@@ -43,6 +43,10 @@ cd core && cargo fmt --all --check
 
 The Swift shell in `app/` only builds on a Mac with Xcode 26: `cd app && swift build`, then `make app` to assemble `INKER.app`. See `app/BUILD.md`.
 
+## Test-driven, always
+
+Ben's instruction: build with TDD. Write the failing test first, see it fail, write the minimum code to pass, refactor green. No public function, tool, subcommand or template without a test that exercises it. Rust: unit tests in the module plus integration tests in `tests/`, fixtures from `samples/synthetic/`. Swift: Swift Testing in `app/Tests/`, logic kept in plain types so `swift test` covers it without AppKit. Python scripts: a sibling `test_*.py`. A change that adds behaviour without a test is not done.
+
 ## Conventions
 
 - Rust edition 2024. `thiserror` for library errors, `anyhow` only in `bins/`. No `unwrap`/`expect` outside tests (workspace lints warn).
