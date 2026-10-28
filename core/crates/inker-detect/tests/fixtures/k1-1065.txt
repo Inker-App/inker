@@ -1,0 +1,49 @@
+Schedule K-1 (Form 1065)   2025
+Partner's Share of Income, Deductions, Credits, etc.
+Department of the Treasury   Internal Revenue Service
+Part I   Information About the Partnership
+A Partnership's employer identification number
+18-7766554
+B Partnership's name, address, city, state, and ZIP code
+Coho Partners LP
+45 Vineyard Rd
+Napa, CA 94558
+C IRS center where partnership filed return
+E-file
+D Check if this is a publicly traded partnership (PTP)
+Part II   Information About the Partner
+E Partner's SSN or TIN (Do not use TIN of a disregarded entity. See instructions.)
+900-12-6655
+F Name, address, city, state, and ZIP code for partner entered in E. See instructions.
+Alex Mock
+14 Cedar Ln
+Austin, TX 78701
+G   X General partner or LLC member-manager   Limited partner or other LLC member
+H1   X Domestic partner   Foreign partner
+H2 If the partner is a disregarded entity (DE), enter the partner's:   TIN   Name
+I1 What type of entity is this partner?
+Individual
+J Partner's share of profit, loss, and capital (see instructions):
+Profit 2.5000%   Loss 2.5000%   Capital 2.5000%
+K1 Partner's share of liabilities:
+Nonrecourse 12,000.00
+L Partner's Capital Account Analysis
+Beginning capital account 40,000.00
+Part III   Partner's Share of Current Year Income, Deductions, Credits, and Other Items
+1 Ordinary business income (loss)
+8,420.00
+2 Net rental real estate income (loss)
+-1,200.00
+3 Other net rental income (loss)
+4a Guaranteed payments for services
+6,000.00
+4b Guaranteed payments for capital
+4c Total guaranteed payments
+6,000.00
+5 Interest income
+45.12
+19 Distributions
+A 5,000.00
+20 Other information
+Z * STMT
+21 Foreign taxes paid or accrued

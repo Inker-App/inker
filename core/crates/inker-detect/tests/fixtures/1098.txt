@@ -1,0 +1,38 @@
+Form 1098   Mortgage Interest Statement   2025
+RECIPIENT'S/LENDER'S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone no.
+Adatum Mortgage Co.
+12 Bank St
+Hartford, CT 06103
+RECIPIENT'S/LENDER'S TIN
+89-4567123
+PAYER'S/BORROWER'S TIN
+912-08-4455
+PAYER'S/BORROWER'S name
+Jane Q Doe
+Street address (including apt. no.)
+1428 Elm Street
+City or town, state or province, country, and ZIP or foreign postal code
+Brooklyn, NY 11201
+Account number (see instructions)
+ML-0012-9934
+1 Mortgage interest received from payer(s)/borrower(s)
+9,812.44
+2 Outstanding mortgage principal
+402,110.00
+3 Mortgage origination date
+06/01/2021
+4 Refund of overpaid interest
+0.00
+5 Mortgage insurance premiums
+0.00
+6 Points paid on purchase of principal residence
+0.00
+7 If address of property securing mortgage is the same as PAYER'S/BORROWER'S address, the box is checked, or the address or description is entered in box 8.
+X
+8 Address or description of property securing mortgage
+1428 Elm Street, Brooklyn, NY 11201
+9 Number of properties securing the mortgage
+1
+10 Other
+Property tax 6,100.00
+11 Mortgage acquisition date

@@ -1,0 +1,11 @@
+SETTLEMENT STATEMENT
+Closing Disclosure   Closing Date 03/14/2025
+Borrower: Maria Example-Lopez
+Seller: Sam T Sample
+Lender: Adatum Mortgage Co.
+Property: 61 Willow Ct, Tucson, AZ 85701
+Loan ID # 4471-0099-3311
+Sale price                      412,000.00
+Funds due from borrower          84,210.55
+Disbursement: wire to 011200446 ref 4471 acct 77001234556
+…wire to 0l12OO446 ref 4471…

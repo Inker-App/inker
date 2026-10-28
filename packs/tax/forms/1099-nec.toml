@@ -1,0 +1,117 @@
+# Form 1099-NEC, Nonemployee Compensation.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "1099-nec"
+display = "1099-NEC"
+kind = "1099-nec"
+anchors = ['\b1099-NEC\b', 'Nonemployee Compensation']
+year = '(?s)1099-NEC.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "payer_name"
+label = '''PAYER['’]S name, street address[^\n]*'''
+kind = "org"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "payer_address"
+label = '''PAYER['’]S name, street address[^\n]*'''
+kind = "address"
+treatment = "generalize"
+role = "payer"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "payer_tin"
+label = '''PAYER['’]S TIN'''
+kind = "ein"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "recipient_tin"
+label = '''RECIPIENT['’]S TIN'''
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "recipient_name"
+label = '''RECIPIENT['’]S name\b'''
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "recipient_street"
+label = 'Street address \(including apt\. no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "recipient_city"
+label = 'City or town, state or province[^\n]*'
+kind = "address"
+treatment = "generalize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "account"
+label = 'Account number \(see instructions\)'
+kind = "account"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "fatca"
+label = 'FATCA filing requirement'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1"
+label = '\b1\s+Nonemployee compensation'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Payer made direct sales totaling \$5,000 or more[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Excess golden parachute payments'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4"
+label = '\b4\s+Federal income tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '\b5\s+State tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+State income'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '''\b6\s+State/Payer['’]s state no\.?'''
+kind = "state_id"
+treatment = "tokenize"
+role = "payer"
+value = "account"

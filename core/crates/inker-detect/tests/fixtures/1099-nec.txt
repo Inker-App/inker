@@ -1,0 +1,30 @@
+PAYER'S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone no.
+Fabrikam Consulting Inc
+900 Market St Fl 3
+Denver, CO 80202
+PAYER'S TIN
+28-1100220
+RECIPIENT'S TIN
+945-67-8901
+RECIPIENT'S name
+Pat R Example
+Street address (including apt. no.)
+77 Oak Ave
+City or town, state or province, country, and ZIP or foreign postal code
+Boise, ID 83702
+Account number (see instructions)
+NEC-000417
+Form 1099-NEC   Nonemployee Compensation   2025
+1 Nonemployee compensation
+18,250.00
+2 Payer made direct sales totaling $5,000 or more of consumer products to recipient for resale
+3 Excess golden parachute payments
+0.00
+4 Federal income tax withheld
+0.00
+5 State tax withheld
+612.00
+6 State/Payer's state no.
+CO 4471-0099
+7 State income
+18,250.00

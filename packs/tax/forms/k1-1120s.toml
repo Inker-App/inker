@@ -1,0 +1,211 @@
+# Schedule K-1 (Form 1120-S), Shareholder's Share of Income, Deductions, Credits, etc. The corporation is the payer, the shareholder the recipient.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "k1-1120s"
+display = "Schedule K-1 (Form 1120-S)"
+kind = "k1-1120s"
+anchors = ['Schedule K-1', 'Form 1120-?S\b', '''Shareholder['’]s Share of Income''']
+year = '(?s)Schedule K-1.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "A"
+label = '''\bA\s+Corporation['’]s employer identification number'''
+kind = "ein"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "B_name"
+label = '''\bB\s+Corporation['’]s name, address, city, state, and ZIP code'''
+kind = "org"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "B_address"
+label = '''\bB\s+Corporation['’]s name, address, city, state, and ZIP code'''
+kind = "address"
+treatment = "generalize"
+role = "payer"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "C"
+label = '\bC\s+IRS Cent(?:er|re) where corporation filed return'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "D"
+label = '''\bD\s+Corporation['’]s total number of shares'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "E"
+label = '''\bE\s+Shareholder['’]s identifying number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "F1_name"
+label = '''\bF1?\s+Shareholder['’]s name, address, city, state,? and ZIP code'''
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "F1_address"
+label = '''\bF1?\s+Shareholder['’]s name, address, city, state,? and ZIP code'''
+kind = "address"
+treatment = "generalize"
+role = "recipient"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "F2_tin"
+label = '\bF2\s+If the shareholder is a disregarded entity[^\n]*'
+kind = "ein"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "F2_name"
+label = '\bF2\s+If the shareholder is a disregarded entity[^\n]*'
+kind = "org"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "G"
+label = '\bG\s+Current year allocation percentage'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "H"
+label = '''\bH\s+Shareholder['’]s number of shares'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1"
+label = '\b1\s+Ordinary business income \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Net rental real estate income \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Other net rental income \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4"
+label = '\b4\s+Interest income'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5a"
+label = '\b5a\s+Ordinary dividends'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5b"
+label = '\b5b\s+Qualified dividends'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '\b6\s+Royalties'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+Net short-term capital gain \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8a"
+label = '\b8a\s+Net long-term capital gain \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8b"
+label = '\b8b\s+Collectibles \(28%\) gain \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8c"
+label = '\b8c\s+Unrecaptured section 1250 gain'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "9"
+label = '\b9\s+Net section 1231 gain \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Other income \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "11"
+label = '\b11\s+Section 179 deduction'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12"
+label = '\b12\s+Other deductions'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "13"
+label = '\b13\s+Credits'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "14"
+label = '\b14\s+Schedule K-3 is attached if checked'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15"
+label = '\b15\s+Alternative minimum tax \(AMT\) items'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "16"
+label = '\b16\s+Items affecting shareholder basis'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "17"
+label = '\b17\s+Other information'
+kind = "keep"
+treatment = "keep"

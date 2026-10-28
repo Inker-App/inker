@@ -1,0 +1,40 @@
+Form 1095-A   Health Insurance Marketplace Statement   2025
+Part I   Recipient Information
+1 Marketplace identifier
+NY
+2 Marketplace-assigned policy number
+POL-7712-0045
+3 Policy issuer's name
+Proseware Health Plan Inc
+4 Recipient's name
+Jane Q Doe
+5 Recipient's SSN
+900-14-2231
+6 Recipient's date of birth
+04/12/1988
+7 Recipient's spouse's name
+John A Sample
+8 Recipient's spouse's SSN
+912-34-5678
+9 Recipient's spouse's date of birth
+09/30/1987
+10 Policy start date
+01/01/2025
+11 Policy termination date
+12/31/2025
+12 Street address (including apartment no.)
+1428 Elm Street Apt 4B
+13 City or town
+Brooklyn
+14 State or province
+NY
+15 Country and ZIP or foreign postal code
+US 11201
+Part II   Coverage Household
+A. Covered individual name   B. Covered individual SSN   C. Covered individual date of birth   D. Coverage start date   E. Coverage termination date
+16 Jane Q Doe   900-14-2231   04/12/1988   01/01/2025   12/31/2025
+17 John A Sample   912-34-5678   09/30/1987   01/01/2025   12/31/2025
+Part III   Household Information
+A. Monthly enrollment premiums   B. Monthly second lowest cost silver plan (SLCSP) premium   C. Monthly advance payment of premium tax credit
+21 January   612.00   590.00   410.00
+33 Annual Totals   7,344.00   7,080.00   4,920.00

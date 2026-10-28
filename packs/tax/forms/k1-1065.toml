@@ -1,0 +1,265 @@
+# Schedule K-1 (Form 1065), Partner's Share of Income, Deductions, Credits, etc. The partnership is the payer, the partner the recipient.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "k1-1065"
+display = "Schedule K-1 (Form 1065)"
+kind = "k1-1065"
+anchors = ['Schedule K-1', 'Form 1065\b', '''Partner['’]s Share of Income''']
+year = '(?s)Schedule K-1.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "A"
+label = '''\bA\s+Partnership['’]s employer identification number'''
+kind = "ein"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "B_name"
+label = '''\bB\s+Partnership['’]s name, address, city, state, and ZIP code'''
+kind = "org"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "B_address"
+label = '''\bB\s+Partnership['’]s name, address, city, state, and ZIP code'''
+kind = "address"
+treatment = "generalize"
+role = "payer"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "C"
+label = '\bC\s+IRS cent(?:er|re) where partnership filed return'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "D"
+label = '\bD\s+Check if this is a publicly traded partnership[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "E"
+label = '''\bE\s+Partner['’]s (?:SSN or TIN|identifying number)[^\n]*'''
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "F_name"
+label = '\bF\s+Name, address, city, state, and ZIP code for partner[^\n]*'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "F_address"
+label = '\bF\s+Name, address, city, state, and ZIP code for partner[^\n]*'
+kind = "address"
+treatment = "generalize"
+role = "recipient"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "H2_tin"
+label = '\bH2\s+If the partner is a disregarded entity[^\n]*'
+kind = "ein"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "H2_name"
+label = '\bH2\s+If the partner is a disregarded entity[^\n]*'
+kind = "org"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "I1"
+label = '\bI1\s+What type of entity is this partner\??'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "J"
+label = '''\bJ\s+Partner['’]s share of profit, loss, and capital[^\n]*'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "K1"
+label = '''\bK1?\s+Partner['’]s share of liabilities:?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "L"
+label = '''\bL\s+Partner['’]s Capital Account Analysis'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1"
+label = '\b1\s+Ordinary business income \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Net rental real estate income \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Other net rental income \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4a"
+label = '\b4a\s+Guaranteed payments for services'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4b"
+label = '\b4b\s+Guaranteed payments for capital'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4c"
+label = '\b4c\s+Total guaranteed payments'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '\b5\s+Interest income'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6a"
+label = '\b6a\s+Ordinary dividends'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6b"
+label = '\b6b\s+Qualified dividends'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6c"
+label = '\b6c\s+Dividend equivalents'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+Royalties'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8"
+label = '\b8\s+Net short-term capital gain \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "9a"
+label = '\b9a\s+Net long-term capital gain \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "9b"
+label = '\b9b\s+Collectibles \(28%\) gain \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "9c"
+label = '\b9c\s+Unrecaptured section 1250 gain'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Net section 1231 gain \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "11"
+label = '\b11\s+Other income \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12"
+label = '\b12\s+Section 179 deduction'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "13"
+label = '\b13\s+Other deductions'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "14"
+label = '\b14\s+Self-employment earnings \(loss\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15"
+label = '\b15\s+Credits'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "16"
+label = '\b16\s+Schedule K-3 is attached if checked'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "17"
+label = '\b17\s+Alternative minimum tax \(AMT\) items'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "18"
+label = '\b18\s+Tax-exempt income and nondeductible expenses'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "19"
+label = '\b19\s+Distributions'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "20"
+label = '\b20\s+Other information'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "21"
+label = '\b21\s+Foreign taxes paid or accrued'
+kind = "keep"
+treatment = "keep"

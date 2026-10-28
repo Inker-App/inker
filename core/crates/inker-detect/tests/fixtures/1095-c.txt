@@ -1,0 +1,38 @@
+Form 1095-C   Employer-Provided Health Insurance Offer and Coverage   2025
+Part I   Employee
+1 Name of employee (first name, middle initial, last name)
+Jane Q Doe
+2 Social security number (SSN)
+900-14-2231
+3 Street address (including apartment no.)
+1428 Elm Street Apt 4B
+4 City or town
+Brooklyn
+5 State or province
+NY
+6 Country and ZIP or foreign postal code
+US 11201
+Applicable Large Employer Member (Employer)
+7 Name of employer
+Contoso Widgets LLC
+8 Employer identification number (EIN)
+07-4400123
+9 Street address (including room or suite no.)
+500 Harbor Blvd Suite 200
+10 Contact telephone number
+(217) 555-0188
+11 City or town
+Springfield
+12 State or province
+IL
+13 Country and ZIP or foreign postal code
+US 62701
+Part II   Employee Offer and Coverage   Plan Start Month (enter 2-digit number): 01
+14 Offer of Coverage (enter required code)   1E
+15 Employee Required Contribution (see instructions)   102.50
+16 Section 4980H Safe Harbor and Other Relief (enter code, if applicable)   2C
+17 ZIP Code   11201
+Part III   Covered Individuals
+(a) Name of covered individual(s) First name, middle initial, last name   (b) SSN or other TIN   (c) DOB (if SSN or other TIN is not available)   (d) Covered all 12 months   (e) Months of coverage
+18 Jane Q Doe   900-14-2231   X
+19 Robin Doe   05/05/2015   X

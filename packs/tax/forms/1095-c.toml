@@ -1,0 +1,410 @@
+# Form 1095-C, Employer-Provided Health Insurance Offer and Coverage. Rows 18-30 are covered individuals.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "1095-c"
+display = "1095-C"
+kind = "1095-c"
+anchors = ['\b1095-C\b', 'Employer-Provided Health Insurance Offer and Coverage']
+year = '(?s)1095-C.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "1"
+label = '\b1\s+Name of employee[^\n]*'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Social security number \(SSN\)'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Street address \(including apartment no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "employee"
+value = "line"
+
+[[fields]]
+id = "4"
+label = '\b4\s+City or town'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '\b5\s+State or province'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '\b6\s+Country and ZIP or foreign postal code'
+kind = "address"
+treatment = "tokenize"
+role = "employee"
+value = "line"
+
+[[fields]]
+id = "7"
+label = '\b7\s+Name of employer'
+kind = "org"
+treatment = "tokenize"
+role = "employer"
+
+[[fields]]
+id = "8"
+label = '\b8\s+Employer identification number \(EIN\)'
+kind = "ein"
+treatment = "tokenize"
+role = "employer"
+
+[[fields]]
+id = "9"
+label = '\b9\s+Street address \(including room or suite no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "employer"
+value = "line"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Contact telephone number'
+kind = "phone"
+treatment = "tokenize"
+role = "employer"
+
+[[fields]]
+id = "11"
+label = '\b11\s+City or town'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12"
+label = '\b12\s+State or province'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "13"
+label = '\b13\s+Country and ZIP or foreign postal code'
+kind = "address"
+treatment = "tokenize"
+role = "employer"
+value = "line"
+
+[[fields]]
+id = "14"
+label = '\b14\s+Offer of Coverage(?:\s*\(enter required code\))?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15"
+label = '\b15\s+Employee Required Contribution(?:\s*\(see instructions\))?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "16"
+label = '\b16\s+Section 4980H Safe Harbor and Other Relief(?:\s*\(enter code, if applicable\))?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "17"
+label = '\b17\s+ZIP Code'
+kind = "address"
+treatment = "tokenize"
+role = "employee"
+value = "line"
+
+[[fields]]
+id = "18_name"
+label = '(?m)^[ \t]*18[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "18_ssn"
+label = '(?m)^[ \t]*18[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "18_dob"
+label = '(?m)^[ \t]*18[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "19_name"
+label = '(?m)^[ \t]*19[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "19_ssn"
+label = '(?m)^[ \t]*19[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "19_dob"
+label = '(?m)^[ \t]*19[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "20_name"
+label = '(?m)^[ \t]*20[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "20_ssn"
+label = '(?m)^[ \t]*20[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "20_dob"
+label = '(?m)^[ \t]*20[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "21_name"
+label = '(?m)^[ \t]*21[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "21_ssn"
+label = '(?m)^[ \t]*21[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "21_dob"
+label = '(?m)^[ \t]*21[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "22_name"
+label = '(?m)^[ \t]*22[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "22_ssn"
+label = '(?m)^[ \t]*22[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "22_dob"
+label = '(?m)^[ \t]*22[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "23_name"
+label = '(?m)^[ \t]*23[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "23_ssn"
+label = '(?m)^[ \t]*23[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "23_dob"
+label = '(?m)^[ \t]*23[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "24_name"
+label = '(?m)^[ \t]*24[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "24_ssn"
+label = '(?m)^[ \t]*24[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "24_dob"
+label = '(?m)^[ \t]*24[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "25_name"
+label = '(?m)^[ \t]*25[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "25_ssn"
+label = '(?m)^[ \t]*25[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "25_dob"
+label = '(?m)^[ \t]*25[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "26_name"
+label = '(?m)^[ \t]*26[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "26_ssn"
+label = '(?m)^[ \t]*26[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "26_dob"
+label = '(?m)^[ \t]*26[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "27_name"
+label = '(?m)^[ \t]*27[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "27_ssn"
+label = '(?m)^[ \t]*27[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "27_dob"
+label = '(?m)^[ \t]*27[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "28_name"
+label = '(?m)^[ \t]*28[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "28_ssn"
+label = '(?m)^[ \t]*28[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "28_dob"
+label = '(?m)^[ \t]*28[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "29_name"
+label = '(?m)^[ \t]*29[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "29_ssn"
+label = '(?m)^[ \t]*29[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "29_dob"
+label = '(?m)^[ \t]*29[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"
+
+[[fields]]
+id = "30_name"
+label = '(?m)^[ \t]*30[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "30_ssn"
+label = '(?m)^[ \t]*30[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "30_dob"
+label = '(?m)^[ \t]*30[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "employee"
+value = "date"

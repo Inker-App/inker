@@ -1,0 +1,47 @@
+Form 1099-DIV   Dividends and Distributions   2025
+PAYER'S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone no.
+Tailspin Brokerage LLC
+1 Commerce Plaza
+Boston, MA 02110
+PAYER'S TIN
+49-5500660
+RECIPIENT'S TIN
+966-48-1122
+RECIPIENT'S name
+Chris Placeholder
+Street address (including apt. no.)
+88 Pine St
+City or town, state or province, country, and ZIP or foreign postal code
+Portland, OR 97205
+Account number (see instructions)
+TB-8812-4400
+1a Total ordinary dividends
+2,410.33
+1b Qualified dividends
+2,001.10
+2a Total capital gain distr.
+512.00
+2b Unrecap. Sec. 1250 gain
+2c Section 1202 gain
+2d Collectibles (28%) gain
+2e Section 897 ordinary dividends
+2f Section 897 capital gain
+3 Nondividend distributions
+4 Federal income tax withheld
+0.00
+5 Section 199A dividends
+6 Investment expenses
+7 Foreign tax paid
+31.45
+8 Foreign country or U.S. possession
+9 Cash liquidation distributions
+10 Noncash liquidation distributions
+11 FATCA filing requirement
+12 Exempt-interest dividends
+13 Specified private activity bond interest dividends
+14 State
+MA
+15 State identification no.
+MA-77120
+16 State tax withheld
+0.00

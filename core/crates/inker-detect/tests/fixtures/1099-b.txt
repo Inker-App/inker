@@ -1,0 +1,51 @@
+Form 1099-B   Proceeds From Broker and Barter Exchange Transactions   2025
+PAYER'S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone no.
+Tailspin Brokerage LLC
+1 Commerce Plaza
+Boston, MA 02110
+PAYER'S TIN
+49-5500660
+RECIPIENT'S TIN
+900-22-3344
+RECIPIENT'S name
+Alex Mock
+Street address (including apt. no.)
+14 Cedar Ln
+City or town, state or province, country, and ZIP or foreign postal code
+Austin, TX 78701
+Account number (see instructions)
+TB-5520-0091
+CUSIP number
+SAMPLE001
+1a Description of property (Example: 100 sh. XYZ Co.)
+100 sh. SAMPLE FUND
+1b Date acquired
+03/14/2023
+1c Date sold or disposed
+11/02/2025
+1d Proceeds
+14,820.00
+1e Cost or other basis
+9,100.00
+1f Accrued market discount
+1g Wash sale loss disallowed
+2 Short-term gain or loss   Long-term gain or loss   Ordinary
+X Long-term
+3 If checked, proceeds from:   Collectibles   QOF
+4 Federal income tax withheld
+0.00
+5 If checked, noncovered security
+6 Reported to IRS:   Gross proceeds   Net proceeds
+X Gross
+7 If checked, loss is not allowed based on amount in 1d
+8 Profit or (loss) realized in 2025 on closed contracts
+9 Unrealized profit or (loss) on open contracts—12/31/2024
+10 Unrealized profit or (loss) on open contracts—12/31/2025
+11 Aggregate profit or (loss) on contracts
+12 If checked, basis reported to IRS
+X
+13 Bartering
+14 State name
+TX
+15 State identification no.
+16 State tax withheld

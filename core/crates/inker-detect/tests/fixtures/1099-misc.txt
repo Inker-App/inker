@@ -1,0 +1,41 @@
+Form 1099-MISC   Miscellaneous Information   2025
+PAYER'S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone no.
+Adatum Property Management LLC
+40 River Rd
+Albany, NY 12207
+PAYER'S TIN
+78-0001234
+RECIPIENT'S TIN
+900-41-9900
+RECIPIENT'S name
+Sam T Sample
+Street address (including apt. no.)
+7 Hill St
+City or town, state or province, country, and ZIP or foreign postal code
+Troy, NY 12180
+Account number (see instructions)
+AD-4410-22
+1 Rents
+12,000.00
+2 Royalties
+3 Other income
+450.00
+4 Federal income tax withheld
+0.00
+5 Fishing boat proceeds
+6 Medical and health care payments
+7 Payer made direct sales totaling $5,000 or more of consumer products to recipient for resale
+8 Substitute payments in lieu of dividends or interest
+9 Crop insurance proceeds
+10 Gross proceeds paid to an attorney
+11 Fish purchased for resale
+12 Section 409A deferrals
+13 FATCA filing requirement
+14 Excess golden parachute payments
+15 Nonqualified deferred compensation
+16 State tax withheld
+380.00
+17 State/Payer's state no.
+NY 7700-1234
+18 State income
+12,000.00

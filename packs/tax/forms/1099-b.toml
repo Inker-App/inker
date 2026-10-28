@@ -1,0 +1,213 @@
+# Form 1099-B, Proceeds From Broker and Barter Exchange Transactions.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "1099-b"
+display = "1099-B"
+kind = "1099-b"
+anchors = ['\b1099-B\b', 'Proceeds From Broker and Barter Exchange']
+year = '(?s)1099-B.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "payer_name"
+label = '''PAYER['’]S name, street address[^\n]*'''
+kind = "org"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "payer_address"
+label = '''PAYER['’]S name, street address[^\n]*'''
+kind = "address"
+treatment = "generalize"
+role = "payer"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "payer_tin"
+label = '''PAYER['’]S TIN'''
+kind = "ein"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "recipient_tin"
+label = '''RECIPIENT['’]S TIN'''
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "recipient_name"
+label = '''RECIPIENT['’]S name\b'''
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "recipient_street"
+label = 'Street address \(including apt\. no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "recipient_city"
+label = 'City or town, state or province[^\n]*'
+kind = "address"
+treatment = "generalize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "account"
+label = 'Account number \(see instructions\)'
+kind = "account"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "fatca"
+label = 'FATCA filing requirement'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "cusip"
+label = 'CUSIP number'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1a"
+label = '\b1a\s+Description of property(?:\s*\(Example:[^)]*\))?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1b"
+label = '\b1b\s+Date acquired'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1c"
+label = '\b1c\s+Date sold or disposed'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1d"
+label = '\b1d\s+Proceeds'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1e"
+label = '\b1e\s+Cost or other basis'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1f"
+label = '\b1f\s+Accrued market discount'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1g"
+label = '\b1g\s+Wash sale loss disallowed'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Short-term gain or loss[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '\b3\s+If checked, proceeds from:?[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4"
+label = '\b4\s+Federal income tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '\b5\s+If checked, noncovered security'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '\b6\s+Reported to IRS:?[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+If checked, loss is not allowed[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8"
+label = '\b8\s+Profit or \(loss\) realized in \d{4} on closed contracts'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "9"
+label = '\b9\s+Unrealized profit or \(loss\) on open contracts[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Unrealized profit or \(loss\) on open contracts[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "11"
+label = '\b11\s+Aggregate profit or \(loss\) on contracts'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12"
+label = '\b12\s+If checked, basis reported to IRS'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "13"
+label = '\b13\s+Bartering'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "14"
+label = '\b14\s+State name'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "16"
+label = '\b16\s+State tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15"
+label = '\b15\s+State identification no\.?'
+kind = "state_id"
+treatment = "tokenize"
+role = "payer"
+value = "account"

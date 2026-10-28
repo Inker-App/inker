@@ -1,0 +1,47 @@
+CORRECTED (if checked)
+PAYER'S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone no.
+Northwind Credit Union
+77 Lakeview Ave
+Madison, WI 53703
+(608) 555-0199
+Payer's RTN (optional)
+990000123
+PAYER'S TIN
+17-2233445
+RECIPIENT'S TIN
+912-34-5678
+RECIPIENT'S name
+John A Sample
+Street address (including apt. no.)
+22 Birch Rd Unit 5
+City or town, state or province, country, and ZIP or foreign postal code
+Madison, WI 53711
+FATCA filing requirement
+Account number (see instructions)
+5501-2299-87
+Form 1099-INT   Interest Income   2025
+OMB No. 1545-0112
+1 Interest income
+1,204.55
+2 Early withdrawal penalty
+0.00
+3 Interest on U.S. Savings Bonds and Treasury obligations
+88.10
+4 Federal income tax withheld
+0.00
+5 Investment expenses
+6 Foreign tax paid
+7 Foreign country or U.S. territory
+8 Tax-exempt interest
+9 Specified private activity bond interest
+10 Market discount
+11 Bond premium
+12 Bond premium on Treasury obligations
+13 Bond premium on tax-exempt bond
+14 Tax-exempt and tax credit bond CUSIP no.
+15 State
+WI
+16 State identification no.
+WI-0331-22
+17 State tax withheld
+31.20

@@ -1,0 +1,184 @@
+# Form 1099-INT, Interest Income.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "1099-int"
+display = "1099-INT"
+kind = "1099-int"
+anchors = ['\b1099-INT\b', 'Interest Income']
+year = '(?s)1099-INT.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "payer_name"
+label = '''PAYER['’]S name, street address[^\n]*'''
+kind = "org"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "payer_address"
+label = '''PAYER['’]S name, street address[^\n]*'''
+kind = "address"
+treatment = "generalize"
+role = "payer"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "payer_tin"
+label = '''PAYER['’]S TIN'''
+kind = "ein"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "recipient_tin"
+label = '''RECIPIENT['’]S TIN'''
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "recipient_name"
+label = '''RECIPIENT['’]S name\b'''
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "recipient_street"
+label = 'Street address \(including apt\. no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "recipient_city"
+label = 'City or town, state or province[^\n]*'
+kind = "address"
+treatment = "generalize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "account"
+label = 'Account number \(see instructions\)'
+kind = "account"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "fatca"
+label = 'FATCA filing requirement'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "payer_rtn"
+label = '''Payer['’]s RTN(?:\s*\(optional\))?'''
+kind = "routing"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "1"
+label = '\b1\s+Interest income'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Early withdrawal penalty'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Interest on U\.S\. Savings Bonds and Treasury obligations'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4"
+label = '\b4\s+Federal income tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '\b5\s+Investment expenses'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '\b6\s+Foreign tax paid'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+Foreign country or U\.S\. (?:territory|possession)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8"
+label = '\b8\s+Tax-exempt interest'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "9"
+label = '\b9\s+Specified private activity bond interest'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Market discount'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "11"
+label = '(?m)\b11\s+Bond premium[ \t]*$'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12"
+label = '\b12\s+Bond premium on Treasury obligations'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "13"
+label = '\b13\s+Bond premium on tax-exempt bond'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "14"
+label = '\b14\s+Tax-exempt and tax credit bond CUSIP no\.?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "17"
+label = '\b17\s+State tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15"
+label = '(?m)\b15\s+State\s*$'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "16"
+label = '\b16\s+State identification no\.?'
+kind = "state_id"
+treatment = "tokenize"
+role = "payer"
+value = "account"

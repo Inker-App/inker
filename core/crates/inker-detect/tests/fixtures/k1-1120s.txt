@@ -1,0 +1,36 @@
+Schedule K-1 (Form 1120-S)   2025
+Shareholder's Share of Income, Deductions, Credits, etc.
+Department of the Treasury   Internal Revenue Service
+Part I   Information About the Corporation
+A Corporation's employer identification number
+19-3344556
+B Corporation's name, address, city, state, and ZIP code
+Wingtip Ventures Inc
+3 Summit Dr
+Reno, NV 89501
+C IRS Center where corporation filed return
+Ogden
+D Corporation's total number of shares
+Beginning of tax year 1,000
+Part II   Information About the Shareholder
+E Shareholder's identifying number
+966-48-1122
+F1 Shareholder's name, address, city, state, and ZIP code
+Chris Placeholder
+88 Pine St
+Portland, OR 97205
+F2 If the shareholder is a disregarded entity (DE), enter the shareholder's:   TIN   Name
+G Current year allocation percentage
+25.000000%
+H Shareholder's number of shares
+Beginning of tax year 250
+Part III   Shareholder's Share of Current Year Income, Deductions, Credits, and Other Items
+1 Ordinary business income (loss)
+22,500.00
+4 Interest income
+120.00
+5a Ordinary dividends
+16 Items affecting shareholder basis
+D 10,000.00
+17 Other information
+V * STMT

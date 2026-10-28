@@ -1,0 +1,298 @@
+# Form 1095-A, Health Insurance Marketplace Statement. Rows 16-20 are covered individuals.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "1095-a"
+display = "1095-A"
+kind = "1095-a"
+anchors = ['\b1095-A\b', 'Health Insurance Marketplace Statement']
+year = '(?s)1095-A.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "1"
+label = '\b1\s+Marketplace identifier'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Marketplace-assigned policy number'
+kind = "account"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "3"
+label = '''\b3\s+Policy issuer['’]s name'''
+kind = "org"
+treatment = "tokenize"
+
+[[fields]]
+id = "4"
+label = '''\b4\s+Recipient['’]s name'''
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "5"
+label = '''\b5\s+Recipient['’]s SSN'''
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "6"
+label = '''\b6\s+Recipient['’]s date of birth'''
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "7"
+label = '''\b7\s+Recipient['’]s spouse['’]s name'''
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "8"
+label = '''\b8\s+Recipient['’]s spouse['’]s SSN'''
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "9"
+label = '''\b9\s+Recipient['’]s spouse['’]s date of birth'''
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Policy start date'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "11"
+label = '\b11\s+Policy termination date'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12"
+label = '\b12\s+Street address \(including apartment no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "13"
+label = '\b13\s+City or town'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "14"
+label = '\b14\s+State or province'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15"
+label = '\b15\s+Country and ZIP or foreign postal code'
+kind = "address"
+treatment = "tokenize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "16_name"
+label = '(?m)^[ \t]*16[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "16_ssn"
+label = '(?m)^[ \t]*16[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "16_dob"
+label = '(?m)^[ \t]*16[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "17_name"
+label = '(?m)^[ \t]*17[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "17_ssn"
+label = '(?m)^[ \t]*17[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "17_dob"
+label = '(?m)^[ \t]*17[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "18_name"
+label = '(?m)^[ \t]*18[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "18_ssn"
+label = '(?m)^[ \t]*18[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "18_dob"
+label = '(?m)^[ \t]*18[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "19_name"
+label = '(?m)^[ \t]*19[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "19_ssn"
+label = '(?m)^[ \t]*19[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "19_dob"
+label = '(?m)^[ \t]*19[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "20_name"
+label = '(?m)^[ \t]*20[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "20_ssn"
+label = '(?m)^[ \t]*20[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "20_dob"
+label = '(?m)^[ \t]*20[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "21"
+label = '(?m)^[ \t]*21[ \t]+January'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "22"
+label = '(?m)^[ \t]*22[ \t]+February'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "23"
+label = '(?m)^[ \t]*23[ \t]+March'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "24"
+label = '(?m)^[ \t]*24[ \t]+April'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "25"
+label = '(?m)^[ \t]*25[ \t]+May'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "26"
+label = '(?m)^[ \t]*26[ \t]+June'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "27"
+label = '(?m)^[ \t]*27[ \t]+July'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "28"
+label = '(?m)^[ \t]*28[ \t]+August'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "29"
+label = '(?m)^[ \t]*29[ \t]+September'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "30"
+label = '(?m)^[ \t]*30[ \t]+October'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "31"
+label = '(?m)^[ \t]*31[ \t]+November'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "32"
+label = '(?m)^[ \t]*32[ \t]+December'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "33"
+label = '(?m)^[ \t]*33[ \t]+Annual Totals'
+kind = "keep"
+treatment = "keep"

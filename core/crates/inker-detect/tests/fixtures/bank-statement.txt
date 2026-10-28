@@ -1,0 +1,24 @@
+Northwind Bank
+PO Box 4471
+Columbus, OH 43215
+Member FDIC
+
+Statement period: 01/01/2025 - 01/31/2025
+Prepared for: Jane Q Doe
+1428 Elm Street Apt 4B
+Brooklyn, NY 11201
+
+Account Summary
+Premier Checking   Account number: 7700012345678
+Routing number: 011200446
+Beginning balance          1,200.00
+Deposits and credits         400.00
+Withdrawals and debits       150.00
+Ending balance             1,450.00
+
+Date     Description                                   Amount
+01/03    Direct deposit CONTOSO WIDGETS LLC            2,100.00
+01/09    Zelle payment ref 8812004471923                -150.00
+01/20    Online transfer to acct ending 4471            -500.00
+
+Questions? Call (614) 555-0142 or email help@northwind.example

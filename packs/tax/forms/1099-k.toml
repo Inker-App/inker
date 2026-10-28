@@ -1,0 +1,214 @@
+# Form 1099-K, Payment Card and Third Party Network Transactions. FILER is the payer, PAYEE the recipient.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "1099-k"
+display = "1099-K"
+kind = "1099-k"
+anchors = ['\b1099-K\b', 'Payment Card and Third Party Network']
+year = '(?s)1099-K.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "filer_name"
+label = '''FILER['’]S name, street address[^\n]*'''
+kind = "org"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "filer_address"
+label = '''FILER['’]S name, street address[^\n]*'''
+kind = "address"
+treatment = "generalize"
+role = "payer"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "filer_tin"
+label = '''FILER['’]S TIN'''
+kind = "ein"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "payee_tin"
+label = '''PAYEE['’]S TIN'''
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "payee_name"
+label = '''PAYEE['’]S name\b'''
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "payee_street"
+label = 'Street address \(including apt\. no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "payee_city"
+label = 'City or town, state or province[^\n]*'
+kind = "address"
+treatment = "generalize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "account"
+label = 'Account number \(see instructions\)'
+kind = "account"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "fatca"
+label = 'FATCA filing requirement'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "pse_name"
+label = '''PSE['’]S name and telephone (?:no\.|number)'''
+kind = "org"
+treatment = "tokenize"
+role = "payer"
+
+[[fields]]
+id = "filer_type"
+label = 'Check to indicate if FILER is a[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "transaction_type"
+label = 'Check to indicate transactions reported are:?[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1a"
+label = '\b1a\s+Gross amount of payment card/third party network transactions'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1b"
+label = '\b1b\s+Card Not Present transactions'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Merchant category code'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Number of payment transactions'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4"
+label = '\b4\s+Federal income tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8"
+label = '\b8\s+State income tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5a"
+label = '\b5a\s+January'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5b"
+label = '\b5b\s+February'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5c"
+label = '\b5c\s+March'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5d"
+label = '\b5d\s+April'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5e"
+label = '\b5e\s+May'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5f"
+label = '\b5f\s+June'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5g"
+label = '\b5g\s+July'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5h"
+label = '\b5h\s+August'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5i"
+label = '\b5i\s+September'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5j"
+label = '\b5j\s+October'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5k"
+label = '\b5k\s+November'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5l"
+label = '\b5l\s+December'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '(?m)\b6\s+State\s*$'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+State identification no\.?'
+kind = "state_id"
+treatment = "tokenize"
+role = "payer"
+value = "account"

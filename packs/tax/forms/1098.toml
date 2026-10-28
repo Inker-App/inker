@@ -1,0 +1,135 @@
+# Form 1098, Mortgage Interest Statement.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "1098"
+display = "1098"
+kind = "1098"
+anchors = ['\bForm\s+1098(?:[^-\w]|$)', 'Mortgage Interest Statement']
+year = '(?s)Form\s+1098\b.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "lender_name"
+label = '''RECIPIENT['’]S/LENDER['’]S name[^\n]*'''
+kind = "org"
+treatment = "tokenize"
+role = "lender"
+
+[[fields]]
+id = "lender_address"
+label = '''RECIPIENT['’]S/LENDER['’]S name[^\n]*'''
+kind = "address"
+treatment = "generalize"
+role = "lender"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "lender_tin"
+label = '''RECIPIENT['’]S/LENDER['’]S TIN'''
+kind = "ein"
+treatment = "tokenize"
+role = "lender"
+
+[[fields]]
+id = "borrower_tin"
+label = '''PAYER['’]S/BORROWER['’]S TIN'''
+kind = "ssn"
+treatment = "tokenize"
+role = "borrower"
+
+[[fields]]
+id = "borrower_name"
+label = '''PAYER['’]S/BORROWER['’]S name\b'''
+kind = "person"
+treatment = "tokenize"
+role = "borrower"
+
+[[fields]]
+id = "borrower_street"
+label = 'Street address \(including apt\. no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "borrower"
+value = "line"
+
+[[fields]]
+id = "borrower_city"
+label = 'City or town, state or province[^\n]*'
+kind = "address"
+treatment = "generalize"
+role = "borrower"
+value = "line"
+
+[[fields]]
+id = "account"
+label = 'Account number \(see instructions\)'
+kind = "account"
+treatment = "tokenize"
+role = "borrower"
+
+[[fields]]
+id = "8"
+label = '\b8\s+Address or description of property securing mortgage'
+kind = "address"
+treatment = "generalize"
+role = "borrower"
+lines = 1
+
+[[fields]]
+id = "1"
+label = '\b1\s+Mortgage interest received from payer\(s\)/borrower\(s\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Outstanding mortgage principal'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Mortgage origination date'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4"
+label = '\b4\s+Refund of overpaid interest'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '\b5\s+Mortgage insurance premiums'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '\b6\s+Points paid on purchase of principal residence'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+If address of property securing mortgage is the same as[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "9"
+label = '\b9\s+Number of properties securing the mortgage'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Other'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "11"
+label = '\b11\s+Mortgage acquisition date'
+kind = "keep"
+treatment = "keep"

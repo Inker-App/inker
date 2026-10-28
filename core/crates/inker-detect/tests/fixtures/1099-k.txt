@@ -1,0 +1,45 @@
+Form 1099-K   Payment Card and Third Party Network Transactions   2025
+FILER'S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone no.
+Litware Payments Inc
+200 Mission St
+San Francisco, CA 94105
+Check to indicate if FILER is a (an):   Payment settlement entity (PSE)   Electronic Payment Facilitator (EPF)/Other third party
+X PSE
+Check to indicate transactions reported are:   Payment card   Third party network
+X Third party network
+PAYEE'S name
+Maria Example-Lopez
+Street address (including apt. no.)
+61 Willow Ct
+City or town, state or province, country, and ZIP or foreign postal code
+Tucson, AZ 85701
+PSE'S name and telephone number
+Litware Payments Inc
+Account number (see instructions)
+LP-0099-3311
+FILER'S TIN
+69-1234500
+PAYEE'S TIN
+900-31-7788
+1a Gross amount of payment card/third party network transactions
+24,118.90
+1b Card Not Present transactions
+24,118.90
+2 Merchant category code
+5999
+3 Number of payment transactions
+412
+4 Federal income tax withheld
+0.00
+5a January
+2,001.00
+5b February
+1,850.25
+5l December
+2,400.00
+6 State
+AZ
+7 State identification no.
+AZ-55012
+8 State income tax withheld
+0.00

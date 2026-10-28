@@ -1,0 +1,281 @@
+# Form 1095-B, Health Coverage. Part III is the issuer (no role); rows 23-28 are covered individuals.
+# Box labels follow the IRS wording. Schema: see w2.toml.
+id = "1095-b"
+display = "1095-B"
+kind = "1095-b"
+anchors = ['\b1095-B\b', '\bHealth Coverage\b']
+year = '(?s)1095-B.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "1"
+label = '\b1\s+Name of responsible individual[^\n]*'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Social security number \(SSN\) or other TIN'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Date of birth[^\n]*'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "4"
+label = '\b4\s+Street address \(including apartment no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "5"
+label = '\b5\s+City or town'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '\b6\s+State or province'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+Country and ZIP or foreign postal code'
+kind = "address"
+treatment = "tokenize"
+role = "recipient"
+value = "line"
+
+[[fields]]
+id = "8"
+label = '\b8\s+Enter letter identifying Origin of the Health Coverage[^\n]*'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Employer name'
+kind = "org"
+treatment = "tokenize"
+role = "employer"
+
+[[fields]]
+id = "11"
+label = '\b11\s+Employer identification number \(EIN\)'
+kind = "ein"
+treatment = "tokenize"
+role = "employer"
+
+[[fields]]
+id = "12"
+label = '\b12\s+Street address \(including room or suite no\.\)'
+kind = "address"
+treatment = "tokenize"
+role = "employer"
+value = "line"
+
+[[fields]]
+id = "13"
+label = '\b13\s+City or town'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "14"
+label = '\b14\s+State or province'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15"
+label = '\b15\s+Country and ZIP or foreign postal code'
+kind = "address"
+treatment = "tokenize"
+role = "employer"
+value = "line"
+
+[[fields]]
+id = "16"
+label = '\b16\s+Name\b'
+kind = "org"
+treatment = "tokenize"
+
+[[fields]]
+id = "17"
+label = '\b17\s+Employer identification number \(EIN\)'
+kind = "ein"
+treatment = "tokenize"
+
+[[fields]]
+id = "18"
+label = '\b18\s+Contact telephone number'
+kind = "phone"
+treatment = "tokenize"
+
+[[fields]]
+id = "19"
+label = '\b19\s+Street address \(including room or suite no\.\)'
+kind = "address"
+treatment = "tokenize"
+value = "line"
+
+[[fields]]
+id = "20"
+label = '\b20\s+City or town'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "21"
+label = '\b21\s+State or province'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "22"
+label = '\b22\s+Country and ZIP or foreign postal code'
+kind = "address"
+treatment = "tokenize"
+value = "line"
+
+[[fields]]
+id = "23_name"
+label = '(?m)^[ \t]*23[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "23_ssn"
+label = '(?m)^[ \t]*23[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "23_dob"
+label = '(?m)^[ \t]*23[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "24_name"
+label = '(?m)^[ \t]*24[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "24_ssn"
+label = '(?m)^[ \t]*24[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "24_dob"
+label = '(?m)^[ \t]*24[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "25_name"
+label = '(?m)^[ \t]*25[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "25_ssn"
+label = '(?m)^[ \t]*25[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "25_dob"
+label = '(?m)^[ \t]*25[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "26_name"
+label = '(?m)^[ \t]*26[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "26_ssn"
+label = '(?m)^[ \t]*26[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "26_dob"
+label = '(?m)^[ \t]*26[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "27_name"
+label = '(?m)^[ \t]*27[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "27_ssn"
+label = '(?m)^[ \t]*27[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "27_dob"
+label = '(?m)^[ \t]*27[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"
+
+[[fields]]
+id = "28_name"
+label = '(?m)^[ \t]*28[ \t]+'
+kind = "person"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "28_ssn"
+label = '(?m)^[ \t]*28[ \t]+'
+kind = "ssn"
+treatment = "tokenize"
+role = "recipient"
+
+[[fields]]
+id = "28_dob"
+label = '(?m)^[ \t]*28[ \t]+'
+kind = "dob"
+treatment = "tokenize"
+role = "recipient"
+value = "date"

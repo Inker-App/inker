@@ -1,0 +1,216 @@
+# Form W-2, Wage and Tax Statement. Box labels are the IRS wording.
+#
+# Schema (shared by every file in forms/):
+#   id, display, kind     template id, display name, DocKind string
+#   anchors               regexes that must all match a page (case-insensitive)
+#   year                  regex whose capture group 1 is the tax year
+#   [[fields]]
+#     id                  box id as printed ("a", "1", "12a") or a name
+#     label               regex for the fixed wording before the value
+#     kind                "keep", or a token kind: ssn, itin, ein, account,
+#                         routing, card, person, org, address, email, phone,
+#                         gov_id, or any other snake_case name (custom kind)
+#     treatment           tokenize | generalize | keep
+#     role                employee | employer | payer | recipient | lender | borrower
+#     value               line | lines | tin | account | routing | date
+#                         (default from kind: tin for ssn/itin/ein, account,
+#                         routing, lines for address, else line)
+#     skip_lines, lines   for addresses under a name line
+#     acroform            AcroForm field names in fillable IRS PDFs
+id = "w2"
+display = "W-2"
+kind = "w2"
+anchors = ['Wage and Tax Statement', '\bW-2\b']
+year = '(?s)W-2.{0,80}?\b(20\d{2})\b'
+
+[[fields]]
+id = "a"
+label = '''\ba\s+Employee['’]s social security number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "b"
+label = '\bb\s+Employer identification number(?:\s*\(EIN\))?'
+kind = "ein"
+treatment = "tokenize"
+role = "employer"
+
+[[fields]]
+id = "c_name"
+label = '''\bc\s+Employer['’]s name, address,? and ZIP code'''
+kind = "org"
+treatment = "tokenize"
+role = "employer"
+
+[[fields]]
+id = "c_address"
+label = '''\bc\s+Employer['’]s name, address,? and ZIP code'''
+kind = "address"
+treatment = "generalize"
+role = "employer"
+skip_lines = 1
+lines = 2
+
+[[fields]]
+id = "d"
+label = '\bd\s+Control number'
+kind = "control_number"
+treatment = "tokenize"
+role = "employer"
+
+[[fields]]
+id = "e"
+label = '''\be\s+Employee['’]s first name and initial(?:\s+Last name)?(?:\s+Suff\.?)?'''
+kind = "person"
+treatment = "tokenize"
+role = "employee"
+
+[[fields]]
+id = "f"
+label = '''\bf\s+Employee['’]s address,? and ZIP code'''
+kind = "address"
+treatment = "generalize"
+role = "employee"
+lines = 2
+
+[[fields]]
+id = "1"
+label = '\b1\s+Wages, tips, other compensation'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '\b2\s+Federal income tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '\b3\s+Social security wages'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4"
+label = '\b4\s+Social security tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '\b5\s+Medicare wages and tips'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6"
+label = '\b6\s+Medicare tax withheld'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '\b7\s+Social security tips'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8"
+label = '\b8\s+Allocated tips'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "10"
+label = '\b10\s+Dependent care benefits'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "11"
+label = '\b11\s+Nonqualified plans'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12a"
+label = '\b12a\s+See instructions for box 12'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12b"
+label = '\b12b\b'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12c"
+label = '\b12c\b'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12d"
+label = '\b12d\b'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "13"
+label = '\b13\s+Statutory employee(?:\s+Retirement plan)?(?:\s+Third-party sick pay)?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "14"
+label = '\b14\s+Other\b'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15_state"
+label = '''\b15\s+State\b(?:\s+Employer['’]s state ID number)?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15_id"
+label = '''Employer['’]s state ID number'''
+kind = "state_id"
+treatment = "tokenize"
+role = "employer"
+value = "account"
+
+[[fields]]
+id = "16"
+label = '\b16\s+State wages, tips, etc\.?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "17"
+label = '\b17\s+State income tax'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "18"
+label = '\b18\s+Local wages, tips, etc\.?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "19"
+label = '\b19\s+Local income tax'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "20"
+label = '\b20\s+Locality name'
+kind = "keep"
+treatment = "keep"
