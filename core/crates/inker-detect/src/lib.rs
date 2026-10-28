@@ -8,9 +8,11 @@
 pub mod address;
 pub mod classify;
 pub mod failclosed;
+pub mod fields;
 pub mod model;
 pub mod names;
 pub mod rules;
+pub mod shape;
 pub mod template;
 mod util;
 
@@ -19,7 +21,7 @@ pub use util::detection;
 pub use classify::Classification;
 pub use model::{Model, NoModel};
 
-use inker_core::{Detection, DetectionSource, Extracted, Result};
+use inker_core::{Detection, DetectionSource, Extracted, PageText, Result, Treatment};
 use inker_packs::PackSet;
 
 /// The detection pipeline: templates, rules, names, addresses, the model (if
@@ -64,6 +66,20 @@ impl<'a> Detector<'a> {
             all.extend(names::find(page));
             all.extend(address::find(page));
         }
+        // Every form field value is scanned as a page of its own, whether or
+        // not a template maps its name.
+        let field_pages: Vec<(&str, PageText)> = extracted
+            .fields
+            .iter()
+            .map(|f| (f.name.as_str(), fields::page(f)))
+            .collect();
+        for (name, p) in &field_pages {
+            let found = rules::find(p)
+                .into_iter()
+                .chain(names::find(p))
+                .chain(address::find(p));
+            all.extend(fields::tag(found, name));
+        }
         all.extend(self.model.detect(&extracted.pages)?);
         let mut merged = merge(all);
 
@@ -82,6 +98,19 @@ impl<'a> Detector<'a> {
                 .collect();
             merged.extend(failclosed::find(page, &covered));
         }
+        let mut held = Vec::new();
+        for (name, p) in &field_pages {
+            let mut covered: Vec<(usize, usize)> = merged
+                .iter()
+                .filter(|d| d.field.as_deref() == Some(*name))
+                .map(|d| (d.span.start, d.span.end))
+                .collect();
+            let fc = fields::tag(failclosed::find(p, &covered), name);
+            covered.extend(fc.iter().map(|d| (d.span.start, d.span.end)));
+            held.extend(fc);
+            held.extend(fields::tag(fields::hold_rest(p, &covered), name));
+        }
+        merged.extend(held);
         let mut out = merge(merged);
 
         // Roles from the template field a detection sits in.
@@ -97,6 +126,9 @@ impl<'a> Detector<'a> {
         }
 
         let class = classify::classify(extracted, matched.as_ref(), &out);
+        if class.kind.as_str() == classify::BANK_STATEMENT {
+            failclosed::settle_statement(&extracted.pages, &mut out);
+        }
         tracing::debug!(
             kind = class.kind.as_str(),
             detections = out.len(),
@@ -109,33 +141,48 @@ impl<'a> Detector<'a> {
 
 /// Resolve overlaps on each page (and within each form field): Template >
 /// Rule > Model > FailClosed, then the longer span, then higher confidence.
+///
+/// A detection wholly inside a better one is dropped. One that reaches past a
+/// better one is never dropped: against a `Keep` winner its uncovered parts
+/// survive; otherwise the two become one tokenized detection over the union,
+/// with the better one's kind, role and source.
 /// The result is sorted by page and start; form-field detections come last.
 pub fn merge(mut detections: Vec<Detection>) -> Vec<Detection> {
-    fn rank(s: &DetectionSource) -> u8 {
-        match s {
-            DetectionSource::Template { .. } => 0,
-            DetectionSource::Rule { .. } => 1,
-            DetectionSource::Model { .. } => 2,
-            DetectionSource::FailClosed { .. } => 3,
-        }
-    }
-    detections.sort_by(|a, b| {
-        rank(&a.source)
-            .cmp(&rank(&b.source))
-            .then(b.span.len().cmp(&a.span.len()))
-            .then(b.confidence.total_cmp(&a.confidence))
-            .then(a.span.start.cmp(&b.span.start))
-    });
+    detections.sort_by(better);
     let mut kept: Vec<Detection> = Vec::with_capacity(detections.len());
     for d in detections {
-        let clash = kept.iter().any(|k| {
-            k.page == d.page
-                && k.field == d.field
-                && k.span.start < d.span.end
-                && d.span.start < k.span.end
-        });
-        if !clash {
-            kept.push(d);
+        let mut pending = vec![d];
+        while let Some(d) = pending.pop() {
+            let Some(i) = kept.iter().position(|k| {
+                k.page == d.page
+                    && k.field == d.field
+                    && k.span.start < d.span.end
+                    && d.span.start < k.span.end
+            }) else {
+                kept.push(d);
+                continue;
+            };
+            let k = &kept[i];
+            if k.span.start <= d.span.start && d.span.end <= k.span.end {
+                continue;
+            }
+            if k.treatment == Treatment::Keep {
+                if d.treatment != Treatment::Keep {
+                    for (s, e) in [(d.span.start, k.span.start), (k.span.end, d.span.end)] {
+                        if s < e {
+                            let mut piece = d.clone();
+                            piece.span = inker_core::Span { start: s, end: e };
+                            pending.push(piece);
+                        }
+                    }
+                }
+                continue;
+            }
+            if d.treatment == Treatment::Keep {
+                continue;
+            }
+            let k = kept.remove(i);
+            pending.push(union(k, d));
         }
     }
     kept.sort_by(|a, b| {
@@ -144,6 +191,45 @@ pub fn merge(mut detections: Vec<Detection>) -> Vec<Detection> {
             .then(a.field.cmp(&b.field))
     });
     kept
+}
+
+fn rank(s: &DetectionSource) -> u8 {
+    match s {
+        DetectionSource::Template { .. } => 0,
+        DetectionSource::Rule { .. } => 1,
+        DetectionSource::Model { .. } => 2,
+        DetectionSource::FailClosed { .. } => 3,
+    }
+}
+
+/// Merge order: the more precise source, then the longer span, then the
+/// higher confidence.
+fn better(a: &Detection, b: &Detection) -> std::cmp::Ordering {
+    rank(&a.source)
+        .cmp(&rank(&b.source))
+        .then(b.span.len().cmp(&a.span.len()))
+        .then(b.confidence.total_cmp(&a.confidence))
+        .then(a.span.start.cmp(&b.span.start))
+}
+
+/// One tokenized detection over both spans, described by the more precise.
+fn union(a: Detection, b: Detection) -> Detection {
+    let (mut win, lose) = if rank(&a.source) <= rank(&b.source) {
+        (a, b)
+    } else {
+        (b, a)
+    };
+    win.span = inker_core::Span {
+        start: win.span.start.min(lose.span.start),
+        end: win.span.end.max(lose.span.end),
+    };
+    win.treatment = Treatment::Tokenize;
+    win.generalized = None;
+    if lose.needs_review && !win.needs_review {
+        win.needs_review = true;
+        win.review_prompt = lose.review_prompt;
+    }
+    win
 }
 
 /// Detect with the default pipeline (no model).

@@ -306,12 +306,55 @@ fn invalid(file: &str, message: &str) -> PackError {
     }
 }
 
+/// Compile a template pattern, case-insensitive. A run of literal spaces
+/// (outside a character class) matches any whitespace run, line breaks
+/// included, because IRS text layers wrap titles and labels mid-phrase.
 fn compile(file: &str, field: &str, pattern: &str) -> Result<Regex> {
-    Regex::new(&format!("(?i){pattern}")).map_err(|e| PackError::Regex {
+    Regex::new(&format!("(?i){}", loosen(pattern))).map_err(|e| PackError::Regex {
         file: file.into(),
         field: field.into(),
         message: e.to_string(),
     })
+}
+
+/// Replace each run of unescaped spaces outside `[...]` with `\s+`.
+pub fn loosen(pattern: &str) -> String {
+    let mut out = String::with_capacity(pattern.len() + 8);
+    let mut chars = pattern.chars().peekable();
+    let mut class = false;
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => {
+                out.push(c);
+                if let Some(n) = chars.next() {
+                    out.push(n);
+                }
+            }
+            '[' if !class => {
+                class = true;
+                out.push(c);
+                // A `]` or `^]` right after the opening bracket is literal.
+                if chars.peek() == Some(&'^') {
+                    out.extend(chars.next());
+                }
+                if chars.peek() == Some(&']') {
+                    out.extend(chars.next());
+                }
+            }
+            ']' if class => {
+                class = false;
+                out.push(c);
+            }
+            ' ' if !class => {
+                while chars.peek() == Some(&' ') {
+                    chars.next();
+                }
+                out.push_str("\\s+");
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 impl FormTemplate {

@@ -31,7 +31,7 @@ AD-4410-22
 11 Fish purchased for resale
 12 Section 409A deferrals
 13 FATCA filing requirement
-14 Excess golden parachute payments
+14
 15 Nonqualified deferred compensation
 16 State tax withheld
 380.00

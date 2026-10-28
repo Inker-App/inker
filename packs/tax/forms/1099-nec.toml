@@ -8,14 +8,14 @@ year = '(?s)1099-NEC.{0,80}?\b(20\d{2})\b'
 
 [[fields]]
 id = "payer_name"
-label = '''PAYER['’]S name, street address[^\n]*'''
+label = '''PAYER['’]S name, street address(?:, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)|[^\n]*)'''
 kind = "org"
 treatment = "tokenize"
 role = "payer"
 
 [[fields]]
 id = "payer_address"
-label = '''PAYER['’]S name, street address[^\n]*'''
+label = '''PAYER['’]S name, street address(?:, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)|[^\n]*)'''
 kind = "address"
 treatment = "generalize"
 role = "payer"
@@ -53,7 +53,7 @@ value = "line"
 
 [[fields]]
 id = "recipient_city"
-label = 'City or town, state or province[^\n]*'
+label = 'City or town, state or province(?:, country, and ZIP or foreign postal code|[^\n]*)'
 kind = "address"
 treatment = "generalize"
 role = "recipient"
@@ -80,7 +80,7 @@ treatment = "keep"
 
 [[fields]]
 id = "2"
-label = '\b2\s+Payer made direct sales totaling \$5,000 or more[^\n]*'
+label = '\b2\s+Payer made direct sales totaling \$5,000 or more(?: of consumer products to recipient for resale|[^\n]*)'
 kind = "keep"
 treatment = "keep"
 

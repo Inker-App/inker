@@ -2,7 +2,7 @@
 
 use std::sync::LazyLock;
 
-use inker_core::{Detection, DocKind, Extracted, TextOrigin, TokenKind};
+use inker_core::{Detection, DetectionSource, DocKind, Extracted, TextOrigin, TokenKind};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
@@ -10,21 +10,45 @@ use crate::template::TemplateMatch;
 use crate::util::re;
 
 /// What a document is. `org` is the employer or payer name as written; the
-/// core uses it for the codename and never shows it to an agent.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// core uses it for the codename and never shows it to an agent. `Debug`
+/// prints `<redacted>` in its place.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Classification {
     pub kind: DocKind,
     pub year: Option<u16>,
     pub org: Option<String>,
 }
 
+impl std::fmt::Debug for Classification {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Classification")
+            .field("kind", &self.kind)
+            .field("year", &self.year)
+            .field("org", &self.org.as_ref().map(|_| Redacted))
+            .finish()
+    }
+}
+
+struct Redacted;
+
+impl std::fmt::Debug for Redacted {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<redacted>")
+    }
+}
+
 pub const BANK_STATEMENT: &str = "bank-statement";
 pub const CLOSING_STATEMENT: &str = "closing-statement";
 pub const RECEIPT: &str = "receipt";
+/// An IRS form with no template: a form number plus an OMB control number.
+pub const TAX_FORM: &str = "tax-form";
 
 /// Roles whose organisation names the document (employer or payer).
 const ORG_ROLES: &[&str] = &["employer", "payer", "lender"];
 
+static FORM_NO: LazyLock<Regex> =
+    LazyLock::new(|| re(r"\bForm\s+(?:1099-[A-Z]{1,3}|W-2[A-Z]?|1098(?:-[A-Z])?)\b"));
+static OMB: LazyLock<Regex> = LazyLock::new(|| re(r"\bOMB\s+No\.?\s*\d{4}-\d{4}"));
 static YEAR: LazyLock<Regex> = LazyLock::new(|| re(r"(?:19[89]\d|20\d{2})"));
 
 /// Classify from the matched template if any, else from the text.
@@ -51,6 +75,10 @@ pub fn classify(
 fn heuristic_kind(extracted: &Extracted) -> &'static str {
     let lower = extracted.full_text().to_ascii_lowercase();
     let any = |words: &[&str]| words.iter().any(|w| lower.contains(w));
+    let full = extracted.full_text();
+    if FORM_NO.is_match(&full) && OMB.is_match(&full) {
+        return TAX_FORM;
+    }
     if any(&[
         "closing disclosure",
         "settlement statement",
@@ -108,17 +136,18 @@ fn common_year(extracted: &Extracted) -> Option<u16> {
     counts.iter().find(|(_, n)| *n == best).map(|(y, _)| *y)
 }
 
-/// The employer, payer or lender name; else the first organisation.
+/// The employer, payer or lender name, read from a template field with that
+/// role. Never from the names pass or fail-closed: the core puts this in the
+/// codename, so a guess must not reach it.
 fn org_name(extracted: &Extracted, detections: &[Detection]) -> Option<String> {
-    let mut orgs: Vec<&Detection> = detections
+    let pick = detections
         .iter()
-        .filter(|d| d.kind == TokenKind::Org)
-        .collect();
-    orgs.sort_by_key(|d| (d.field.is_none(), d.page, d.span.start));
-    let pick = orgs
-        .iter()
-        .find(|d| d.role.as_deref().is_some_and(|r| ORG_ROLES.contains(&r)))
-        .or_else(|| orgs.first())?;
+        .filter(|d| {
+            d.kind == TokenKind::Org
+                && matches!(d.source, DetectionSource::Template { .. })
+                && d.role.as_deref().is_some_and(|r| ORG_ROLES.contains(&r))
+        })
+        .min_by_key(|d| (d.field.is_none(), d.page, d.span.start))?;
     let source = match &pick.field {
         Some(name) => extracted
             .fields

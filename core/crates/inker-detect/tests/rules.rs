@@ -392,7 +392,6 @@ fn phone_in_text() {
     }
     for t in [
         "call 555-0142",
-        "id 2125550142",
         "(112) 555-0142",
         "212-155-0142",
         "total 1,212.55",
@@ -445,4 +444,76 @@ fn spans_are_byte_offsets() {
     let t = "Café – Account № 7700012345678";
     let d = &rules::find(&page(t))[0];
     assert_eq!(&t[d.span.start..d.span.end], "7700012345678");
+}
+
+// ---------------------------------------------------- Separators and widths
+
+#[test]
+fn ssn_with_other_separators() {
+    // Dots, en dash, U+2212 minus (PDFDocEncoding), a line break after a
+    // dash, fullwidth digits. Spans point at the original text.
+    for t in [
+        "SSN 900.12.3456",
+        "SSN 900\u{2013}12\u{2013}3456",
+        "SSN 900\u{2212}12\u{2212}3456",
+        "SSN 900\u{2010}12\u{2010}3456",
+        "SSN 900-12-\n3456",
+        "SSN \u{ff19}\u{ff10}\u{ff10}-\u{ff11}\u{ff12}-\u{ff13}\u{ff14}\u{ff15}\u{ff16}",
+    ] {
+        let want = &t[4..];
+        assert!(has(t, TokenKind::Ssn, want), "{t:?}: {:?}", found(t));
+    }
+    // Mixed separators are not an SSN shape.
+    assert!(none_of("ref 900.12-3456", TokenKind::Ssn));
+}
+
+#[test]
+fn routing_with_spaces_after_a_label() {
+    assert!(has(
+        "ABA 011 200 446", // pii-check: allow (synthetic, constructed for the checksum test)
+        TokenKind::Routing,
+        "011 200 446" // pii-check: allow (synthetic, constructed for the checksum test)
+    ));
+    assert!(none_of("Total 011 200 446", TokenKind::Routing)); // pii-check: allow (synthetic, constructed for the checksum test)
+}
+
+#[test]
+fn bare_ten_digit_phones() {
+    assert!(has(
+        "RIDESHARE TRIP 6145550142 OH",
+        TokenKind::Phone,
+        "6145550142"
+    ));
+    // Area or exchange starting 0 or 1: not a phone.
+    assert!(none_of("ref 1145550142", TokenKind::Phone));
+    assert!(none_of("ref 6141550142", TokenKind::Phone));
+    // Glued to more digits: not a phone.
+    assert!(none_of("ref 61455501421", TokenKind::Phone));
+    // An account label wins.
+    assert!(has("Account 6145550142", TokenKind::Account, "6145550142"));
+}
+
+#[test]
+fn aba_rejects_all_zeros() {
+    assert!(!rules::is_valid_aba("000000000"));
+    assert!(none_of("Routing 000000000", TokenKind::Routing));
+}
+
+#[test]
+fn mir_cards() {
+    // Built from parts: a Luhn-valid number in the Mir range 2200-2204.
+    let mir = format!("2200{}04", "0".repeat(10));
+    assert_eq!(rules::card_brand(&mir), Some("mir"));
+    let spaced = format!(
+        "{} {} {} {}",
+        &mir[..4],
+        &mir[4..8],
+        &mir[8..12],
+        &mir[12..]
+    );
+    assert!(rules::is_valid_card(&spaced));
+    assert_eq!(
+        rules::card_brand(&format!("2205{}03", "0".repeat(10))),
+        None
+    );
 }

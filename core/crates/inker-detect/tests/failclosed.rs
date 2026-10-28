@@ -49,7 +49,7 @@ fn number() -> TokenKind {
 
 #[test]
 fn long_numbers_without_context() {
-    let f = found("Ref 4471002233119 attached");
+    let f = found("Note 4471002233119 attached");
     assert_eq!(
         f,
         vec![(
@@ -58,10 +58,10 @@ fn long_numbers_without_context() {
             "A long number I can't place. Ink it?".into()
         )]
     );
-    let f = found("ref 4471-0022-3311.");
+    let f = found("note 4471-0022-3311.");
     assert_eq!(f[0].1, "4471-0022-3311");
     assert_eq!(
-        found("Ref 44710022 attached"),
+        found("Note 44710022 attached"),
         vec![],
         "eight digits is below the text threshold"
     );
@@ -117,7 +117,7 @@ fn ocr_pages_lower_the_threshold_and_read_misread_digits() {
             "Looks like a routing number, but the scan is rough. Ink it?".into()
         )]
     );
-    let f = ocr("Ref 4471002233119");
+    let f = ocr("Note 4471002233119");
     assert_eq!(f[0].2, "A long number, and the scan is rough. Ink it?");
 }
 
@@ -138,10 +138,10 @@ fn amounts_dates_and_years_are_left_alone() {
 
 #[test]
 fn covered_spans_are_skipped() {
-    let t = "Ref 4471002233119 attached";
-    assert_eq!(found_with(t, TextOrigin::TextLayer, &[(4, 17)]), vec![]);
+    let t = "Note 4471002233119 attached";
+    assert_eq!(found_with(t, TextOrigin::TextLayer, &[(5, 18)]), vec![]);
     assert_eq!(
-        found_with(t, TextOrigin::TextLayer, &[(8, 10)]),
+        found_with(t, TextOrigin::TextLayer, &[(9, 11)]),
         vec![],
         "any overlap counts"
     );
@@ -169,4 +169,63 @@ fn names_near_sensitive_labels() {
     ] {
         assert_eq!(found(t), vec![], "{t}");
     }
+}
+
+#[test]
+fn digit_groups_join_across_dots_dashes_and_breaks() {
+    for t in [
+        "note 4471.0022.3311",
+        "note 4471\u{2013}0022\u{2013}3311",
+        "note 4471-0022-\n3311",
+        "note \u{ff14}\u{ff14}\u{ff17}\u{ff11}\u{ff10}\u{ff10}\u{ff12}\u{ff12}\u{ff13}",
+    ] {
+        let f = found(t);
+        assert_eq!(f.len(), 1, "{t:?}: {f:?}");
+        assert_eq!(f[0].1, &t[5..], "{t:?}");
+    }
+    // An amount with a decimal point is still an amount.
+    assert_eq!(found("Total 1234567.89"), vec![]);
+}
+
+#[test]
+fn statement_references_are_inked_without_a_question() {
+    let text = "PPD ID: 9111222333 TRACE 990000441234567 ORDER 112-3456789-1234567 \
+                SEQ 990123487 x\nCASHOUT 1037621994857263 PPD\nIN 20250310000123 IMAD\n\
+                REF NUMBER :810237465912\nconf 4471002233119\n\
+                PAYMENTREC 000048213337\nTAX 990547123456789\nSSN ref 0001122334455\n";
+    let pages = vec![PageText {
+        page: 1,
+        text: text.into(),
+        origin: TextOrigin::TextLayer,
+    }];
+    let mut got = failclosed::find(&pages[0], &[]);
+    assert!(got.iter().all(|d| d.needs_review), "held until settled");
+    failclosed::settle_statement(&pages, &mut got);
+    let v = |d: &inker_core::Detection| text[d.span.start..d.span.end].to_string();
+    let refs: Vec<String> = got
+        .iter()
+        .filter(|d| matches!(&d.source, DetectionSource::FailClosed { reason } if reason == "transaction_ref"))
+        .map(v)
+        .collect();
+    assert_eq!(refs.len(), 8, "{refs:?}");
+    // The two unexplained numbers share one question; the SSN keeps its own.
+    let asked: Vec<(String, Option<String>)> = got
+        .iter()
+        .filter(|d| d.needs_review)
+        .map(|d| (v(d), d.review_prompt.clone()))
+        .collect();
+    assert_eq!(
+        asked,
+        vec![
+            (
+                "000048213337".into(),
+                Some(failclosed::STATEMENT_PROMPT.into())
+            ),
+            (
+                "0001122334455".into(),
+                Some("Looks like a Social Security number, but I'm not sure. Ink it?".into())
+            ),
+        ]
+    );
+    assert!(got.iter().all(|d| d.treatment == Treatment::Tokenize));
 }

@@ -1,4 +1,7 @@
-# Form 1099-MISC, Miscellaneous Information.
+# Form 1099-MISC, Miscellaneous Information, Rev. April 2025 (and earlier
+# layouts): 13 FATCA filing requirement, 14 blank, 15 Nonqualified deferred
+# compensation. Excess golden parachute payments moved to 1099-NEC box 3.
+# The Rev. December 2026 layout is 1099-misc-2026.toml.
 # Box labels follow the IRS wording. Schema: see w2.toml.
 id = "1099-misc"
 display = "1099-MISC"
@@ -8,14 +11,14 @@ year = '(?s)1099-MISC.{0,80}?\b(20\d{2})\b'
 
 [[fields]]
 id = "payer_name"
-label = '''PAYER['’]S name, street address[^\n]*'''
+label = '''PAYER['’]S name, street address(?:, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)|[^\n]*)'''
 kind = "org"
 treatment = "tokenize"
 role = "payer"
 
 [[fields]]
 id = "payer_address"
-label = '''PAYER['’]S name, street address[^\n]*'''
+label = '''PAYER['’]S name, street address(?:, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)|[^\n]*)'''
 kind = "address"
 treatment = "generalize"
 role = "payer"
@@ -53,7 +56,7 @@ value = "line"
 
 [[fields]]
 id = "recipient_city"
-label = 'City or town, state or province[^\n]*'
+label = 'City or town, state or province(?:, country, and ZIP or foreign postal code|[^\n]*)'
 kind = "address"
 treatment = "generalize"
 role = "recipient"
@@ -68,7 +71,7 @@ role = "recipient"
 
 [[fields]]
 id = "fatca"
-label = 'FATCA filing requirement'
+label = '(?:\b13\s+)?FATCA filing requirement'
 kind = "keep"
 treatment = "keep"
 
@@ -110,7 +113,7 @@ treatment = "keep"
 
 [[fields]]
 id = "7"
-label = '\b7\s+Payer made direct sales totaling \$5,000 or more[^\n]*'
+label = '\b7\s+Payer made direct sales totaling \$5,000 or more(?: of consumer products to recipient for resale|[^\n]*)'
 kind = "keep"
 treatment = "keep"
 
@@ -141,12 +144,6 @@ treatment = "keep"
 [[fields]]
 id = "12"
 label = '\b12\s+Section 409A deferrals'
-kind = "keep"
-treatment = "keep"
-
-[[fields]]
-id = "14"
-label = '\b14\s+Excess golden parachute payments'
 kind = "keep"
 treatment = "keep"
 

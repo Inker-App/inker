@@ -173,7 +173,10 @@ fn f1099_nec_end_to_end() {
 fn bank_statement_end_to_end() {
     let (text, dets, c) = run("bank-statement.txt", TextOrigin::TextLayer);
     assert_eq!((c.kind.as_str(), c.year), ("bank-statement", Some(2025)));
-    assert_eq!(c.org.as_deref(), Some("Northwind Bank"));
+    assert_eq!(
+        c.org, None,
+        "no template: the org stays out of the codename"
+    );
     no_overlaps(&dets);
     let kinds = [
         ("Northwind Bank", TokenKind::Org),
@@ -194,9 +197,10 @@ fn bank_statement_end_to_end() {
     assert_eq!(home.generalized.as_deref(), Some("Brooklyn, NY"));
     let bank = find(&text, &dets, "PO Box 4471\nColumbus, OH 43215");
     assert_eq!(bank.generalized.as_deref(), Some("Columbus, OH"));
-    // The unexplained reference number is held for review.
+    // A transaction reference is inked, but does not ask a question.
     let r = find(&text, &dets, "8812004471923");
-    assert!(r.needs_review);
+    assert!(!r.needs_review);
+    assert_eq!(r.treatment, Treatment::Tokenize);
     assert!(matches!(r.source, DetectionSource::FailClosed { .. }));
     untouched(
         &text,
@@ -217,7 +221,10 @@ fn bank_statement_end_to_end() {
 fn closing_statement_rough_scan() {
     let (text, dets, c) = run("closing-statement.txt", TextOrigin::Ocr);
     assert_eq!((c.kind.as_str(), c.year), ("closing-statement", Some(2025)));
-    assert_eq!(c.org.as_deref(), Some("Adatum Mortgage Co."));
+    assert_eq!(
+        c.org, None,
+        "no template: the org stays out of the codename"
+    );
     no_overlaps(&dets);
     let b = find(&text, &dets, "Maria Example-Lopez");
     assert_eq!(
@@ -260,18 +267,38 @@ fn empty_input_is_unknown() {
 }
 
 #[test]
-fn acroform_fields_flow_through() {
-    // A synthetic acroform-only value on a W-2 page: the template has no
-    // acroform names, so the value is found only if it is also in the text.
+fn acroform_fields_are_scanned_not_passed_through() {
+    // A W-2 page whose template maps no AcroForm names: an unmapped field
+    // that is not an amount is inked; an amount stays clear.
     let text = fixture("w2.txt");
     let mut e = one_page(&text, TextOrigin::TextLayer);
-    e.fields.push(inker_core::FormField {
-        name: "unrelated".into(),
-        value: "12.00".into(),
-        page: Some(1),
-    });
+    for (name, value) in [("unrelated", "12.00"), ("f1_11", "666-12-3456")] {
+        e.fields.push(inker_core::FormField {
+            name: name.into(),
+            value: value.into(),
+            page: Some(1),
+        });
+    }
     let (d, _) = detect(&e, &packs()).unwrap();
-    assert!(d.iter().all(|d| d.field.is_none()));
+    assert!(!d.iter().any(|d| d.field.as_deref() == Some("unrelated")));
+    let ssn = d
+        .iter()
+        .find(|d| d.field.as_deref() == Some("f1_11"))
+        .expect("unmapped field is scanned");
+    assert_eq!((ssn.span.start, ssn.span.end), (0, 11));
+}
+
+#[test]
+fn keep_box_does_not_shelter_a_reference_number() {
+    // Probe from the review: a keep box's line carries more than the amount.
+    let text = fixture("w2.txt").replace(
+        "52340.18\n2 Federal",
+        "52000.00 ref 4471002233119\n2 Federal",
+    );
+    let (dets, _) = detect(&one_page(&text, TextOrigin::TextLayer), &packs()).unwrap();
+    let r = find(&text, &dets, "4471002233119");
+    assert!(r.needs_review, "the reference number holds the document");
+    untouched(&text, &dets, &["52000.00"]);
 }
 
 fn src(kind: &str) -> DetectionSource {
@@ -301,10 +328,10 @@ fn d(page: u32, s: usize, e: usize, source: &str, conf: f32) -> Detection {
 #[test]
 fn merge_prefers_precision_then_length_then_confidence() {
     let out = merge(vec![
-        d(1, 0, 20, "f", 0.4), // fail-closed loses to the template inside it
-        d(1, 5, 10, "t", 0.95),
-        d(1, 30, 40, "m", 0.99), // model loses to rule
-        d(1, 32, 38, "r", 0.5),
+        d(1, 5, 10, "t", 0.95), // fail-closed inside the template is dropped
+        d(1, 6, 9, "f", 0.4),
+        d(1, 30, 40, "r", 0.5), // model inside the rule is dropped
+        d(1, 32, 38, "m", 0.99),
         d(1, 50, 60, "r", 0.5), // same source: longer wins
         d(1, 50, 65, "r", 0.5),
         d(1, 70, 80, "r", 0.5), // same span: higher confidence wins
@@ -319,12 +346,77 @@ fn merge_prefers_precision_then_length_then_confidence() {
         got,
         vec![
             (1, 5, 10, 0.95),
-            (1, 32, 38, 0.5),
+            (1, 30, 40, 0.5),
             (1, 50, 65, 0.5),
             (1, 70, 80, 0.9),
             (2, 5, 10, 0.4)
         ]
     );
+}
+
+#[test]
+fn merge_unions_partial_overlaps_when_tokenizing() {
+    // Template 5..10 and a fail-closed 0..20 around it: nothing is dropped.
+    let mut t = d(1, 5, 10, "t", 0.95);
+    t.kind = TokenKind::Ssn;
+    t.role = Some("employee".into());
+    let out = merge(vec![d(1, 0, 20, "f", 0.4), t]);
+    assert_eq!(out.len(), 1, "{out:?}");
+    let u = &out[0];
+    assert_eq!((u.span.start, u.span.end), (0, 20));
+    assert_eq!(u.treatment, Treatment::Tokenize);
+    assert_eq!(u.kind, TokenKind::Ssn, "the more precise source's kind");
+    assert_eq!(u.role.as_deref(), Some("employee"));
+    assert!(matches!(u.source, DetectionSource::Template { .. }));
+
+    // Rule 30..40 and model 35..45 overlap partly: the union is inked.
+    let out = merge(vec![d(1, 35, 45, "m", 0.99), d(1, 30, 40, "r", 0.5)]);
+    assert_eq!(out.len(), 1);
+    assert_eq!((out[0].span.start, out[0].span.end), (30, 45));
+    assert!(matches!(out[0].source, DetectionSource::Rule { .. }));
+
+    // A generalized address partly overlapped by a tokenized hit: inked whole.
+    let mut a = d(1, 0, 10, "t", 0.95);
+    a.treatment = Treatment::Generalize;
+    a.generalized = Some("Brooklyn, NY".into());
+    let out = merge(vec![a, d(1, 8, 14, "r", 0.9)]);
+    assert_eq!(out.len(), 1);
+    assert_eq!(
+        (out[0].span.start, out[0].span.end, out[0].treatment),
+        (0, 14, Treatment::Tokenize)
+    );
+    assert_eq!(out[0].generalized, None);
+
+    // A union that reaches a third detection absorbs it too.
+    let out = merge(vec![
+        d(1, 0, 10, "r", 0.9),
+        d(1, 8, 22, "f", 0.4),
+        d(1, 20, 30, "r", 0.8),
+    ]);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!((out[0].span.start, out[0].span.end), (0, 30));
+}
+
+#[test]
+fn merge_keeps_what_a_template_keep_does_not_cover() {
+    let mut k = d(1, 10, 20, "t", 0.95);
+    k.treatment = Treatment::Keep;
+    let out = merge(vec![k.clone(), d(1, 5, 25, "r", 0.9)]);
+    let got: Vec<(usize, usize, Treatment)> = out
+        .iter()
+        .map(|d| (d.span.start, d.span.end, d.treatment))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            (5, 10, Treatment::Tokenize),
+            (10, 20, Treatment::Keep),
+            (20, 25, Treatment::Tokenize)
+        ]
+    );
+    // A tokenized hit wholly inside the keep stays dropped.
+    let out = merge(vec![k, d(1, 12, 18, "r", 0.9)]);
+    assert_eq!(out.len(), 1);
 }
 
 #[test]
@@ -410,4 +502,39 @@ fn no_model_finds_nothing() {
         origin: TextOrigin::TextLayer,
     }];
     assert!(NoModel.detect(&pages).unwrap().is_empty());
+}
+
+#[test]
+fn a_busy_statement_asks_one_question() {
+    let (text, dets, c) = run("bank-statement-20.txt", TextOrigin::TextLayer);
+    assert_eq!(c.kind.as_str(), "bank-statement");
+    no_overlaps(&dets);
+    let held: Vec<&str> = dets
+        .iter()
+        .filter(|d| d.needs_review)
+        .map(|d| value(&text, d))
+        .collect();
+    assert!(held.len() <= 2, "{} questions: {held:?}", held.len());
+    // Every reference is still inked.
+    for r in [
+        "9111222333",
+        "990000441234567",
+        "112-3456789-1234567",
+        "8812004471923",
+        "0123456789",
+        "000048213337",
+        "1037621994857263",
+        "990123487",
+        "990547123456789",
+        "1004958372615",
+        "810237465912",
+    ] {
+        let d = find(&text, &dets, r);
+        assert_eq!(d.treatment, Treatment::Tokenize, "{r}");
+    }
+    // Bare ten-digit numbers shaped like phone numbers are phones.
+    for p in ["6145550142", "6145550188", "614-555-0177"] {
+        assert_eq!(find(&text, &dets, p).kind, TokenKind::Phone, "{p}");
+    }
+    untouched(&text, &dets, &["2,100.00", "-1,200.00", "812.00", "1042"]);
 }

@@ -283,3 +283,78 @@ fn errors_name_the_line_and_convert_to_core_errors() {
     let core: inker_core::Error = e.into();
     assert!(matches!(core, inker_core::Error::Detect(_)));
 }
+
+#[test]
+fn spaces_in_patterns_match_wrapped_text() {
+    // IRS text layers wrap titles and labels: "Medical and health care \npayments".
+    let t = FormTemplate::parse(
+        "forms/demo.toml",
+        r#"
+id = "demo"
+display = "Demo"
+kind = "demo"
+anchors = ["Mortgage Interest Statement"]
+year = 'For calendar year (20\d{2})'
+
+[[fields]]
+id = "6"
+label = '\b6\s+Medical and health care payments'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "c"
+label = '[^ ]x y'
+kind = "keep"
+treatment = "keep"
+"#,
+    )
+    .unwrap();
+    assert!(t.anchors[0].is_match("Mortgage \nInterest \nStatement"));
+    assert!(
+        t.fields[0]
+            .label
+            .is_match(" 6 Medical and health care \npayments")
+    );
+    assert!(t.year.as_ref().unwrap().is_match("For calendar year\n2025"));
+    // Spaces inside a character class are left alone.
+    assert!(t.fields[1].label.is_match("ax \n y"));
+    assert!(!t.fields[1].label.is_match(" x y"));
+}
+
+#[test]
+fn misc_2025_and_2026_boxes_follow_their_revisions() {
+    let set = PackSet::builtin().unwrap();
+    let get = |id: &str| set.forms().find(|f| f.id == id).unwrap();
+    let labels = |id: &str, text: &str| -> Vec<String> {
+        get(id)
+            .fields
+            .iter()
+            .filter(|f| f.label.is_match(text))
+            .map(|f| f.id.clone())
+            .collect()
+    };
+    // Rev. April 2025: 13 FATCA, 14 bare, 15 NQDC; golden parachutes moved to NEC.
+    assert!(labels("1099-misc", "14 Excess golden parachute payments").is_empty());
+    assert_eq!(
+        labels("1099-misc", "15 Nonqualified deferred \ncompensation"),
+        ["15"]
+    );
+    assert_eq!(
+        labels("1099-misc", "13 FATCA filing \nrequirement"),
+        ["fatca"]
+    );
+    // Rev. December 2026: 13a cash tips, 13b TTOC, 14 overtime, 15 NQDC, 16-18 state.
+    let m = get("1099-misc-2026");
+    assert_eq!(m.kind, "1099-misc");
+    for (text, id) in [
+        ("13a Cash tips", "13a"),
+        ("13b TTOC", "13b"),
+        ("14   Overtime compensation", "14"),
+        ("15   Nonqualified deferred \ncompensation", "15"),
+        ("16   State tax withheld", "16"),
+        ("18   State income", "18"),
+    ] {
+        assert_eq!(labels("1099-misc-2026", text), [id], "{text}");
+    }
+}

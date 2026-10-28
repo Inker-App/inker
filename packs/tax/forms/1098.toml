@@ -8,14 +8,14 @@ year = '(?s)Form\s+1098\b.{0,80}?\b(20\d{2})\b'
 
 [[fields]]
 id = "lender_name"
-label = '''RECIPIENT['’]S/LENDER['’]S name[^\n]*'''
+label = '''RECIPIENT['’]S/LENDER['’]S name(?:, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)|[^\n]*)'''
 kind = "org"
 treatment = "tokenize"
 role = "lender"
 
 [[fields]]
 id = "lender_address"
-label = '''RECIPIENT['’]S/LENDER['’]S name[^\n]*'''
+label = '''RECIPIENT['’]S/LENDER['’]S name(?:, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)|[^\n]*)'''
 kind = "address"
 treatment = "generalize"
 role = "lender"
@@ -53,7 +53,7 @@ value = "line"
 
 [[fields]]
 id = "borrower_city"
-label = 'City or town, state or province[^\n]*'
+label = 'City or town, state or province(?:, country, and ZIP or foreign postal code|[^\n]*)'
 kind = "address"
 treatment = "generalize"
 role = "borrower"

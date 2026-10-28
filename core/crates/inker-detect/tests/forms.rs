@@ -126,10 +126,20 @@ fn check(
             .find(a)
             .unwrap_or_else(|| panic!("{form}: amount {a} not in fixture"));
         let end = at + a.len();
-        assert!(
-            out.keep.iter().any(|(_, s)| s.start <= at && end <= s.end),
-            "{form}: amount {a} not in a keep span"
-        );
+        // Keep spans cover only amount- and code-shaped tokens; words in a
+        // keep box (a locality, a security description) stay visible to
+        // fail-closed, and are not detected by the template either.
+        let mut off = at;
+        for tok in a.split(' ') {
+            let (ts, te) = (off, off + tok.len());
+            off = te + 1;
+            let kept = out.keep.iter().any(|(_, s)| s.start <= ts && te <= s.end);
+            assert_eq!(
+                kept,
+                inker_detect::shape::is_benign_token(tok),
+                "{form}: keep of {tok:?} in {a:?}"
+            );
+        }
         assert!(
             !out.detections
                 .iter()

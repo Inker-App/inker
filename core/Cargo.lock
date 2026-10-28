@@ -1390,10 +1390,18 @@ name = "inker-ffi"
 version = "0.1.0"
 dependencies = [
  "camino",
+ "chrono",
  "inker-core",
+ "inker-extract",
+ "inker-host",
+ "inker-ipc",
+ "inker-mcp",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
+ "tokio",
+ "tokio-util",
  "tracing",
  "uniffi",
 ]

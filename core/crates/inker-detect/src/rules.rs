@@ -9,7 +9,7 @@ use std::sync::LazyLock;
 use inker_core::{Detection, PageText, TokenKind, Treatment};
 use regex::Regex;
 
-use crate::util::{detection, digits, isolated, label_before, overlaps, re, rule};
+use crate::util::{Folded, detection, digits, isolated, label_before, overlaps, re, rule};
 
 /// The outcome of checking nine digits as an SSN.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,11 +30,12 @@ pub const SSN_SAMPLES: &[&str] = &["078051120", "219099999", "123456789"];
 
 /// Nine digits from `AAA-GG-SSSS`, `AAA GG SSSS` or `AAAGGSSSS`; else `None`.
 fn nine_digits_3_2_4(s: &str) -> Option<String> {
-    let b = s.as_bytes();
+    let joined: String = s.chars().filter(|&c| c != '\n').collect();
+    let b = joined.as_bytes();
     let ok = match b.len() {
         9 => b.iter().all(u8::is_ascii_digit),
         11 => {
-            matches!(b[3], b'-' | b' ')
+            matches!(b[3], b'-' | b' ' | b'.')
                 && b[6] == b[3]
                 && b.iter()
                     .enumerate()
@@ -203,9 +204,9 @@ pub fn is_valid_ein(s: &str) -> bool {
 }
 
 /// True for an ABA routing number: nine digits, 3-7-1 weighted checksum,
-/// Federal Reserve prefix 00-12, 21-32, 61-72 or 80.
+/// Federal Reserve prefix 00-12, 21-32, 61-72 or 80; never all zeros.
 pub fn is_valid_aba(s: &str) -> bool {
-    if s.len() != 9 || !s.bytes().all(|c| c.is_ascii_digit()) {
+    if s.len() != 9 || !s.bytes().all(|c| c.is_ascii_digit()) || s.bytes().all(|c| c == b'0') {
         return false;
     }
     let d: Vec<u32> = s.bytes().map(|c| u32::from(c - b'0')).collect();
@@ -265,6 +266,8 @@ pub fn card_brand(digits: &str) -> Option<&'static str> {
         || matches!(p(6), 622126..=622925)
     {
         (16..=19).contains(&len).then_some("discover")
+    } else if matches!(p(4), 2200..=2204) {
+        (16..=19).contains(&len).then_some("mir")
     } else if matches!(p(4), 3528..=3589) {
         (16..=19).contains(&len).then_some("jcb")
     } else if matches!(p(3), 300..=305) || matches!(p(2), 36 | 38 | 39) {
@@ -330,10 +333,15 @@ pub const ACCOUNT_LABELS: &[&str] = &[
 static EMAIL: LazyLock<Regex> =
     LazyLock::new(|| re(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"));
 static CARD: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:[ -]?\d){12,18}"));
-static SSN_FMT: LazyLock<Regex> = LazyLock::new(|| re(r"\d{3}-\d{2}-\d{4}|\d{3} \d{2} \d{4}"));
+/// `AAA-GG-SSSS` (a line break may follow a dash), `AAA.GG.SSSS`, `AAA GG SSSS`.
+static SSN_FMT: LazyLock<Regex> =
+    LazyLock::new(|| re(r"\d{3}-\n?\d{2}-\n?\d{4}|\d{3}\.\n?\d{2}\.\n?\d{4}|\d{3} \d{2} \d{4}"));
+static NINE_SPACED: LazyLock<Regex> = LazyLock::new(|| re(r"\d{3} \d{3} \d{3}"));
 static EIN_FMT: LazyLock<Regex> = LazyLock::new(|| re(r"\d{2}-\d{7}"));
 static PHONE: LazyLock<Regex> =
     LazyLock::new(|| re(r"(?:\+?1[ .-]?)?(?:\((\d{3})\) ?|(\d{3})[ .-])(\d{3})[ .-]\d{4}"));
+/// A bare ten-digit North American number: area and exchange start 2-9.
+static PHONE_BARE: LazyLock<Regex> = LazyLock::new(|| re(r"[2-9]\d{2}[2-9]\d{6}"));
 static NINE: LazyLock<Regex> = LazyLock::new(|| re(r"\d{9}"));
 static ACCOUNT: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:-?\d){5,16}"));
 static DATE: LazyLock<Regex> = LazyLock::new(|| re(r"^\d{4}-\d{2}-\d{2}$|^\d{2}-\d{2}-\d{4}$"));
@@ -341,8 +349,30 @@ static DATE: LazyLock<Regex> = LazyLock::new(|| re(r"^\d{4}-\d{2}-\d{2}$|^\d{2}-
 /// Context window, in bytes before a value, for the label rules.
 const CONTEXT: usize = 30;
 
-/// Run every rule over one page.
+/// Run every rule over one page. Dash variants and fullwidth digits are
+/// folded first; spans point into the original text.
 pub fn find(page: &PageText) -> Vec<Detection> {
+    let folded = Folded::new(&page.text);
+    if folded.is_identity(&page.text) {
+        return find_folded(page);
+    }
+    let fp = PageText {
+        page: page.page,
+        text: folded.text.clone(),
+        origin: page.origin,
+    };
+    find_folded(&fp)
+        .into_iter()
+        .map(|mut d| {
+            let (s, e) = folded.span_to_orig(&page.text, d.span.start, d.span.end);
+            d.span.start = s;
+            d.span.end = e;
+            d
+        })
+        .collect()
+}
+
+fn find_folded(page: &PageText) -> Vec<Detection> {
     let text = page.text.as_str();
     let lower = text.to_ascii_lowercase();
     let mut sink = Sink {
@@ -402,6 +432,17 @@ pub fn find(page: &PageText) -> Vec<Detection> {
         }
     }
 
+    // Routing numbers written in three groups, after a routing label.
+    for m in NINE_SPACED.find_iter(text) {
+        let (s, e) = (m.start(), m.end());
+        if sink.free(text, s, e)
+            && label_before(&lower, s, CONTEXT, ROUTING_LABELS).is_some()
+            && is_valid_aba(&digits(m.as_str()))
+        {
+            sink.add(s, e, TokenKind::Routing, "aba_routing", 0.9);
+        }
+    }
+
     // Bare nine digits: routing first, then SSN/ITIN, then EIN, by context.
     for m in NINE.find_iter(text) {
         let (s, e) = (m.start(), m.end());
@@ -446,6 +487,13 @@ pub fn find(page: &PageText) -> Vec<Detection> {
             _ => 0.55,
         };
         sink.add(s, e, TokenKind::Account, "account_context", conf);
+    }
+
+    // Bare ten digits shaped like a phone number, after every labelled rule.
+    for m in PHONE_BARE.find_iter(text) {
+        if sink.free(text, m.start(), m.end()) {
+            sink.add(m.start(), m.end(), TokenKind::Phone, "phone_bare", 0.6);
+        }
     }
 
     let mut out = sink.out;

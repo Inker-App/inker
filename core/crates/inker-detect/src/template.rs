@@ -13,7 +13,8 @@ use inker_packs::{FieldKind, FieldSpec, FormTemplate, PackSet, ValueShape};
 use regex::Regex;
 
 use crate::address;
-use crate::util::{ceil_char, detection, isolated, re};
+use crate::shape;
+use crate::util::{ceil_char, detection, floor_char, isolated, re};
 
 /// The template chosen for a document.
 #[derive(Debug, Clone)]
@@ -36,7 +37,8 @@ pub struct RoleRegion {
 #[derive(Debug, Clone, Default)]
 pub struct TemplateOutput {
     pub detections: Vec<Detection>,
-    /// Values of `keep` fields: later stages must not fail-close them.
+    /// Amount- or code-shaped tokens of `keep` fields: later stages must not
+    /// fail-close them.
     pub keep: Vec<(u32, Span)>,
     pub regions: Vec<RoleRegion>,
 }
@@ -54,16 +56,32 @@ static DATE: LazyLock<Regex> =
 static ROUTING: LazyLock<Regex> = LazyLock::new(|| re(r"\d{9}"));
 static ACCOUNT: LazyLock<Regex> = LazyLock::new(|| re(r"[A-Za-z0-9*][A-Za-z0-9*-]{3,}"));
 
+/// How far either side of the title anchor the other anchors must match,
+/// in bytes of whitespace-collapsed text.
+const TITLE_WINDOW: usize = 300;
+
+/// The tax year as the IRS prints it on continuous-use forms. Case-sensitive:
+/// cover-page prose says "for calendar year".
+static CALENDAR_YEAR: LazyLock<Regex> = LazyLock::new(|| re(r"\bFor calendar year\s*(20\d{2})\b"));
+/// A revision date, e.g. "(Rev. January 2024)" or "Rev. 1-2024".
+static REVISION: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(?i)\bRev\.\s*(?:[A-Za-z]+\.?\s*|\d{1,2}\s*-\s*)?(?:19|20)\d{2}"));
+
 /// The best template for a document, if any applies: the one whose anchors
-/// all match the most pages, then the one with the most anchors.
+/// all match the title area of the most pages, then the one with the most
+/// anchors.
 pub fn match_template<'a>(extracted: &Extracted, packs: &'a PackSet) -> Option<TemplateMatch<'a>> {
+    let collapsed: Vec<(u32, String)> = extracted
+        .pages
+        .iter()
+        .map(|p| (p.page, collapse(&p.text)))
+        .collect();
     let mut best: Option<(usize, usize, TemplateMatch<'a>)> = None;
     for t in packs.forms() {
-        let pages: Vec<u32> = extracted
-            .pages
+        let pages: Vec<u32> = collapsed
             .iter()
-            .filter(|p| t.anchors.iter().all(|a| a.is_match(&p.text)))
-            .map(|p| p.page)
+            .filter(|(_, text)| title_matches(&t.anchors, text))
+            .map(|(p, _)| *p)
             .collect();
         if pages.is_empty() {
             continue;
@@ -72,14 +90,13 @@ pub fn match_template<'a>(extracted: &Extracted, packs: &'a PackSet) -> Option<T
         if best.as_ref().is_some_and(|(n, a, _)| (*n, *a) >= score) {
             continue;
         }
-        let year = t.year.as_ref().and_then(|y| {
-            extracted
-                .pages
-                .iter()
-                .filter(|p| pages.contains(&p.page))
-                .find_map(|p| y.captures(&p.text)?.get(1)?.as_str().parse::<u16>().ok())
-                .filter(|y| (1990..=2100).contains(y))
-        });
+        let on_form = || extracted.pages.iter().filter(|p| pages.contains(&p.page));
+        let year = on_form()
+            .find_map(|p| first_year(&CALENDAR_YEAR, &p.text))
+            .or_else(|| {
+                let y = t.year.as_ref()?;
+                on_form().find_map(|p| first_year(y, &mask_revisions(&p.text)))
+            });
         best = Some((
             score.0,
             score.1,
@@ -91,6 +108,55 @@ pub fn match_template<'a>(extracted: &Extracted, packs: &'a PackSet) -> Option<T
         ));
     }
     best.map(|(_, _, m)| m)
+}
+
+/// Whitespace runs, line breaks included, as one space.
+fn collapse(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// True when the first anchor matches as a title (not a prose mention such
+/// as "Form 1099-NEC, Nonemployee Compensation," or "Forms W-2 and W-3") and
+/// every other anchor matches within `TITLE_WINDOW` of it.
+fn title_matches(anchors: &[Regex], text: &str) -> bool {
+    let Some((first, rest)) = anchors.split_first() else {
+        return false;
+    };
+    first.find_iter(text).any(|m| {
+        let prose = text[m.end()..].trim_start().starts_with(',')
+            || text[..m.start()]
+                .trim_end()
+                .to_ascii_lowercase()
+                .ends_with("forms");
+        if prose {
+            return false;
+        }
+        let lo = floor_char(text, m.start().saturating_sub(TITLE_WINDOW));
+        let hi = ceil_char(text, m.end() + TITLE_WINDOW);
+        let window = &text[lo..hi];
+        rest.iter().all(|a| a.is_match(window))
+    })
+}
+
+/// The first plausible year captured by `re` (first participating group).
+fn first_year(re: &Regex, text: &str) -> Option<u16> {
+    re.captures_iter(text).find_map(|c| {
+        c.iter()
+            .skip(1)
+            .flatten()
+            .next()?
+            .as_str()
+            .parse::<u16>()
+            .ok()
+            .filter(|y| (1990..=2100).contains(y))
+    })
+}
+
+/// `text` with revision dates blanked (same length, so offsets hold).
+fn mask_revisions(text: &str) -> String {
+    REVISION
+        .replace_all(text, |c: &regex::Captures<'_>| " ".repeat(c[0].len()))
+        .into_owned()
 }
 
 /// Read every field of the matched template.
@@ -110,6 +176,16 @@ pub fn apply(extracted: &Extracted, m: &TemplateMatch<'_>) -> TemplateOutput {
             .flat_map(|f| f.label.find_iter(text).map(|m| (m.start(), m.end())))
             .collect();
         labels.sort_unstable();
+        labels.dedup();
+        // A label found inside a longer label and ending before it ("city or
+        // town, state or province" inside the payer's label) is not a label
+        // of its own. One that ends with it (W-2 box 15's state ID) is.
+        let inner = |s: usize, e: usize| labels.iter().any(|&(ls, le)| ls <= s && e < le);
+        let labels: Vec<(usize, usize)> = labels
+            .iter()
+            .copied()
+            .filter(|&(s, e)| !inner(s, e))
+            .collect();
         let page_ctx = Page {
             text,
             template: t,
@@ -117,11 +193,28 @@ pub fn apply(extracted: &Extracted, m: &TemplateMatch<'_>) -> TemplateOutput {
         };
         for f in &t.fields {
             for lm in f.label.find_iter(text) {
+                if inner(lm.start(), lm.end()) {
+                    continue;
+                }
                 let Some((start, end)) = page_ctx.value(f, lm.end()) else {
                     continue;
                 };
                 let FieldKind::Token(kind) = &f.kind else {
-                    out.keep.push((page.page, Span { start, end }));
+                    // Only amount- or code-shaped tokens are kept; anything
+                    // else on the line stays visible to the later stages.
+                    out.keep.extend(
+                        shape::tokens(&text[start..end])
+                            .filter(|&(s, e)| shape::is_benign_token(&text[start + s..start + e]))
+                            .map(|(s, e)| {
+                                (
+                                    page.page,
+                                    Span {
+                                        start: start + s,
+                                        end: start + e,
+                                    },
+                                )
+                            }),
+                    );
                     continue;
                 };
                 if out
@@ -225,9 +318,17 @@ struct Page<'a> {
 }
 
 impl Page<'_> {
-    /// True when `s` holds any label of the template: it is not a value.
-    fn is_label(&self, s: &str) -> bool {
-        self.template.fields.iter().any(|f| f.label.is_match(s))
+    /// True when the value candidate `[s, e)` is label text: a label match
+    /// on the page (labels wrap over lines) overlaps it, or the rest of its
+    /// line, not just its column segment, matches a label.
+    fn is_label(&self, s: usize, e: usize) -> bool {
+        let le = self.text[e..].find('\n').map_or(self.text.len(), |i| e + i);
+        self.labels.iter().any(|&(a, b)| a < e && s < b)
+            || self
+                .template
+                .fields
+                .iter()
+                .any(|f| f.label.is_match(&self.text[s..le]))
     }
 
     /// End of the search window after a label: the next label, or `WINDOW`.
@@ -254,7 +355,7 @@ impl Page<'_> {
                 let v = &self.text[s..e];
                 let wants_letters =
                     matches!(f.kind, FieldKind::Token(TokenKind::Person | TokenKind::Org));
-                if self.is_label(v)
+                if self.is_label(s, e)
                     || (wants_letters && !v.bytes().any(|b| b.is_ascii_alphabetic()))
                 {
                     return None;
@@ -266,7 +367,7 @@ impl Page<'_> {
                     .lines(from)
                     .skip(f.skip_lines)
                     .take(f.lines)
-                    .take_while(|&(s, e)| !self.is_label(&self.text[s..e]))
+                    .take_while(|&(s, e)| !self.is_label(s, e))
                     .collect();
                 Some((taken.first()?.0, taken.last()?.1))
             }

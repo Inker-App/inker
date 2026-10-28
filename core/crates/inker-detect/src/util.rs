@@ -119,3 +119,62 @@ pub(crate) fn ceil_char(s: &str, mut i: usize) -> usize {
     }
     i
 }
+
+/// Page text with look-alike characters folded so the digit rules see them:
+/// dash variants (hyphen, non-breaking hyphen, figure dash, en and em dash,
+/// U+2212 minus, fullwidth hyphen) become `-`, fullwidth digits become ASCII.
+/// Keeps a byte map back to the original so spans can be translated.
+#[derive(Debug)]
+pub(crate) struct Folded {
+    pub text: String,
+    /// `to_orig[i]` is the original byte offset of folded byte `i`; one
+    /// extra entry maps the end.
+    to_orig: Vec<usize>,
+}
+
+impl Folded {
+    pub fn new(text: &str) -> Self {
+        let mut out = String::with_capacity(text.len());
+        let mut to_orig = Vec::with_capacity(text.len() + 1);
+        for (i, c) in text.char_indices() {
+            let f = match c {
+                '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}' | '\u{2014}' | '\u{2212}'
+                | '\u{fe63}' | '\u{ff0d}' => '-',
+                '\u{ff10}'..='\u{ff19}' => {
+                    char::from_u32(c as u32 - 0xff10 + u32::from(b'0')).unwrap_or(c)
+                }
+                _ => c,
+            };
+            for _ in 0..f.len_utf8() {
+                to_orig.push(i);
+            }
+            out.push(f);
+        }
+        to_orig.push(text.len());
+        Self { text: out, to_orig }
+    }
+
+    /// True when folding changed nothing.
+    pub fn is_identity(&self, original: &str) -> bool {
+        self.text == original
+    }
+
+    /// Original span for a folded span. A span end maps to the end of the
+    /// original character before it.
+    pub fn span_to_orig(&self, original: &str, start: usize, end: usize) -> (usize, usize) {
+        let s = self.to_orig[start];
+        let last = self.to_orig[end.saturating_sub(1).max(start)];
+        let e = if end > start {
+            last + original[last..].chars().next().map_or(0, char::len_utf8)
+        } else {
+            s
+        };
+        (s, e)
+    }
+
+    /// Folded span for an original span (first folded byte at or after each end).
+    pub fn span_from_orig(&self, start: usize, end: usize) -> (usize, usize) {
+        let f = |o: usize| self.to_orig.partition_point(|&x| x < o);
+        (f(start), f(end))
+    }
+}

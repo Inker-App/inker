@@ -13,7 +13,8 @@ use regex::Regex;
 
 use crate::names;
 use crate::rules::{ACCOUNT_LABELS, EIN_LABELS, ROUTING_LABELS, SSN_LABELS};
-use crate::util::{detection, label_before, overlaps, re};
+use crate::shape;
+use crate::util::{Folded, detection, label_before, overlaps, re};
 
 /// Minimum digits in a leftover run on a text-layer page and on an OCR page.
 pub const DIGITS_TEXT: usize = 9;
@@ -34,9 +35,99 @@ pub const NAME_LABELS: &[&str] = &[
     "name",
 ];
 
-static RUN_TEXT: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:[- ]?\d)*"));
-static RUN_OCR: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:[- ]?[\dOoIl])*"));
+/// Digit groups joined by a space, a dash or a dot, or by a dash or dot at a
+/// line end ("000-12-\n3456"). Dash variants are folded to `-` first.
+static RUN_TEXT: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:(?:[-. ]|[-.]\n)?\d)*"));
+static RUN_OCR: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:(?:[-. ]|[-.]\n)?[\dOoIl])*"));
 static DATE: LazyLock<Regex> = LazyLock::new(|| re(r"^(?:\d{4}-\d{2}-\d{2}|\d{2}-\d{2}-\d{4})$"));
+
+/// Labels that mark a number as a transaction reference on a statement.
+pub const REF_LABELS: &[&str] = &[
+    "ref",
+    "reference",
+    "trace",
+    "order",
+    "conf",
+    "confirmation",
+    "id",
+    "seq",
+    "imad",
+    "omad",
+    "ppd",
+    "ccd",
+    "web",
+    "txn",
+    "transaction",
+];
+/// How far before a number a reference label may end, and how far after it
+/// one may start (on the same line).
+const REF_BEFORE: usize = 16;
+const REF_AFTER: usize = 6;
+
+/// The prompt for the one question a statement's leftover numbers share.
+pub const STATEMENT_PROMPT: &str = "Some long numbers on this statement I can't place. Ink them?";
+
+/// Quiet a statement's fail-closed numbers: those next to a transaction
+/// reference label stay inked without a question, and the rest share one
+/// question (the first keeps it, the others stay inked). `pages` are the
+/// statement's pages; detections on form fields are left alone.
+pub fn settle_statement(pages: &[PageText], dets: &mut [Detection]) {
+    let lowers: Vec<(u32, String)> = pages
+        .iter()
+        .map(|p| (p.page, Folded::new(&p.text).text.to_ascii_lowercase()))
+        .collect();
+    let mut asked = false;
+    for d in dets.iter_mut().filter(|d| {
+        d.needs_review
+            && d.field.is_none()
+            && d.kind == TokenKind::Custom("number".into())
+            && matches!(d.source, DetectionSource::FailClosed { .. })
+    }) {
+        let is_ref = lowers
+            .iter()
+            .find(|(p, _)| *p == d.page)
+            .is_some_and(|(_, lower)| {
+                // Folding keeps ASCII text byte for byte; a span that does not
+                // line up (a folded dash) is simply not treated as a reference.
+                lower.is_char_boundary(d.span.start)
+                    && lower.is_char_boundary(d.span.end)
+                    && d.span.end <= lower.len()
+                    && transaction_ref(lower, d.span.start, d.span.end)
+            });
+        if is_ref {
+            d.needs_review = false;
+            d.review_prompt = None;
+            d.source = DetectionSource::FailClosed {
+                reason: "transaction_ref".into(),
+            };
+        } else if asked {
+            d.needs_review = false;
+            d.review_prompt = None;
+        } else {
+            asked = true;
+            d.review_prompt = Some(STATEMENT_PROMPT.into());
+        }
+    }
+}
+
+/// True when a reference label sits just before the number, or just after it
+/// on the same line ("1037621994857263 PPD").
+fn transaction_ref(lower: &str, start: usize, end: usize) -> bool {
+    if label_before(lower, start, REF_BEFORE, REF_LABELS).is_some() {
+        return true;
+    }
+    let line_end = lower[end..].find('\n').map_or(lower.len(), |i| end + i);
+    let after = &lower[end..line_end];
+    let skip = after.len() - after.trim_start().len();
+    if skip == 0 || skip > REF_AFTER {
+        return false;
+    }
+    let word: String = after[skip..]
+        .chars()
+        .take_while(char::is_ascii_alphabetic)
+        .collect();
+    REF_LABELS.contains(&word.as_str())
+}
 
 /// What a leftover number most likely is, from the nearest label before it.
 fn number_kind(
@@ -86,7 +177,7 @@ fn prompt(what: Option<&str>, ocr: bool) -> String {
     }
 }
 
-fn held(
+pub(crate) fn held(
     page: u32,
     start: usize,
     end: usize,
@@ -133,8 +224,35 @@ fn looks_like_amount(text: &str, start: usize, end: usize) -> bool {
 }
 
 /// Leftover long numbers and names near sensitive labels on one page.
-/// `covered` holds byte spans already detected or kept on this page.
+/// `covered` holds byte spans already detected or kept on this page. Dash
+/// variants and fullwidth digits are folded first; spans point into the
+/// original text.
 pub fn find(page: &PageText, covered: &[(usize, usize)]) -> Vec<Detection> {
+    let folded = Folded::new(&page.text);
+    if folded.is_identity(&page.text) {
+        return find_folded(page, covered);
+    }
+    let fp = PageText {
+        page: page.page,
+        text: folded.text.clone(),
+        origin: page.origin,
+    };
+    let cov: Vec<(usize, usize)> = covered
+        .iter()
+        .map(|&(s, e)| folded.span_from_orig(s, e))
+        .collect();
+    find_folded(&fp, &cov)
+        .into_iter()
+        .map(|mut d| {
+            let (s, e) = folded.span_to_orig(&page.text, d.span.start, d.span.end);
+            d.span.start = s;
+            d.span.end = e;
+            d
+        })
+        .collect()
+}
+
+fn find_folded(page: &PageText, covered: &[(usize, usize)]) -> Vec<Detection> {
     let ocr = page.origin == TextOrigin::Ocr;
     let text = page.text.as_str();
     let lower = text.to_ascii_lowercase();
@@ -158,6 +276,7 @@ pub fn find(page: &PageText, covered: &[(usize, usize)]) -> Vec<Detection> {
             if digits < min_digits
                 || real + 2 < min_digits
                 || DATE.is_match(piece)
+                || shape::is_amount(piece)
                 || looks_like_amount(text, start, end)
                 || overlaps(&taken, start, end)
             {

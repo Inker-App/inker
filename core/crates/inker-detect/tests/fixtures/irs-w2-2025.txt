@@ -1,0 +1,72 @@
+
+
+     
+ 22222 a  Employee’s social security number
+  OMB No. 1545-0029 
+
+b  Employer identification number (EIN)
+
+c  Employer’s name, address, and ZIP code
+
+d  Control number
+
+e  Employee’s first name and initial Last name Suff.
+
+f  Employee’s address and ZIP code
+ 1   Wages, tips, other compensation 2   Federal income tax withheld
+
+3   Social security wages 4   Social security tax withheld
+
+5   Medicare wages and tips 6   Medicare tax withheld
+
+7   Social security tips 8   Allocated tips
+
+9    10   Dependent care benefits
+
+11   Nonqualified plans 12a  
+C
+o 
+d 
+e
+12b
+C
+o 
+d 
+e
+12c
+C
+o 
+d 
+e
+12d
+C
+o 
+d 
+e
+
+13 Statutory 
+employee Retirement 
+plan Third-party 
+sick pay
+
+14  Other
+
+15  State Employer’s state ID number 16  State wages, tips, etc. 17  State income tax 18  Local wages, tips, etc. 19  Local income tax 20  Locality name
+
+Form W-2 Wage and Tax Statement 2025 Department of the Treasury—Internal Revenue Service
+
+Copy 1—For State, City, or Local Tax Department
+900-14-2231
+07-4400123
+Contoso Widgets LLC
+500 Harbor Blvd Suite 200
+Springfield, IL 62701
+CW-0042-77
+Jane Q Doe
+1428 Elm Street Apt 4B
+Brooklyn, NY 11201
+52340.18
+6120.44
+54000.00
+3348.00
+IL 0047-91234
