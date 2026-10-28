@@ -120,8 +120,11 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
     let read_only = ToolAnnotations::new().read_only(true);
     let mut resolve = Tool::new(
         "resolve",
-        "Read a private document by its handle (🐙/… or ink/…). Returns the text with sensitive \
-         values replaced by stable tokens like [SSN_1], or a list of child handles for a folder.",
+        "Read a private document by its handle. Whenever the user's message contains a handle \
+         like 🐙/w2-2025 or ink/w2-2025, call this tool with it before answering; never guess \
+         what a handle refers to, and do not look for the file on disk. Returns the document's \
+         text with sensitive values replaced by stable tokens like [SSN_1] (the same token always \
+         means the same value), or a list of child handles for a folder.",
         schema::<HandleArgs>(),
     )
     .with_title("Resolve an INKER handle")
@@ -134,8 +137,9 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
     vec![
         Tool::new(
             "list",
-            "List every document and folder INKER holds, with kind, year, state and how many \
-             values were inked.",
+            "List every private document and folder INKER holds, as handles (🐙/… or ink/…) with \
+             kind, year, state and how many values were inked. Use it when the user asks what \
+             documents are available or mentions a document without giving its handle.",
             schema::<ListArgs>(),
         )
         .with_title("List INKER handles")
@@ -144,7 +148,8 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
         Tool::new(
             "describe",
             "Explain what each token in a document stands for (for example [SSN_1]: employee) \
-             and how each kind of value was treated. Never returns the values themselves.",
+             and how each kind of value was treated. Call it after `resolve` when a token's role \
+             matters to the answer. Never returns the values themselves.",
             schema::<HandleArgs>(),
         )
         .with_title("Describe an INKER document's tokens")
@@ -152,8 +157,8 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
         Tool::new(
             "write",
             "Save output derived from a document into the user's private folder. Write the \
-             content with tokens like [SSN_1]; INKER fills in the real values when saving. \
-             Returns a new handle for the saved file.",
+             content with tokens like [SSN_1]; INKER fills in the real values when saving, so \
+             never write a real value yourself. Returns a new handle for the saved file.",
             schema::<WriteArgs>(),
         )
         .with_title("Write a file with INKER")

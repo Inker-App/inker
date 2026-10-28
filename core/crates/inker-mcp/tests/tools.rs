@@ -313,3 +313,58 @@ async fn stateless_2026_era_discover_and_call_with_meta_client_info() {
     assert!(text(&r).contains("[SSN_1]"), "{r}");
     assert_eq!(fake.reads()[0].0, "claude-code");
 }
+
+/// Chat clients such as Claude Desktop reportedly ignore the server
+/// `instructions`, so the tool descriptions themselves must tell the model
+/// when to call `resolve` and what never to do.
+#[test]
+fn tool_descriptions_carry_the_handle_rule_for_clients_that_ignore_instructions() {
+    let tools = inker_mcp::tool_definitions(inker_mcp::ServerOptions::default());
+    let desc = |name: &str| -> String {
+        tools
+            .iter()
+            .find(|t| t.name == name)
+            .unwrap_or_else(|| panic!("tool {name}"))
+            .description
+            .clone()
+            .map(|d| d.to_string())
+            .unwrap_or_default()
+    };
+    let resolve = desc("resolve");
+    assert!(
+        resolve.contains("🐙/") && resolve.contains("ink/"),
+        "{resolve}"
+    );
+    assert!(
+        resolve
+            .to_lowercase()
+            .contains("whenever the user's message contains")
+            || resolve
+                .to_lowercase()
+                .contains("when the user's message contains"),
+        "resolve must say when to call it: {resolve}"
+    );
+    assert!(resolve.to_lowercase().contains("never guess"), "{resolve}");
+    assert!(
+        resolve.to_lowercase().contains("do not look for the file"),
+        "{resolve}"
+    );
+    let list = desc("list");
+    assert!(list.to_lowercase().contains("handle"), "{list}");
+    assert!(
+        list.to_lowercase().contains("mention") || list.to_lowercase().contains("asks"),
+        "list must say when: {list}"
+    );
+    let describe = desc("describe");
+    assert!(describe.contains("[SSN_1]"), "{describe}");
+    assert!(
+        describe.to_lowercase().contains("after `resolve`")
+            || describe.to_lowercase().contains("after resolve"),
+        "{describe}"
+    );
+    let write = desc("write");
+    assert!(
+        write.to_lowercase().contains("never") && write.to_lowercase().contains("real value"),
+        "{write}"
+    );
+}
