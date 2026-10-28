@@ -8,6 +8,8 @@ Facts below marked *(verified)* were checked against vendor docs or source on 20
 
 ## 1. What INKER is
 
+> **Reframed 2026-10-28, after the first build.** Ben: INKER is not for coding agents. It is for the chat window: people using the Claude or ChatGPT desktop app first, and ideally later the browser apps too, through MCP. The brief below and the build to date were framed around Claude Code, Cursor and Codex. The core, the vault, the pipeline and the MCP server carry over unchanged; the onboarding targets, the "keep agents out" layer, the instructions wording and the website copy change. Section 9 (pending research) records the client-by-client facts and the plan.
+
 INKER is a macOS menu bar app plus a local MCP server. You drop a sensitive document (taxes first) on the octopus in the menu bar instead of into your agent's chat. INKER moves it into a private folder outside any agent workspace, extracts the text, finds the identifying values, and replaces them with stable tokens like `[SSN_1]` and `[EMPLOYER_1]` while keeping amounts, box numbers, dates and the state. You get a handle like `🐙/w2-acme-2025` on your clipboard. The agent pastes it, calls INKER's MCP tools, and reasons over the tokenized text. Anything the agent writes back is rehydrated locally into the private folder. The agent, the model and the provider never see the real values.
 
 The brand is a small world: nosy red-irised eyeballs (models, logs, servers), a calm octopus (you), and ink made of dots that pools to hide and disperses to move. Everything is 3D rendered down to a halftone dot grid, the UI is all dark, and big motion happens only on state changes.
