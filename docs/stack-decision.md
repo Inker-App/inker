@@ -98,7 +98,7 @@ Vision has no published accuracy numbers on tax forms *(verified: none found)*. 
 ### 3.4 Vault and index
 
 - **Vault:** value-to-token map, AES-GCM, key in the Keychain as a `SymmetricKey`. Tokens are typed and numbered on first sight (`SSN_1`, `EIN_1`, `EMPLOYER_1`, `ACCOUNT_1`). Numbering is global and stable forever, per the brief.
-- **Index:** everything derived from a document (extracted text, tokenized text, detections, review decisions, codename, state) lives in an encrypted SQLite store in Application Support, never beside the file. This honours "no mirror folder": the only thing in `~/Private` is the original file.
+- **Index:** everything derived from a document (tokenized text, detections, review decisions, codename, state) lives in a SQLite store in Application Support, never beside the file. This honours "no mirror folder": the only thing in `~/Private` is the original file. *As built (2026-10-28):* the SQLite file itself is not encrypted (plain bundled SQLite, not SQLCipher). It holds tokenized text only, but `original_name` and `path` are plain, so a file named after a person puts that name in the index. The raw extracted text of a held document is sealed with the vault key while it waits for review and deleted once the document is Ready. Encrypting the whole index is a follow-up if Ben wants it.
 - **Handles** resolve through the index. A held document returns `pending review` to agents until the user answers.
 
 ### 3.5 Detection pipeline
@@ -197,6 +197,11 @@ Ben answered on 2026-10-28: all dark, AGENTS.md for the teaching line, and best 
 13. **Handle syntax.** The server accepts both `🐙/` and `ink/` always. The setting only controls what lands on the clipboard.
 14. **Footer.** "MCP running" means the socket is listening. The Ready board's last-read line stays; no connected-agent count in v1.
 15. **Folder picker** defaults to `~/Private` and warns on `~/Desktop`, `~/Documents` (iCloud sync) and any path inside a known agent workspace.
+
+**Raised by the build, not yet decided**
+
+16. **Handles leak the org name.** `TypeOrgYear` (the brief's default, as built) puts the detected employer or payer in the handle (`🐙/w2-acme-2025`) while the text tokenizes it as `[ORG_1]`. `TypeYear` (`🐙/w2-2025`, `-2`, `-3`) is implemented and switchable. Folder handles are slugged from the folder name, so a folder named after a person leaks that name too. Awaiting Ben's call on the default.
+17. **Index encryption.** See section 3.4. The index is plain SQLite as built.
 
 ## 6. Risks
 
