@@ -226,15 +226,42 @@ fn question_from_row(row: &Row<'_>) -> rusqlite::Result<ReviewQuestion> {
     })
 }
 
+/// Create `path` as an empty `0600` file, or chmod an existing one to `0600`.
+#[cfg(unix)]
+fn restrict(path: &Utf8Path) -> Result<()> {
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+    std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .open(path)?;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
 impl Index {
     /// Open or create the index at `path`, enable WAL and run migrations.
     pub fn open(path: &Utf8Path) -> Result<Self> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
+        // SQLite gives the -wal and -shm files the database file's mode, so
+        // making index.db 0600 before the first open covers all three; the
+        // chmods after cover files left by an older build.
+        #[cfg(unix)]
+        restrict(path)?;
         let conn = Connection::open(path)?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
-        Self::init(conn)
+        let index = Self::init(conn)?;
+        #[cfg(unix)]
+        for suffix in ["-wal", "-shm"] {
+            let side = Utf8PathBuf::from(format!("{path}{suffix}"));
+            if side.exists() {
+                restrict(&side)?;
+            }
+        }
+        Ok(index)
     }
 
     /// A throwaway in-memory index (tests).
@@ -380,7 +407,7 @@ impl Index {
             "UPDATE documents SET state=?2, status_note=?3, updated_at=?4 WHERE id=?1",
             params![id.0.to_string(), enum_str(&to)?, note, ts(now)],
         )?;
-        tracing::debug!(codename = %r.codename, from = ?r.state, ?to, "state");
+        tracing::debug!(doc = %id.0, from = ?r.state, ?to, "state");
         r.state = to;
         r.status_note = note.map(str::to_string);
         r.updated_at = parse_ts(&ts(now))?;

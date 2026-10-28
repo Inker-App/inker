@@ -9,7 +9,7 @@
 //! Real values only ever exist in memory here and in the ciphertext. Nothing in
 //! this module logs or formats a value; `Debug` prints counts only.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -18,19 +18,24 @@ use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use camino::{Utf8Path, Utf8PathBuf};
 use serde::{Deserialize, Serialize};
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::fsutil::atomic_write;
 use crate::ports::KeyStore;
 use crate::{Error, Result, Token, TokenKind};
 
+/// Tokens a `write` may expand, as (bracket label, index).
+pub type TokenScope = HashSet<(String, u32)>;
+
 const HEADER: &[u8; 5] = b"INKV\x01";
 const SEAL_HEADER: &[u8; 5] = b"INKS\x01";
 const NONCE_LEN: usize = 12;
 
-/// In-memory key store for tests and the headless CLI. Clones share the key.
+/// In-memory key store for tests and the headless CLI. Clones share the key,
+/// which is wiped when the last clone is dropped.
 #[derive(Clone)]
 pub struct MemoryKeyStore {
-    key: Arc<[u8; 32]>,
+    key: Arc<Zeroizing<[u8; 32]>>,
 }
 
 impl fmt::Debug for MemoryKeyStore {
@@ -42,21 +47,29 @@ impl fmt::Debug for MemoryKeyStore {
 impl MemoryKeyStore {
     /// A fresh random key.
     pub fn new() -> Result<Self> {
-        let mut key = [0u8; 32];
-        getrandom::fill(&mut key).map_err(|e| Error::Vault(format!("random key: {e}")))?;
+        let mut key = Zeroizing::new([0u8; 32]);
+        getrandom::fill(key.as_mut()).map_err(|e| Error::Vault(format!("random key: {e}")))?;
         Ok(Self { key: Arc::new(key) })
     }
 
     /// A fixed key (tests).
     pub fn with_key(key: [u8; 32]) -> Self {
-        Self { key: Arc::new(key) }
+        Self {
+            key: Arc::new(Zeroizing::new(key)),
+        }
     }
 }
 
 impl KeyStore for MemoryKeyStore {
     fn load_or_create(&self) -> Result<[u8; 32]> {
-        Ok(*self.key)
+        Ok(**self.key)
     }
+}
+
+/// Load the vault key into memory that is wiped on drop. The `KeyStore` port
+/// returns a plain array (other crates implement it); this wraps it at once.
+pub(crate) fn load_key(keystore: &dyn KeyStore) -> Result<Zeroizing<[u8; 32]>> {
+    Ok(Zeroizing::new(keystore.load_or_create()?))
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -87,10 +100,22 @@ struct State {
 }
 
 impl State {
+    /// Overwrite every real value and lookup key held in memory.
+    fn wipe(&mut self) {
+        for e in &mut self.file.entries {
+            e.value.zeroize();
+            e.key.zeroize();
+        }
+        for ((_, mut key), _) in self.forward.drain() {
+            key.zeroize();
+        }
+    }
+
     fn from_file(file: VaultFile) -> Self {
         let mut s = State {
             file,
-            ..Default::default()
+            forward: HashMap::new(),
+            reverse: HashMap::new(),
         };
         for (i, e) in s.file.entries.iter().enumerate() {
             let label = e.kind.label();
@@ -102,6 +127,12 @@ impl State {
             s.reverse.insert((label, e.index), i);
         }
         s
+    }
+}
+
+impl Drop for State {
+    fn drop(&mut self) {
+        self.wipe();
     }
 }
 
@@ -125,13 +156,13 @@ impl Vault {
     /// Open (or create on first mint) the vault at `path`, decrypting with the
     /// key from `keystore`.
     pub fn open(path: &Utf8Path, keystore: &dyn KeyStore) -> Result<Self> {
-        let key = keystore.load_or_create()?;
-        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
+        let key = load_key(keystore)?;
+        let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key.as_slice()));
         let file = if path.exists() {
             let bytes = std::fs::read(path)?;
-            let plain = decrypt(&cipher, HEADER, &bytes).map_err(|_| {
+            let plain = Zeroizing::new(decrypt(&cipher, HEADER, &bytes).map_err(|_| {
                 Error::Vault("could not decrypt the vault (wrong key or damaged file)".into())
-            })?;
+            })?);
             let file: VaultFile = serde_json::from_slice(&plain)
                 .map_err(|_| Error::Vault("vault contents are malformed".into()))?;
             file
@@ -201,8 +232,33 @@ impl Vault {
         self.lock().forward.get(&(kind.label(), key)).cloned()
     }
 
-    /// Replace every known `[KIND_N]` token in `text` with its real value.
-    /// Unknown tokens are left as they are.
+    /// Replace every `[KIND_N]` token in `text` that is in `scope` and known
+    /// to the vault with its real value. Every other token is left as
+    /// literal text; the count of those is returned. This is what `write`
+    /// uses, so an agent cannot expand tokens from documents it was not given.
+    pub fn rehydrate_scoped(&self, text: &str, scope: &TokenScope) -> (String, u32) {
+        let st = self.lock();
+        let mut out = String::with_capacity(text.len());
+        let mut last = 0;
+        let mut skipped: u32 = 0;
+        for (range, label, index) in find_tokens(text) {
+            let key = (label, index);
+            match st.reverse.get(&key) {
+                Some(&pos) if scope.contains(&key) => {
+                    out.push_str(&text[last..range.start]);
+                    out.push_str(&st.file.entries[pos].value);
+                    last = range.end;
+                }
+                _ => skipped = skipped.saturating_add(1),
+            }
+        }
+        out.push_str(&text[last..]);
+        (out, skipped)
+    }
+
+    /// Replace every known `[KIND_N]` token in `text` with its real value,
+    /// whatever document it came from. Unknown tokens are left as they are.
+    /// Not for agent input: see [`Vault::rehydrate_scoped`].
     pub fn rehydrate(&self, text: &str) -> String {
         let st = self.lock();
         let mut out = String::with_capacity(text.len());
@@ -239,7 +295,7 @@ impl Vault {
     }
 
     fn persist(&self, file: &VaultFile) -> Result<()> {
-        let plain = serde_json::to_vec(file)?;
+        let plain = Zeroizing::new(serde_json::to_vec(file)?);
         let blob = encrypt(&self.cipher, HEADER, &plain)?;
         if let Some(dir) = self.path.parent() {
             std::fs::create_dir_all(dir)?;
@@ -287,7 +343,8 @@ fn decrypt(cipher: &Aes256Gcm, header: &[u8; 5], blob: &[u8]) -> Result<Vec<u8>>
 /// Canonical lookup key for a value of `kind`.
 ///
 /// Numeric identifiers drop spaces, hyphens and other punctuation and are
-/// upper-cased; phone numbers also drop a leading US `1`; names and other text
+/// upper-cased; phone numbers also drop a leading US `1` and keep an
+/// extension as an `x<digits>` suffix; names and other text
 /// are case-folded with whitespace collapsed.
 pub fn normalize(kind: &TokenKind, value: &str) -> String {
     match kind {
@@ -298,19 +355,37 @@ pub fn normalize(kind: &TokenKind, value: &str) -> String {
         | TokenKind::Routing
         | TokenKind::Card
         | TokenKind::GovId => alnum_upper(value),
-        TokenKind::Phone => {
-            let d: String = value.chars().filter(|c| c.is_ascii_digit()).collect();
-            match d.strip_prefix('1') {
-                Some(rest) if d.len() == 11 => rest.to_string(),
-                _ => d,
-            }
-        }
+        TokenKind::Phone => normalize_phone(value),
         TokenKind::Email => value.trim().to_lowercase(),
         TokenKind::Person | TokenKind::Org | TokenKind::Address | TokenKind::Custom(_) => value
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ")
             .to_lowercase(),
+    }
+}
+
+/// Digits of the number, without a leading US `1`, then `x<digits>` when an
+/// extension follows (`x`, `ext`, `extension` or `#`), so two extensions on
+/// one switchboard number stay two values.
+fn normalize_phone(value: &str) -> String {
+    let lower = value.to_ascii_lowercase();
+    let cut = ["ext", "x", "#"]
+        .iter()
+        .filter_map(|m| lower.find(m))
+        .min()
+        .unwrap_or(lower.len());
+    let digits = |s: &str| -> String { s.chars().filter(|c| c.is_ascii_digit()).collect() };
+    let d = digits(&lower[..cut]);
+    let base = match d.strip_prefix('1') {
+        Some(rest) if d.len() == 11 => rest.to_string(),
+        _ => d,
+    };
+    let ext = digits(&lower[cut..]);
+    if ext.is_empty() {
+        base
+    } else {
+        format!("{base}x{ext}")
     }
 }
 
@@ -421,6 +496,24 @@ mod tests {
     }
 
     #[test]
+    fn phone_extensions_stay_distinct() {
+        let base = normalize(&TokenKind::Phone, "555-010-0000");
+        let x12 = normalize(&TokenKind::Phone, "555-010-0000 x12");
+        let ext12 = normalize(&TokenKind::Phone, "+1 (555) 010-0000 ext. 12");
+        let x34 = normalize(&TokenKind::Phone, "555-010-0000 #34");
+        assert_eq!(base, "5550100000");
+        assert_eq!(x12, "5550100000x12");
+        assert_eq!(ext12, x12);
+        assert_eq!(x34, "5550100000x34");
+        let (_d, _ks, v) = open_tmp();
+        let a = v.mint(&TokenKind::Phone, "555-010-0000 x12").unwrap();
+        let b = v.mint(&TokenKind::Phone, "555-010-0000 x34").unwrap();
+        let c = v.mint(&TokenKind::Phone, "555-010-0000").unwrap();
+        assert_ne!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
     fn empty_value_is_refused() {
         let (_d, _ks, v) = open_tmp();
         assert!(v.mint(&TokenKind::Ssn, " - ").is_err());
@@ -438,6 +531,17 @@ mod tests {
             out,
             "SSN 000-12-3456, plan PX-1, unknown [SSN_9], [not a token], [SSN_x]"
         );
+    }
+
+    #[test]
+    fn scoped_rehydrate_expands_only_allowed_tokens() {
+        let (_d, _ks, v) = open_tmp();
+        let a = v.mint(&TokenKind::Ssn, "000-12-3456").unwrap();
+        v.mint(&TokenKind::Ssn, "666-12-3456").unwrap();
+        let scope: TokenScope = [(a.kind.label(), a.index)].into_iter().collect();
+        let (out, skipped) = v.rehydrate_scoped("[SSN_1] [SSN_2] [SSN_9] [x]", &scope);
+        assert_eq!(out, "000-12-3456 [SSN_2] [SSN_9] [x]");
+        assert_eq!(skipped, 2);
     }
 
     #[test]
@@ -509,6 +613,28 @@ mod tests {
         assert_eq!(v.lookup(&TokenKind::Ssn, "000-12-3456"), None);
         // The counter was rolled back too: the next mint is still _1.
         assert_eq!(v.mint(&TokenKind::Ssn, "000-12-3456").unwrap().index, 1);
+    }
+
+    #[test]
+    fn vault_key_is_zeroizing() {
+        let ks = MemoryKeyStore::new().unwrap();
+        let k: zeroize::Zeroizing<[u8; 32]> = load_key(&ks).unwrap();
+        assert_eq!(*k, ks.load_or_create().unwrap());
+    }
+
+    #[test]
+    fn wiping_state_clears_values_and_keys() {
+        let (_d, _ks, v) = open_tmp();
+        v.mint(&TokenKind::Person, "Testy McFakename").unwrap();
+        let mut st = std::mem::take(&mut *v.lock());
+        st.wipe();
+        assert!(
+            st.file
+                .entries
+                .iter()
+                .all(|e| e.value.is_empty() && e.key.is_empty())
+        );
+        assert!(st.forward.is_empty());
     }
 
     #[test]

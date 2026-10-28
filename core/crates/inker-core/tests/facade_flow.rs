@@ -95,10 +95,10 @@ fn whole_facade_flow_and_stable_tokens_across_reopen() {
             .unwrap();
         assert_eq!(state, DocState::Ready);
         let rec = core.document(ids[0]).unwrap();
-        assert_eq!(rec.codename.as_str(), "w2-acme-2025");
+        assert_eq!(rec.codename.as_str(), "w2-2025");
         assert_eq!(rec.inked, 3);
 
-        let handle = Handle::parse("🐙/w2-acme-2025").unwrap();
+        let handle = Handle::parse("🐙/w2-2025").unwrap();
         let Resolved::Document(doc) = core.resolve(&handle).unwrap() else {
             panic!("expected a document")
         };
@@ -135,7 +135,7 @@ fn whole_facade_flow_and_stable_tokens_across_reopen() {
                 "[PERSON_1] ([SSN_1]) works at [ORG_1].",
             )
             .unwrap();
-        assert_eq!(out.handle.to_string(), "🐙/w2-acme-2025-summary");
+        assert_eq!(out.handle.to_string(), "🐙/w2-2025-summary");
         assert!(out.path.starts_with(&paths.private_folder));
         assert_eq!(
             std::fs::read_to_string(&out.path).unwrap(),
@@ -158,7 +158,7 @@ fn whole_facade_flow_and_stable_tokens_across_reopen() {
 
     // Reopen the same data dir: same tokens, numbering continues.
     let core = Core::open(paths.clone(), &ks).unwrap();
-    let handle = Handle::parse("ink/w2-acme-2025").unwrap();
+    let handle = Handle::parse("ink/w2-2025").unwrap();
     let Resolved::Document(doc) = core.resolve(&handle).unwrap() else {
         panic!()
     };

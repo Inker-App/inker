@@ -188,7 +188,7 @@ Ben answered on 2026-10-28: all dark, AGENTS.md for the teaching line, and best 
 
 5. **Folder handles.** `resolve` on a folder handle returns a listing of child handles with type, state and inked count, not concatenated text. Ready children resolve normally; a held child shows `pending review` in the listing. The folder's Copy button copies the folder handle whenever at least one child is ready.
 6. **`write` returns** a confirmation and a new handle for the output file (for example `🐙/w2-acme-2025-summary`). The agent can `resolve` that handle to see the tokenized view of what it saved. Real values never come back.
-7. **Codename collisions** get a numeric suffix: `w2-acme-2025`, `w2-acme-2025-2`. No renaming UI in v1.
+7. **Codename collisions** get a numeric suffix: `w2-acme-2025`, `w2-acme-2025-2`. No renaming UI in v1. *Update (2026-10-28):* the default policy is now `TypeYear`, so collisions read `w2-2025`, `w2-2025-2`, because a handle is pasted into agent chats in the clear and a security review found payer names and EINs in handles under `TypeOrgYear`.
 8. **Tokens keep global numbering.** `describe` returns a per-document role map (`SSN_1: employee`, `EIN_1: employer`) so a joint return is readable without changing the token scheme.
 9. **Attention card.** "Open file" reveals the original in Finder. "Leave it" applies to this document only; nothing is remembered globally.
 10. **Move edge cases.** Cross-volume moves are copy, verify, delete. A file already inside the private folder is indexed in place. A dropped folder moves as a unit; unsupported files inside it are listed as skipped and stay where they landed.
@@ -200,7 +200,7 @@ Ben answered on 2026-10-28: all dark, AGENTS.md for the teaching line, and best 
 
 **Raised by the build, not yet decided**
 
-16. **Handles leak the org name.** `TypeOrgYear` (the brief's default, as built) puts the detected employer or payer in the handle (`🐙/w2-acme-2025`) while the text tokenizes it as `[ORG_1]`. `TypeYear` (`🐙/w2-2025`, `-2`, `-3`) is implemented and switchable. Folder handles are slugged from the folder name, so a folder named after a person leaks that name too. Awaiting Ben's call on the default.
+16. **Handles leak the org name.** `TypeOrgYear` (the brief's default, as built) puts the detected employer or payer in the handle (`🐙/w2-acme-2025`) while the text tokenizes it as `[ORG_1]`. `TypeYear` (`🐙/w2-2025`, `-2`, `-3`) is implemented and switchable. Folder handles are slugged from the folder name, so a folder named after a person leaks that name too. *Update (2026-10-28):* the default is now `TypeYear` and folder handles are `folder-NNNN`, never the folder name, because a review showed handles carrying a person's name (`🐙/1099nec-<first name>-2025`), an EIN and a folder name; `TypeOrgYear` remains opt-in and now takes only a template's employer, payer or lender box, with digits stripped.
 17. **Index encryption.** See section 3.4. The index is plain SQLite as built.
 
 ## 6. Risks

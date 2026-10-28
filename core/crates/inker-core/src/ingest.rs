@@ -5,6 +5,9 @@
 //! path already inside the private folder is indexed in place; folders move as
 //! a unit; nothing is ever moved out of the private folder; an existing name
 //! is never overwritten (`w2.pdf` becomes `w2-2.pdf`).
+//!
+//! Error messages describe the failure and never name the file: they reach
+//! logs through the pipeline's outcome, and file names are often personal.
 
 use std::fs;
 use std::io;
@@ -29,7 +32,10 @@ fn utf8(p: std::path::PathBuf) -> Result<Utf8PathBuf> {
 }
 
 fn canonical(p: &Utf8Path) -> Result<Utf8PathBuf> {
-    utf8(fs::canonicalize(p).map_err(|e| Error::Ingest(format!("{p}: {e}")))?)
+    utf8(
+        fs::canonicalize(p)
+            .map_err(|e| Error::Ingest(format!("cannot resolve the source: {e}")))?,
+    )
 }
 
 /// Bring `src` into `private_folder`, by move or copy.
@@ -40,16 +46,17 @@ pub fn ingest(
 ) -> Result<IngestOutcome> {
     fs::create_dir_all(private_folder)?;
     let private = canonical(private_folder)?;
-    let meta = fs::symlink_metadata(src).map_err(|e| Error::Ingest(format!("{src}: {e}")))?;
+    let meta = fs::symlink_metadata(src)
+        .map_err(|e| Error::Ingest(format!("cannot read the source: {e}")))?;
     if meta.file_type().is_symlink() {
-        return Err(Error::Ingest(format!(
-            "{src} is a symbolic link; drop the file it points to"
-        )));
+        return Err(Error::Ingest(
+            "source is a symbolic link; drop the file it points to".into(),
+        ));
     }
     if !meta.is_file() && !meta.is_dir() {
-        return Err(Error::Ingest(format!(
-            "{src} is not a regular file or folder"
-        )));
+        return Err(Error::Ingest(
+            "source is not a regular file or folder".into(),
+        ));
     }
     let src = canonical(src)?;
     let is_dir = meta.is_dir();
@@ -69,7 +76,7 @@ pub fn ingest(
 
     let name = src
         .file_name()
-        .ok_or_else(|| Error::Ingest(format!("{src} has no file name")))?;
+        .ok_or_else(|| Error::Ingest("source has no file name".into()))?;
     let dest = unique_destination(&private, name);
     match mode {
         IngestMode::Copy => copy_tree(&src, &dest)?,
@@ -104,7 +111,7 @@ pub fn move_by_copy(src: &Utf8Path, dest: &Utf8Path) -> Result<()> {
 /// or copied.
 pub fn copy_tree(src: &Utf8Path, dest: &Utf8Path) -> Result<()> {
     if fs::symlink_metadata(dest).is_ok() {
-        return Err(Error::Ingest(format!("{dest} already exists")));
+        return Err(Error::Ingest("destination exists".into()));
     }
     let result = copy_inner(src, dest);
     if result.is_err() {
@@ -136,14 +143,14 @@ fn copy_inner(src: &Utf8Path, dest: &Utf8Path) -> Result<()> {
         }
     } else if meta.is_file() {
         if dest.exists() {
-            return Err(Error::Ingest(format!("{dest} already exists")));
+            return Err(Error::Ingest("destination exists".into()));
         }
         fs::copy(src, dest)?;
         fs::File::open(dest)?.sync_all()?;
         let copied = fs::metadata(dest)?.len();
         if copied != meta.len() {
             return Err(Error::Ingest(format!(
-                "copy of {src} is {copied} bytes, expected {}",
+                "copy is {copied} bytes, expected {}",
                 meta.len()
             )));
         }
@@ -335,6 +342,31 @@ mod tests {
             ingest(&f.private, &link, IngestMode::Move),
             Err(Error::Ingest(_))
         ));
+    }
+
+    fn assert_no_path(e: &Error) {
+        let msg = e.to_string();
+        for part in ["McFakename", "Downloads", "Private", ".txt", "/"] {
+            assert!(!msg.contains(part), "{part:?} in {msg:?}");
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ingest_errors_carry_no_path() {
+        let f = fx();
+        let missing = f.outside.join("Testy McFakename W2.txt");
+        assert_no_path(&ingest(&f.private, &missing, IngestMode::Move).unwrap_err());
+
+        let real = f.outside.join("Testy McFakename real.txt");
+        fs::write(&real, "x").unwrap();
+        let link = f.outside.join("Testy McFakename link.txt");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        assert_no_path(&ingest(&f.private, &link, IngestMode::Move).unwrap_err());
+
+        let dest = f.private.join("Testy McFakename dest.txt");
+        fs::write(&dest, "keep").unwrap();
+        assert_no_path(&copy_tree(&real, &dest).unwrap_err());
     }
 
     #[test]

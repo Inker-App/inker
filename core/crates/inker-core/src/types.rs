@@ -277,7 +277,8 @@ pub enum DetectionSource {
 }
 
 /// One sensitive value found in a document, before or after treatment.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// `Debug` prints positions, kinds and sources, never the generalized text.
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct Detection {
     pub page: u32,
     pub span: Span,
@@ -329,7 +330,8 @@ pub enum TextOrigin {
 }
 
 /// Text of one page, with the origin so detection can weight confidence.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// `Debug` prints the page number and text length, never the text.
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct PageText {
     /// 1-based.
     pub page: u32,
@@ -338,18 +340,69 @@ pub struct PageText {
 }
 
 /// A fillable form field (AcroForm widget) with its value.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// `Debug` prints the field name and value length, never the value.
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct FormField {
     pub name: String,
     pub value: String,
     pub page: Option<u32>,
 }
 
-/// Everything extraction produces for one file.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+/// Everything extraction produces for one file. `Debug` is redacted.
+#[derive(Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct Extracted {
     pub pages: Vec<PageText>,
     pub fields: Vec<FormField>,
+}
+
+impl fmt::Debug for Extracted {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Extracted")
+            .field("pages", &self.pages)
+            .field("fields", &self.fields)
+            .finish()
+    }
+}
+
+impl fmt::Debug for PageText {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PageText")
+            .field("page", &self.page)
+            .field("len", &self.text.len())
+            .field("origin", &self.origin)
+            .finish()
+    }
+}
+
+impl fmt::Debug for FormField {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("FormField")
+            .field("name", &self.name)
+            .field("value_len", &self.value.len())
+            .field("page", &self.page)
+            .finish()
+    }
+}
+
+impl fmt::Debug for Detection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Detection")
+            .field("page", &self.page)
+            .field("span", &self.span)
+            .field("kind", &self.kind)
+            .field("source", &self.source)
+            .field("confidence", &self.confidence)
+            .field("treatment", &self.treatment)
+            .field("needs_review", &self.needs_review)
+            .field("has_review_prompt", &self.review_prompt.is_some())
+            .field("role", &self.role)
+            .field(
+                "generalized_len",
+                &self.generalized.as_ref().map(String::len),
+            )
+            .field("field", &self.field)
+            .finish()
+    }
 }
 
 impl Extracted {
@@ -552,6 +605,10 @@ pub enum Resolved {
 pub struct WriteOutcome {
     pub path: Utf8PathBuf,
     pub handle: Handle,
+    /// Tokens left as literal text because they are not from the source
+    /// document (or folder) or are unknown.
+    #[serde(default)]
+    pub skipped_tokens: u32,
 }
 
 /// Identity of a review question (one attention-card item).
@@ -702,6 +759,65 @@ mod tests {
         assert_eq!(DocKind::unknown().as_str(), "unknown");
         assert_ne!(DocumentId::new(), DocumentId::default());
         assert_ne!(FolderId::new(), FolderId::default());
+    }
+
+    #[test]
+    fn debug_never_prints_text_or_values() {
+        let secret = "Testy McFakename 000-12-3456";
+        let e = Extracted {
+            pages: vec![PageText {
+                page: 3,
+                text: secret.into(),
+                origin: TextOrigin::Ocr,
+            }],
+            fields: vec![FormField {
+                name: "f1_01".into(),
+                value: secret.into(),
+                page: Some(1),
+            }],
+        };
+        let d = Detection {
+            page: 2,
+            span: Span { start: 4, end: 9 },
+            kind: TokenKind::Person,
+            source: DetectionSource::Rule { name: "r".into() },
+            confidence: 0.9,
+            treatment: Treatment::Generalize,
+            needs_review: false,
+            review_prompt: None,
+            role: Some("employee".into()),
+            generalized: Some(secret.into()),
+            field: Some("f1_01".into()),
+        };
+        for out in [
+            format!("{e:?}"),
+            format!("{:?}", e.pages[0]),
+            format!("{:?}", e.fields[0]),
+            format!("{d:?}"),
+            format!("{e:#?}"),
+        ] {
+            assert!(!out.contains("McFakename"), "{out}");
+            assert!(!out.contains("000-12-3456"), "{out}");
+        }
+        let p = format!("{:?}", e.pages[0]);
+        assert!(
+            p.contains("page: 3") && p.contains(&format!("len: {}", secret.len())),
+            "{p}"
+        );
+        let f = format!("{:?}", e.fields[0]);
+        assert!(f.contains(&format!("value_len: {}", secret.len())), "{f}");
+        let ds = format!("{d:?}");
+        assert!(
+            ds.contains("Person") && ds.contains("start: 4") && ds.contains("page: 2"),
+            "{ds}"
+        );
+    }
+
+    #[test]
+    fn write_outcome_skipped_defaults() {
+        let o: WriteOutcome =
+            serde_json::from_str(r#"{"path":"/p/a.md","handle":"w2-2025-a"}"#).unwrap();
+        assert_eq!(o.skipped_tokens, 0);
     }
 
     #[test]

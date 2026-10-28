@@ -1,7 +1,7 @@
 //! Codename proposals: the human-readable part of a handle.
 //!
 //! `w2-acme-2025`, `1099int-chase-2025`, `receipt-4471` (no org, no year),
-//! `taxes-2025` (a folder), `w2-acme-2025-summary` (a `write` output).
+//! `folder-4471` (a folder), `w2-acme-2025-summary` (a `write` output).
 //! Collisions get `-2`, `-3`, ... (decision 5.7). Every function returns a
 //! valid [`Codename`] built through [`Codename::parse`].
 
@@ -34,14 +34,15 @@ const ORG_STOPWORDS: &[&str] = &[
     "pllc",
 ];
 
-/// What goes into a document codename. Pluggable: which one is the product
-/// default is Ben's call; `TypeOrgYear` follows the brief.
+/// What goes into a document codename. `TypeYear` is the default because a
+/// handle is pasted into agent chats in the clear, and any name in it is a
+/// leak (decision 5.16); `TypeOrgYear` (the brief's original) stays available.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum CodenamePolicy {
     /// `w2-acme-2025`. Puts the organisation's name in the handle.
-    #[default]
     TypeOrgYear,
     /// `w2-2025`. No organisation in the handle.
+    #[default]
     TypeYear,
 }
 
@@ -91,13 +92,20 @@ fn unreachable_codename() -> Codename {
     Codename::parse("doc").expect("\"doc\" is a valid codename")
 }
 
-/// Slug for an organisation name: lowercase, punctuation and legal suffixes
-/// (Inc, LLC, Corp, ...) dropped, words joined by hyphens; when that is longer
-/// than 16 characters, only the first word. `None` when nothing is left.
+/// Slug for an organisation name: lowercase, digits, punctuation and legal
+/// suffixes (Inc, LLC, Corp, ...) dropped, words joined by hyphens; when that
+/// is longer than 16 characters, only the first word. `None` when nothing is
+/// left. Digits are dropped so an EIN or account number caught in the org
+/// span never reaches a handle.
 pub fn slugify_org(name: &str) -> Option<String> {
     let ws: Vec<String> = words(name)
         .into_iter()
-        .filter(|w| !ORG_STOPWORDS.contains(&w.as_str()))
+        .map(|w| {
+            w.chars()
+                .filter(|c| !c.is_ascii_digit())
+                .collect::<String>()
+        })
+        .filter(|w| !w.is_empty() && !ORG_STOPWORDS.contains(&w.as_str()))
         .collect();
     let first = ws.first()?;
     let joined = ws.join("-");
@@ -150,15 +158,12 @@ pub fn propose(
     finish(&parts.join("-"), "doc")
 }
 
-/// Propose a folder codename from the dropped folder's name (first four
-/// words), e.g. `Taxes 2025` -> `taxes-2025`; `folder-NNNN` if nothing is left.
-pub fn propose_folder(name: &str, discriminator: u32) -> Codename {
-    let ws = words(name);
-    if ws.is_empty() {
-        return finish(&format!("folder-{}", serial(discriminator)), "folder");
-    }
-    let s = ws.into_iter().take(4).collect::<Vec<_>>().join("-");
-    finish(&s, "folder")
+/// Propose a folder codename: `folder-NNNN`. Never built from the folder's
+/// name, which is often a person's name. The folder handle exists before its
+/// children are classified and may be copied as soon as one child is ready, so
+/// it is not renamed later from the children's kinds or years.
+pub fn propose_folder(discriminator: u32) -> Codename {
+    finish(&format!("folder-{}", serial(discriminator)), "folder")
 }
 
 /// Codename for a `write` output: `<source>-<file stem slug>`.
@@ -301,14 +306,27 @@ mod tests {
             1,
         );
         assert!(c.as_str().len() <= 60);
-        let f = propose_folder(&long, 1);
-        assert!(f.as_str().len() <= 60);
     }
 
     #[test]
-    fn folder_names() {
-        assert_eq!(propose_folder("Taxes 2025", 1).as_str(), "taxes-2025");
-        assert_eq!(propose_folder("  ...  ", 7).as_str(), "folder-1007");
+    fn folder_codenames_never_come_from_the_folder_name() {
+        assert_eq!(propose_folder(1234).as_str(), "folder-1234");
+        assert_eq!(propose_folder(7).as_str(), "folder-1007");
+    }
+
+    #[test]
+    fn default_policy_is_type_year() {
+        assert_eq!(CodenamePolicy::default(), CodenamePolicy::TypeYear);
+    }
+
+    #[test]
+    fn org_slugs_drop_digits() {
+        assert_eq!(slugify_org("ACME 07-3456789").as_deref(), Some("acme"));
+        assert_eq!(
+            slugify_org("Acme 4471 Widgets").as_deref(),
+            Some("acme-widgets")
+        );
+        assert_eq!(slugify_org("07-3456789"), None);
     }
 
     #[test]

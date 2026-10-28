@@ -12,7 +12,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 
 use crate::codename::propose_output;
 use crate::fsutil::{atomic_write, is_within};
-use crate::vault::Vault;
+use crate::vault::{TokenScope, Vault};
 use crate::{Codename, Error, Result};
 
 fn refused(msg: impl Into<String>) -> Error {
@@ -76,25 +76,29 @@ fn canonical(p: &Utf8Path) -> Result<Utf8PathBuf> {
     Utf8PathBuf::from_path_buf(c).map_err(|_| refused("path is not valid UTF-8"))
 }
 
-/// Rehydrate `content` through the vault and write it to `dir/name`.
-/// Returns the path written and the proposed codename for the output,
-/// `<source>-<name>` (not yet checked for collisions).
+/// Rehydrate the tokens of `content` that are in `scope` and write it to
+/// `dir/name`. Returns the path written, the proposed codename for the
+/// output, `<source>-<name>` (not yet checked for collisions), and the number
+/// of tokens left as literal text.
+#[allow(clippy::too_many_arguments)]
 pub fn write(
     vault: &Vault,
+    scope: &TokenScope,
     private_folder: &Utf8Path,
     dir: &Utf8Path,
     name: &str,
     content: &str,
     source: &Codename,
     allow_overwrite: bool,
-) -> Result<(Utf8PathBuf, Codename)> {
+) -> Result<(Utf8PathBuf, Codename, u32)> {
     let target = resolve_target(private_folder, dir, name)?;
     if !allow_overwrite && fs::symlink_metadata(&target).is_ok() {
         return Err(refused("a file with that name already exists"));
     }
-    atomic_write(&target, vault.rehydrate(content).as_bytes())?;
-    tracing::info!(source = %source, "wrote rehydrated output");
-    Ok((target, propose_output(source, name)))
+    let (text, skipped) = vault.rehydrate_scoped(content, scope);
+    atomic_write(&target, text.as_bytes())?;
+    tracing::info!(skipped, "wrote rehydrated output");
+    Ok((target, propose_output(source, name), skipped))
 }
 
 #[cfg(test)]
@@ -136,9 +140,11 @@ mod tests {
     #[test]
     fn writes_rehydrated_content_under_private() {
         let f = fx();
-        f.vault.mint(&TokenKind::Ssn, "000-12-3456").unwrap();
-        let (path, code) = write(
+        let t = f.vault.mint(&TokenKind::Ssn, "000-12-3456").unwrap();
+        let scope: TokenScope = [(t.kind.label(), t.index)].into_iter().collect();
+        let (path, code, skipped) = write(
             &f.vault,
+            &scope,
             &f.private,
             &f.private.join("sub"),
             "summary.md",
@@ -153,6 +159,7 @@ mod tests {
             "SSN: 000-12-3456 [SSN_7]"
         );
         assert_eq!(code.as_str(), "w2-acme-2025-summary");
+        assert_eq!(skipped, 1);
     }
 
     #[test]
@@ -194,6 +201,7 @@ mod tests {
         fs::write(f.private.join("a.txt"), "orig").unwrap();
         assert!(refused(write(
             &f.vault,
+            &TokenScope::new(),
             &f.private,
             &f.private,
             "a.txt",
@@ -204,6 +212,7 @@ mod tests {
         assert_eq!(fs::read_to_string(f.private.join("a.txt")).unwrap(), "orig");
         write(
             &f.vault,
+            &TokenScope::new(),
             &f.private,
             &f.private,
             "a.txt",
