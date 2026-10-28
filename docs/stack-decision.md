@@ -250,3 +250,24 @@ Plus hardening: partial-overlap union, a lock file against a second writer, `wri
 - The GLiNER model pass compiles behind a feature flag and has never run against weights. Detection today is templates, rules and fail-closed only.
 - The index is plain SQLite (section 3.4).
 - The host serialises all core access behind one lock; processing a document blocks MCP reads for its duration.
+
+---
+
+## 9. Target clients (reframed 2026-10-28)
+
+INKER is for the chat window. Research on 2026-10-28 (search summaries only; vendor pages were unreachable from the dev box that day, so re-read primary sources before relying on a detail):
+
+| Client | Local MCP | How INKER plugs in | Notes |
+|---|---|---|---|
+| **Claude desktop app (macOS)** | stdio via `~/Library/Application Support/Claude/claude_desktop_config.json`, or a side-loaded `.mcpb` Desktop Extension bundle | **Primary.** Onboarding writes the config line (restart required) or the user installs the bundle. | Reportedly ignores the server `instructions` field, so the `🐙/` guidance lives in the tool descriptions. Unsigned bundles show an "unverified" warning; Anthropic's directory no longer accepts MCPB, only plugins. Each tool call prompts Allow once / Always allow; the default is now Always allow. |
+| Raycast AI, Perplexity Mac | stdio | Same command; "copy this JSON". | Cheap second clients. |
+| **ChatGPT desktop app** | Chat mode: remote HTTPS connectors only (Developer mode). Codex mode: stdio via `~/.codex/config.toml`. | Stretch. The Codex writer already covers the config; whether plain chat can see it is unverified. | Write tools prompt unless `readOnlyHint`. |
+| claude.ai, chatgpt.com | Remote HTTPS with OAuth only; never localhost | **Parked.** Needs a public relay. OpenAI has a first-party outbound tunnel client (enterprise/API). | A relay only ever carries tokenized text, which is the one thing that makes it thinkable; still, deferred. |
+| Claude Code, Cursor, Codex CLI | stdio | Already built; now the "also works with coding agents" tier. | |
+
+**Consequences for the build**
+- The `🐙/` rule moves into the `list`, `resolve` and `describe` tool descriptions ("when the user's message contains `🐙/…` or `ink/…`, call `resolve`"). The `instructions` field stays for clients that honour it.
+- Onboarding step 1 shrinks to "pick a folder"; the exclusion writers become an optional extra. But the "keep out" layer is not moot: Claude Desktop's Cowork, Code tab and Chrome extension can reach local files, and a July 2026 Cowork sandbox escape exposed the host filesystem. The private folder outside any workspace remains the real wall.
+- The cold-handle spike must be rerun in Claude Desktop on a Mac; the Claude Code result (12/12) does not transfer, because the mechanism it relied on (instructions) is reportedly not applied there.
+- Distribution: a `.mcpb` containing a signed, notarized copy of the shim, plus the config-line fallback. Every binary a chat app launches must be Developer ID signed; unsigned helpers get killed on managed Macs.
+- The website and app copy say "your AI chat", not "your coding agent".
