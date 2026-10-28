@@ -146,8 +146,8 @@ enum GuardFormat {
 }
 
 fn init_logging() {
-    let filter = tracing_subscriber::EnvFilter::try_from_env("INKER_LOG")
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn"));
+    let filter =
+        tracing_subscriber::EnvFilter::new(log_filter(std::env::var("INKER_LOG").ok().as_deref()));
     // Colour only on a terminal: logs piped to a file must stay greppable.
     let ansi = std::io::IsTerminal::is_terminal(&std::io::stderr());
     let _ = tracing_subscriber::fmt()
@@ -235,6 +235,16 @@ fn run(cmd: Cmd) -> Result<ExitCode> {
             socket,
         } => client_call(socket, "describe", json!({"handle": handle}), json),
     }
+}
+
+/// The tracing filter: the user's `INKER_LOG` (default `warn`) plus the PDF
+/// libraries forced off, because their debug lines print document bytes.
+fn log_filter(env: Option<&str>) -> String {
+    let base = env
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .unwrap_or("warn");
+    format!("{base},pdf_extract=off,lopdf=off")
 }
 
 fn utf8(p: PathBuf) -> Result<Utf8PathBuf> {
@@ -514,6 +524,16 @@ mod tests {
     fn change_lines_marks_additions_and_removals() {
         assert_eq!(change_lines(Some("a\nb\n"), "a\nc\n"), ["- b", "+ c"]);
         assert_eq!(change_lines(None, "x\n"), ["+ x"]);
+    }
+
+    #[test]
+    fn log_filter_silences_the_pdf_libraries_by_default_and_when_set() {
+        assert_eq!(log_filter(None), "warn,pdf_extract=off,lopdf=off");
+        assert_eq!(log_filter(Some("debug")), "debug,pdf_extract=off,lopdf=off");
+        assert_eq!(
+            log_filter(Some("info,inker_core=trace")),
+            "info,inker_core=trace,pdf_extract=off,lopdf=off"
+        );
     }
 
     #[test]

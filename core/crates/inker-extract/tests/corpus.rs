@@ -458,3 +458,50 @@ fn extractor_composes_any_sources() {
         .unwrap();
     assert_eq!(got.pages[0].text, "canned");
 }
+
+mod quiet_extraction {
+    //! Finding 9 of the security review: pdf-extract and lopdf can print
+    //! document bytes through panics and log lines. Extraction must stay
+    //! silent and its errors must never quote the file.
+    use camino::Utf8PathBuf;
+    use inker_core::ports::TextSource;
+    use inker_extract::{PdfTextSource, should_silence_panic};
+
+    #[test]
+    fn panics_from_the_pdf_libraries_are_silenced_and_ours_are_not() {
+        assert!(should_silence_panic(
+            "/home/x/.cargo/registry/src/index/pdf-extract-0.12.1/src/lib.rs"
+        ));
+        assert!(should_silence_panic(
+            "/home/x/.cargo/registry/src/index/lopdf-0.42.0/src/parser.rs"
+        ));
+        assert!(!should_silence_panic("crates/inker-extract/src/pdf.rs"));
+        assert!(!should_silence_panic(
+            "/home/x/.cargo/registry/src/index/serde_json-1.0.0/src/de.rs"
+        ));
+    }
+
+    #[test]
+    fn a_broken_pdf_errors_without_quoting_its_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = Utf8PathBuf::from_path_buf(dir.path().join("broken.pdf")).unwrap();
+        let marker = "ZQX-SENTINEL-900-12-3456";
+        let junk = format!(
+            "%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 obj\n<< /Type /Page /Parent 2 0 R /Contents 4 0 R >>\nendobj\n4 0 obj\n<< /Length 999 >>\nstream\nBT ({marker}) Tj [ ( {marker} ) ] TJ ET garbage (({marker}\nendstream\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n"
+        );
+        std::fs::write(&path, junk).unwrap();
+        let r = PdfTextSource::new().extract(&path);
+        let msg = match r {
+            Ok(_) => return, // tolerant parse is fine too; nothing to leak through an error
+            Err(e) => e.to_string(),
+        };
+        assert!(
+            !msg.contains(marker),
+            "error quoted document content: {msg}"
+        );
+        assert!(
+            !msg.contains("900-12-3456"),
+            "error quoted document content: {msg}"
+        );
+    }
+}

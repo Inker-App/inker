@@ -1355,8 +1355,10 @@ dependencies = [
 name = "inker-detect"
 version = "0.1.0"
 dependencies = [
+ "camino",
  "gline-rs",
  "inker-core",
+ "inker-extract",
  "inker-packs",
  "orp",
  "regex",
@@ -1376,6 +1378,7 @@ dependencies = [
  "pdf-extract",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tracing",
 ]

@@ -260,3 +260,43 @@ fn an_unsure_value_holds_the_document_until_answered() {
     );
     assert!(text.contains("1,250.00"), "amount kept");
 }
+
+#[test]
+fn an_agent_output_is_never_reprocessed() {
+    // Finding 8 of the security review: an output file is rehydrated on
+    // disk. Re-extracting it would put whatever detection misses into the
+    // tokenized view. `process` must refuse outputs and leave them as they are.
+    let w = World::new();
+    let src = w.download("w2-acme-2025.txt");
+    let out = w
+        .pipeline
+        .ingest(std::slice::from_ref(&src), IngestMode::Copy)
+        .expect("ingest");
+    let rec = w.pipeline.core().document(out[0].id).expect("record");
+    let handle = Handle::new(rec.codename);
+    let written = w
+        .pipeline
+        .core()
+        .write(&handle, "summary.md", "Employee [SSN_1] earned 84,250.00.")
+        .expect("write");
+    let output = w
+        .pipeline
+        .core()
+        .find_document(&written.handle)
+        .expect("output record");
+    assert_eq!(output.state, DocState::Ready);
+
+    let outcome = w.pipeline.process(output.id);
+    let why = outcome.error.clone().unwrap_or_default();
+    assert!(
+        why.contains("output"),
+        "process must refuse an output explicitly, got: {why:?}"
+    );
+    let after = w.pipeline.core().document(output.id).expect("record");
+    assert_eq!(after.state, DocState::Ready, "state must be untouched");
+    let text = w.text_of(&written.handle);
+    assert!(
+        text.contains("[SSN_1]") && !text.contains(JORDAN_SSN),
+        "{text}"
+    );
+}

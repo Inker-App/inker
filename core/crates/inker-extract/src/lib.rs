@@ -19,4 +19,4 @@ mod pdfdoc;
 pub use extractor::Extractor;
 pub use kind::{FileKind, detect_file_kind};
 pub use ocr::{FixtureOcr, NoOcr, OCR_SIDECAR_SUFFIX};
-pub use pdf::PdfTextSource;
+pub use pdf::{PdfTextSource, install_quiet_panic_hook, should_silence_panic};

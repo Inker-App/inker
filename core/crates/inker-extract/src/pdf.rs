@@ -44,19 +44,22 @@ impl TextSource for PdfTextSource {
             return Err(Error::Extract("not a PDF".into()));
         }
 
-        // pdf-extract panics on some malformed input; contain it.
+        // pdf-extract panics on some malformed input; contain it, and keep its
+        // panic message (which can quote document bytes) off stderr. The
+        // library's error text can quote operands too, so it is not forwarded.
+        install_quiet_panic_hook();
         let texts = catch_unwind(AssertUnwindSafe(|| {
             pdf_extract::extract_text_from_mem_by_pages(&bytes)
         }))
         .map_err(|_| Error::Extract("PDF text extraction panicked".into()))?
-        .map_err(|e| Error::Extract(format!("PDF text layer: {e}")))?;
+        .map_err(|_| Error::Extract("PDF text layer could not be read".into()))?;
         let Some(pages) = pages_from_texts(texts) else {
             tracing::debug!("PDF has no text layer; caller should OCR");
             return Ok(None);
         };
 
         let doc = lopdf::Document::load_mem(&bytes)
-            .map_err(|e| Error::Extract(format!("PDF structure: {e}")))?;
+            .map_err(|_| Error::Extract("PDF structure could not be read".into()))?;
         let fields = acroform::read_fields(&doc)?;
         tracing::debug!(
             pages = pages.len(),
@@ -65,6 +68,34 @@ impl TextSource for PdfTextSource {
         );
         Ok(Some(Extracted { pages, fields }))
     }
+}
+
+/// Whether a panic from this source file should be kept off stderr: the PDF
+/// libraries' panic messages can quote document bytes.
+pub fn should_silence_panic(file: &str) -> bool {
+    ["/pdf-extract-", "/lopdf-", "\\pdf-extract-", "\\lopdf-"]
+        .iter()
+        .any(|needle| file.contains(needle))
+}
+
+/// Installs, once per process, a panic hook that drops panics raised inside
+/// the PDF libraries and forwards everything else to the previous hook.
+pub fn install_quiet_panic_hook() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            let silenced = info
+                .location()
+                .map(|l| should_silence_panic(l.file()))
+                .unwrap_or(false);
+            if silenced {
+                tracing::debug!("a PDF library panicked; message withheld");
+            } else {
+                previous(info);
+            }
+        }));
+    });
 }
 
 #[cfg(test)]

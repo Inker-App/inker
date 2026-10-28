@@ -84,11 +84,24 @@ impl Pipeline {
                 state,
                 error: None,
             },
+            Err(inker_core::Error::Refused(why)) => {
+                let state = self
+                    .core
+                    .document(id)
+                    .map(|r| r.state)
+                    .unwrap_or(DocState::Failed);
+                Outcome {
+                    id,
+                    state,
+                    error: Some(why),
+                }
+            }
             Err(e) => {
-                tracing::warn!(document = ?id, error = %e, "processing failed");
+                // Log the kind of failure only; the message can carry a path.
+                tracing::warn!(document = ?id, kind = error_kind(&e), "processing failed");
                 let note = "could not read this file";
                 if let Err(e2) = self.core.set_state(id, DocState::Failed, Some(note)) {
-                    tracing::error!(document = ?id, error = %e2, "could not mark failed");
+                    tracing::error!(document = ?id, kind = error_kind(&e2), "could not mark failed");
                 }
                 Outcome {
                     id,
@@ -101,6 +114,13 @@ impl Pipeline {
 
     fn run(&self, id: DocumentId) -> Result<DocState> {
         let rec = self.core.document(id)?;
+        if rec.kind.as_str() == inker_core::facade::OUTPUT_KIND {
+            // An output is rehydrated on disk. Re-extracting it would hand
+            // the agent whatever detection misses. Leave it exactly as is.
+            return Err(inker_core::Error::Refused(
+                "agent outputs are not processed".into(),
+            ));
+        }
         let note = match detect_file_kind(&rec.path) {
             FileKind::Image => "reading the scan",
             _ => "reading",
@@ -118,5 +138,24 @@ impl Pipeline {
 
         self.core
             .complete_processing(id, &extracted, &detections, class.kind, class.year)
+    }
+}
+
+/// A short, content-free label for logs.
+fn error_kind(e: &inker_core::Error) -> &'static str {
+    use inker_core::Error as E;
+    match e {
+        E::InvalidHandle(_) => "invalid_handle",
+        E::UnknownHandle(_) => "unknown_handle",
+        E::PendingReview(_) => "pending_review",
+        E::NotReady(_) => "not_ready",
+        E::Vault(_) => "vault",
+        E::Index(_) => "index",
+        E::Extract(_) => "extract",
+        E::Detect(_) => "detect",
+        E::Ingest(_) => "ingest",
+        E::Refused(_) => "refused",
+        E::Io(_) => "io",
+        E::Json(_) => "json",
     }
 }
