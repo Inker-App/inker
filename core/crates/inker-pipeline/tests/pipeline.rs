@@ -83,7 +83,7 @@ fn w2_text_file_becomes_a_ready_handle_with_tokens_and_no_real_values() {
 
     let outcomes = w
         .pipeline
-        .ingest(&[src.clone()], IngestMode::Move)
+        .ingest(std::slice::from_ref(&src), IngestMode::Move)
         .expect("ingest");
     assert_eq!(outcomes.len(), 1);
     let Outcome { id, state, .. } = &outcomes[0];
@@ -200,7 +200,7 @@ fn an_unsupported_file_is_moved_but_marked_failed() {
 
     let outcomes = w
         .pipeline
-        .ingest(&[src.clone()], IngestMode::Move)
+        .ingest(std::slice::from_ref(&src), IngestMode::Move)
         .expect("ingest");
     assert_eq!(outcomes[0].state, DocState::Failed);
     assert!(!src.exists(), "still moved out of Downloads");
