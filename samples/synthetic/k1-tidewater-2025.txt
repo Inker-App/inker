@@ -1,0 +1,61 @@
+Schedule K-1 (Form 1065) 2025
+Partner's Share of Income, Deductions, Credits, etc.
+[X] Final K-1   [ ] Amended K-1
+
+Part I    Information About the Partnership
+A Partnership's employer identification number
+  78-1357924
+B Partnership's name, address, city, state, and ZIP code
+  Tidewater Partners LP
+  300 Estuary Plaza
+  Astoria, OR 97103
+C IRS center where partnership filed return
+  e-file
+D [ ] Check if this is a publicly traded partnership (PTP)
+
+Part II   Information About the Partner
+E Partner's SSN or TIN (Do not use TIN of a disregarded entity. See instructions.)
+  900-12-3456
+F Name, address, city, state, and ZIP code for partner entered in E.
+  Jordan A Example
+  48 Lantern Way Apt 3
+  Springfield, OR 97477
+G [ ] General partner or LLC member-manager   [X] Limited partner or other LLC member
+H1 [X] Domestic partner   [ ] Foreign partner
+I1 What type of entity is this partner?   Individual
+J Partner's share of profit, loss, and capital (see instructions):
+              Beginning        Ending
+  Profit        2.500000 %     2.500000 %
+  Loss          2.500000 %     2.500000 %
+  Capital       2.500000 %     2.500000 %
+K1 Partner's share of liabilities:
+  Nonrecourse                $ 0.00
+  Qualified nonrecourse      $ 12,400.00
+  Recourse                   $ 0.00
+L Partner's Capital Account Analysis
+  Beginning capital account  $ 25,000.00
+  Capital contributed        $ 0.00
+  Current year net income    $ 3,212.00
+  Withdrawals & distributions $ (1,500.00)
+  Ending capital account     $ 26,712.00
+
+Part III  Partner's Share of Current Year Income, Deductions, Credits, and Other Items
+1 Ordinary business income (loss)            2,861.00
+2 Net rental real estate income (loss)         351.00
+3 Other net rental income (loss)                 0.00
+4a Guaranteed payments for services              0.00
+4b Guaranteed payments for capital               0.00
+4c Total guaranteed payments                     0.00
+5 Interest income                               14.00
+6a Ordinary dividends                            0.00
+6b Qualified dividends                           0.00
+7 Royalties                                      0.00
+8 Net short-term capital gain (loss)             0.00
+9a Net long-term capital gain (loss)             0.00
+10 Net section 1231 gain (loss)                  0.00
+11 Other income (loss)
+12 Section 179 deduction                         0.00
+13 Other deductions
+14 Self-employment earnings (loss)   A           0.00
+19 Distributions                     A       1,500.00
+20 Other information                 Z       2,861.00

@@ -1,0 +1,37 @@
+Form 1099-INT Interest Income 2025
+Copy B For Recipient
+
+PAYER'S name, street address, city or town, state or province, country, ZIP
+or foreign postal code, and telephone no.
+  Harbor Street Credit Union
+  9 Harbor Street
+  Portland, OR 97209
+  (503) 555-0142
+PAYER'S TIN                         RECIPIENT'S TIN
+  19-2468013                          900-12-3456
+RECIPIENT'S name
+  Jordan A Example
+Street address (including apt. no.)
+  48 Lantern Way Apt 3
+City or town, state or province, country, and ZIP or foreign postal code
+  Springfield, OR 97477
+Account number (see instructions)
+  00098765432
+
+1 Interest income                            $      412.88
+2 Early withdrawal penalty                   $        0.00
+3 Interest on U.S. Savings Bonds and Treasury obligations
+                                             $        0.00
+4 Federal income tax withheld                $        0.00
+5 Investment expenses                        $        0.00
+6 Foreign tax paid                           $        0.00
+7 Foreign country or U.S. possession
+8 Tax-exempt interest                        $        0.00
+9 Specified private activity bond interest   $        0.00
+10 Market discount                           $        0.00
+11 Bond premium                              $        0.00
+12 Bond premium on Treasury obligations      $        0.00
+13 Bond premium on tax-exempt bond           $        0.00
+14 Tax-exempt and tax credit bond CUSIP no.
+15 State   16 State identification no.   17 State tax withheld
+   OR         19-2468013                  $        0.00

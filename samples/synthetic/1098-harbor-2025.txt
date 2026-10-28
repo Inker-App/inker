@@ -1,0 +1,34 @@
+Form 1098 Mortgage Interest Statement 2025
+Copy B For Payer/Borrower
+
+RECIPIENT'S/LENDER'S name, street address, city or town, state or province,
+country, ZIP or foreign postal code, and telephone no.
+  Harbor Street Credit Union
+  9 Harbor Street
+  Portland, OR 97209
+  (503) 555-0142
+RECIPIENT'S/LENDER'S TIN            PAYER'S/BORROWER'S TIN
+  19-2468013                          900-12-3456
+PAYER'S/BORROWER'S name
+  Jordan A Example
+Street address (including apt. no.)
+  48 Lantern Way Apt 3
+City or town, state or province, country, and ZIP or foreign postal code
+  Springfield, OR 97477
+
+1 Mortgage interest received from payer(s)/borrower(s)
+                                             $   11,204.37
+2 Outstanding mortgage principal             $  318,450.00
+3 Mortgage origination date                     06/14/2021
+4 Refund of overpaid interest                $        0.00
+5 Mortgage insurance premiums                $        0.00
+6 Points paid on purchase of principal residence
+                                             $        0.00
+7 If address of property securing mortgage is the same as
+  PAYER'S/BORROWER'S address, the box is checked   [X]
+8 Address or description of property securing mortgage
+9 Number of properties securing the mortgage     1
+10 Other   Real estate taxes paid $ 4,118.02
+11 Mortgage acquisition date
+Account number (see instructions)
+  ML-0000-88231

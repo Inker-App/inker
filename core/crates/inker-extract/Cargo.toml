@@ -1,0 +1,22 @@
+[package]
+name = "inker-extract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+inker-core.workspace = true
+camino.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+# Text layer, per page. Pinned to the minor that matches the lopdf below so
+# both share one parser in the build.
+pdf-extract = "0.12.1"
+# AcroForm walking. pdf-extract 0.12 depends on lopdf 0.42.
+lopdf = { version = "0.42.0", default-features = false }
+
+[lints]
+workspace = true

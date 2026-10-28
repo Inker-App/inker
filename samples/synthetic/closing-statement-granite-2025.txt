@@ -1,0 +1,32 @@
+Granite Key Title & Escrow
+Closing Disclosure / Settlement Statement
+File No. GK-2025-000417        Settlement date: 04/18/2025
+
+Property: 1720 Quarry Road, Lakewood, CO 80226
+Buyer:    Riley Sample   SSN 666-48-2210
+Seller:   Jordan A Example   SSN 900-12-3456
+Lender:   Harbor Street Credit Union   Loan No. ML-0000-88231
+
+                                         Buyer                Seller
+                                    Debit      Credit    Debit       Credit
+Contract sales price            425,000.00                         425,000.00
+Earnest money deposit                       10,000.00
+New loan amount                            340,000.00
+Payoff of first mortgage                                318,450.00
+County taxes 01/01-04/18           1,231.40                          1,231.40
+Title insurance premium            1,890.00
+Recording fees                       142.00
+Real estate commission                                   21,250.00
+Totals                         428,263.40  350,000.00  339,700.00  426,231.40
+Cash due from buyer                         78,263.40
+Cash due to seller                                       86,531.40
+
+WIRE INSTRUCTIONS (verify by phone before sending; we never change wire
+instructions by email)
+  Bank:            Harbor Street Credit Union
+  Routing number:  987654321
+  Account name:    Granite Key Title & Escrow Escrow Trust
+  Account number:  0000-7713-9902
+  Reference:       GK-2025-000417 / Riley Sample
+
+Buyer signature: ______________________   Seller signature: ______________________

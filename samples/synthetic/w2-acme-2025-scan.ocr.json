@@ -1,0 +1,8 @@
+{
+  "pages": [
+    {
+      "page": 1,
+      "text": "Form W-2 Wage and Tax Statement 2025\nDepartment of the Treasury - Internal Revenue Service\nCopy B - To Be Filed With Employee's FEDERAL Tax Return\n\na Employee's social security number\n900123456\nb Employer identiﬁcation nurnber (EIN)\n07-1234567\nc Employer's name, address, and ZIP code\nAcme Robotics Inc\n500 Gearwheel Blvd\nPortland, OR 97201\nd Control number\nA0042-2025\ne Employee's first name and initial    Last name    Suff.\nJordan A    Example\nf Employee's address and ZIP code\n48 Lantern Way Apt 3\nSpringfield, OR 97477\n\n1 Wages, tips, other compensation    2 Federal income tax withheld\n84,25O.OO   11,912.40\n3 Social security wages    4 Social security tax withheld\n88,750.00    5,502.50\n5 Medicare wages and tips    6 Medicare tax withheld\n88,750.00    1,286.88\n7 Social security tips   8 Allocated tips\n0.00    0.00\n9    10 Dependent care benefits\n0.00\n11 Nonqualified plans    12a See instructions for box 12\n0.00   D    4,500.00\n13 Statutory employee  Retirement plan  Third-party sick pay\n[ ]   [X]    [ ]\n14 Other\nOR STT 63.19\n15 State  Employer's state ID number   16 State wages, tips, etc.\nOR 0000123-4    84,250.00\n17 State income tax    18 Local wages, tips, etc.\n6,318.75    0.00\n19 Local income tax    20 Locality name\n0.00\n"
+    }
+  ]
+}

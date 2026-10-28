@@ -1,0 +1,29 @@
+Harbor Street Credit Union
+9 Harbor Street, Portland, OR 97209   (503) 555-0142
+Member Statement   March 1, 2025 - March 31, 2025
+
+Jordan A Example
+48 Lantern Way Apt 3
+Springfield, OR 97477
+
+Member number: 0000-4471
+Account: Free Checking   Account number: 00012345678
+Routing number: 123456789
+
+Summary
+  Beginning balance  03/01/2025           $  4,210.55
+  Deposits and credits (3)                $  6,902.18
+  Withdrawals and debits (6)              $  5,118.40
+  Ending balance     03/31/2025           $  5,994.33
+
+Date        Description                                   Amount       Balance
+03/03/2025  PAYROLL DEPOSIT ACME ROBOTICS INC          3,451.09      7,661.64
+03/05/2025  ACH DEBIT HARBOR ST CU MORTGAGE PMT      -1,842.17      5,819.47
+03/09/2025  POS CORNERSTONE HARDWARE CO                 -86.41      5,733.06
+03/14/2025  ZELLE TO RILEY SAMPLE                      -250.00      5,483.06
+03/17/2025  PAYROLL DEPOSIT ACME ROBOTICS INC          3,451.09      8,934.15
+03/21/2025  ONLINE TRANSFER TO SAVINGS ****5432      -2,000.00      6,934.15
+03/28/2025  CHECK 1043                                 -939.82      5,994.33
+03/31/2025  DIVIDEND EARNED                               0.00      5,994.33
+
+Questions? Call (503) 555-0142 or visit any branch.

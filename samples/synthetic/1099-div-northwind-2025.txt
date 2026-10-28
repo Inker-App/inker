@@ -1,0 +1,42 @@
+Form 1099-DIV Dividends and Distributions 2025
+Copy B For Recipient
+
+PAYER'S name, street address, city or town, state or province, country, ZIP
+or foreign postal code, and telephone no.
+  Northwind Index Fund
+  PO Box 0000
+  Boston, MA 02101
+  (617) 555-0110
+PAYER'S TIN                         RECIPIENT'S TIN
+  70-2244668                          666-48-2210
+RECIPIENT'S name
+  Riley Sample
+Street address (including apt. no.)
+  1720 Quarry Road
+City or town, state or province, country, and ZIP or foreign postal code
+  Lakewood, CO 80226
+Account number (see instructions)
+  NW-0000-5521
+
+1a Total ordinary dividends                  $    1,284.16
+1b Qualified dividends                       $    1,102.40
+2a Total capital gain distr.                 $      310.00
+2b Unrecap. Sec. 1250 gain                   $        0.00
+2c Section 1202 gain                         $        0.00
+2d Collectibles (28%) gain                   $        0.00
+2e Section 897 ordinary dividends            $        0.00
+2f Section 897 capital gain                  $        0.00
+3 Nondividend distributions                  $        0.00
+4 Federal income tax withheld                $        0.00
+5 Section 199A dividends                     $       42.75
+6 Investment expenses                        $        0.00
+7 Foreign tax paid                           $       18.22
+8 Foreign country or U.S. possession          Various
+9 Cash liquidation distributions             $        0.00
+10 Noncash liquidation distributions         $        0.00
+11 FATCA filing requirement                   [ ]
+12 Exempt-interest dividends                 $        0.00
+13 Specified private activity bond interest dividends
+                                             $        0.00
+14 State   15 State identification no.   16 State tax withheld
+   CO                                      $        0.00

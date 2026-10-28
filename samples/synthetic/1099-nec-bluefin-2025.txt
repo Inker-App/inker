@@ -1,0 +1,27 @@
+Form 1099-NEC Nonemployee Compensation 2025
+Copy B For Recipient
+
+PAYER'S name, street address, city or town, state or province, country, ZIP
+or foreign postal code, and telephone no.
+  Bluefin Analytics LLC
+  77 Harbor Light Dr Suite 210
+  Denver, CO 80202
+  (303) 555-0187
+PAYER'S TIN                         RECIPIENT'S TIN
+  89-7654321                          666-48-2210
+RECIPIENT'S name
+  Riley Sample
+Street address (including apt. no.)
+  1720 Quarry Road
+City or town, state or province, country, and ZIP or foreign postal code
+  Lakewood, CO 80226
+Account number (see instructions)
+  BF-CONTRACTOR-0042
+
+1 Nonemployee compensation                   $   18,500.00
+2 Payer made direct sales totaling $5,000 or more of consumer
+  products to recipient for resale            [ ]
+3 Excess golden parachute payments           $        0.00
+4 Federal income tax withheld                $        0.00
+5 State tax withheld   6 State/Payer's state no.   7 State income
+  $ 0.00                 CO 00-000-1188             $   18,500.00
