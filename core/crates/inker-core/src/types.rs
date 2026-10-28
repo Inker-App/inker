@@ -86,7 +86,8 @@ impl Handle {
             .strip_prefix(HANDLE_PREFIX_OCTOPUS)
             .or_else(|| s.strip_prefix(HANDLE_PREFIX_ASCII))
             .ok_or_else(|| crate::Error::InvalidHandle(s.to_string()))?;
-        let codename = Codename::parse(rest).map_err(|_| crate::Error::InvalidHandle(s.to_string()))?;
+        let codename =
+            Codename::parse(rest).map_err(|_| crate::Error::InvalidHandle(s.to_string()))?;
         Ok(Self { codename })
     }
 
@@ -107,9 +108,24 @@ impl fmt::Display for Handle {
 
 /// A codename like `w2-acme-2025`: lowercase ASCII letters, digits and single
 /// hyphens, 1 to 64 characters, no leading or trailing hyphen.
+///
+/// [`Codename::parse`] is the only constructor; deserialization goes through it too.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
+#[serde(try_from = "String", into = "String")]
 pub struct Codename(String);
+
+impl TryFrom<String> for Codename {
+    type Error = String;
+    fn try_from(s: String) -> Result<Self, String> {
+        Codename::parse(&s)
+    }
+}
+
+impl From<Codename> for String {
+    fn from(c: Codename) -> String {
+        c.0
+    }
+}
 
 impl Codename {
     pub fn parse(s: &str) -> Result<Self, String> {
@@ -186,7 +202,13 @@ impl TokenKind {
             TokenKind::GovId => "GOVID".into(),
             TokenKind::Custom(s) => s
                 .chars()
-                .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_uppercase() } else { '_' })
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() {
+                        c.to_ascii_uppercase()
+                    } else {
+                        '_'
+                    }
+                })
                 .collect(),
         }
     }
@@ -272,6 +294,14 @@ pub struct Detection {
     /// Role of this value in the document, for `describe`: "employee",
     /// "employer", "payer", "recipient", "lender", "borrower".
     pub role: Option<String>,
+    /// Replacement text for [`Treatment::Generalize`], e.g. "Brooklyn, NY".
+    /// `None` for every other treatment.
+    #[serde(default)]
+    pub generalized: Option<String>,
+    /// When set, `span` indexes into the value of the form field with this
+    /// name instead of a page's text, and `page` is ignored.
+    #[serde(default)]
+    pub field: Option<String>,
 }
 
 /// The user's answer on the attention card.
@@ -381,6 +411,29 @@ impl DocState {
     pub fn is_servable(self) -> bool {
         matches!(self, DocState::Ready)
     }
+
+    /// Legal state machine moves. Staying in the same state is always allowed
+    /// (status note updates).
+    ///
+    /// Queued -> Reading -> Inking -> NeedsAttention | Ready | Failed;
+    /// NeedsAttention -> Inking (after an answer); Queued | Reading -> Failed;
+    /// Failed -> Queued (retry).
+    pub fn can_transition_to(self, to: DocState) -> bool {
+        use DocState::*;
+        self == to
+            || matches!(
+                (self, to),
+                (Queued, Reading)
+                    | (Reading, Inking)
+                    | (Inking, NeedsAttention)
+                    | (Inking, Ready)
+                    | (Inking, Failed)
+                    | (NeedsAttention, Inking)
+                    | (Queued, Failed)
+                    | (Reading, Failed)
+                    | (Failed, Queued)
+            )
+    }
 }
 
 /// Whether the drop moved or copied the original.
@@ -485,6 +538,49 @@ pub struct Description {
     pub treatments: Vec<KindTreatment>,
 }
 
+/// What `resolve` returns: a document's tokenized text or a folder listing.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum Resolved {
+    Document(ResolvedDocument),
+    Folder(ResolvedFolder),
+}
+
+/// Result of `write`: where the rehydrated file landed and the handle for its
+/// tokenized view (decision 5.6). The path is for the shell, not the agent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct WriteOutcome {
+    pub path: Utf8PathBuf,
+    pub handle: Handle,
+}
+
+/// Identity of a review question (one attention-card item).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct QuestionId(pub i64);
+
+/// One pending or answered attention-card question. Never contains the value.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ReviewQuestion {
+    pub id: QuestionId,
+    pub document: DocumentId,
+    pub page: u32,
+    pub kind: TokenKind,
+    pub prompt: Option<String>,
+    pub answer: Option<ReviewAnswer>,
+    pub created_at: DateTime<Utc>,
+    pub answered_at: Option<DateTime<Utc>>,
+}
+
+/// One audit-log row: an agent read a handle. Feeds the "Claude Code read
+/// 🐙/w2-acme-2025, saw only ink · 2m" footer.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AgentRead {
+    pub agent: String,
+    pub handle: Handle,
+    pub at: DateTime<Utc>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TokenRole {
     pub token: Token,
@@ -521,10 +617,104 @@ mod tests {
     }
 
     #[test]
+    fn codename_deserialize_validates() {
+        let ok: Codename = serde_json::from_str("\"w2-acme-2025\"").unwrap();
+        assert_eq!(ok.as_str(), "w2-acme-2025");
+        assert_eq!(serde_json::to_string(&ok).unwrap(), "\"w2-acme-2025\"");
+        assert!(serde_json::from_str::<Codename>("\"Bad Name\"").is_err());
+        assert!(serde_json::from_str::<Handle>("\"a--b\"").is_err());
+    }
+
+    #[test]
+    fn doc_state_transitions() {
+        use DocState::*;
+        let legal = [
+            (Queued, Reading),
+            (Reading, Inking),
+            (Inking, NeedsAttention),
+            (Inking, Ready),
+            (Inking, Failed),
+            (NeedsAttention, Inking),
+            (Queued, Failed),
+            (Reading, Failed),
+            (Failed, Queued),
+            (Inking, Inking),
+        ];
+        for (a, b) in legal {
+            assert!(a.can_transition_to(b), "{a:?} -> {b:?}");
+        }
+        let illegal = [
+            (Queued, Ready),
+            (Queued, Inking),
+            (Reading, Ready),
+            (NeedsAttention, Ready),
+            (Ready, Inking),
+            (Ready, Queued),
+            (Failed, Ready),
+        ];
+        for (a, b) in illegal {
+            assert!(!a.can_transition_to(b), "{a:?} -> {b:?}");
+        }
+    }
+
+    #[test]
+    fn detection_new_fields_default() {
+        let json = r#"{"page":1,"span":{"start":0,"end":3},"kind":"ssn",
+            "source":{"source":"rule","name":"ssn"},"confidence":0.9,
+            "treatment":"tokenize","needs_review":false,"review_prompt":null,"role":null}"#;
+        let d: Detection = serde_json::from_str(json).unwrap();
+        assert_eq!(d.generalized, None);
+        assert_eq!(d.field, None);
+    }
+
+    #[test]
+    fn resolved_serializes_tagged() {
+        let f = ResolvedFolder {
+            handle: Handle::parse("ink/taxes-2025").unwrap(),
+            children: vec![],
+        };
+        let v = serde_json::to_value(Resolved::Folder(f)).unwrap();
+        assert_eq!(v["type"], "folder");
+    }
+
+    #[test]
+    fn small_helpers() {
+        let e = Extracted {
+            pages: vec![
+                PageText {
+                    page: 1,
+                    text: "a".into(),
+                    origin: TextOrigin::TextLayer,
+                },
+                PageText {
+                    page: 2,
+                    text: "b".into(),
+                    origin: TextOrigin::Ocr,
+                },
+            ],
+            fields: vec![],
+        };
+        assert_eq!(e.full_text(), "a\n\nb");
+        assert!(DocState::Ready.is_servable());
+        assert!(!DocState::NeedsAttention.is_servable());
+        assert_eq!(Span { start: 2, end: 5 }.len(), 3);
+        assert!(Span { start: 5, end: 5 }.is_empty());
+        assert_eq!(DocKind::unknown().as_str(), "unknown");
+        assert_ne!(DocumentId::new(), DocumentId::default());
+        assert_ne!(FolderId::new(), FolderId::default());
+    }
+
+    #[test]
     fn token_renders_like_the_brief() {
-        let t = Token { kind: TokenKind::Ssn, index: 1 };
+        let t = Token {
+            kind: TokenKind::Ssn,
+            index: 1,
+        };
         assert_eq!(t.to_string(), "[SSN_1]");
-        let t = Token { kind: TokenKind::Custom("plan id".into()), index: 3 };
+        let t = Token {
+            kind: TokenKind::Custom("plan id".into()),
+            index: 3,
+        };
         assert_eq!(t.to_string(), "[PLAN_ID_3]");
     }
 }
