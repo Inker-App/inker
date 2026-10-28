@@ -32,7 +32,11 @@ impl World {
             data_dir: root.join("data"),
             packs_dir: None,
         };
-        Self { _tmp: tmp, downloads, config }
+        Self {
+            _tmp: tmp,
+            downloads,
+            config,
+        }
     }
 
     fn open(&self) -> Host {
@@ -107,7 +111,11 @@ fn ingest_then_resolve_through_the_backend_shows_tokens_only() {
     }
 
     let desc = backend.describe(&handle).expect("describe");
-    assert!(desc.roles.iter().any(|r| r.role == "employee"), "{:?}", desc.roles);
+    assert!(
+        desc.roles.iter().any(|r| r.role == "employee"),
+        "{:?}",
+        desc.roles
+    );
 
     backend.note_read("Claude Code", &handle);
     let reads = host.recent_reads(5).expect("reads");
@@ -125,14 +133,29 @@ fn write_through_the_backend_lands_in_the_private_folder_only() {
 
     let receipt = host
         .backend()
-        .write(&handle, "summary.md", "Employee [SSN_1] earned 84,250.00 at [ORG_1].")
+        .write(
+            &handle,
+            "summary.md",
+            "Employee [SSN_1] earned 84,250.00 at [ORG_1].",
+        )
         .expect("write");
-    assert!(receipt.path.starts_with(&w.config.private_folder), "{}", receipt.path);
+    assert!(
+        receipt.path.starts_with(&w.config.private_folder),
+        "{}",
+        receipt.path
+    );
     let saved = fs::read_to_string(&receipt.path).unwrap();
-    assert!(saved.contains(JORDAN_SSN), "output on disk is rehydrated: {saved}");
+    assert!(
+        saved.contains(JORDAN_SSN),
+        "output on disk is rehydrated: {saved}"
+    );
 
     // The agent can only ever see the tokenized view of what it wrote.
-    match host.backend().resolve(&receipt.handle).expect("resolve output") {
+    match host
+        .backend()
+        .resolve(&receipt.handle)
+        .expect("resolve output")
+    {
         Resolved::Document(d) => {
             let text: String = d.pages.iter().map(|p| p.text.as_str()).collect();
             assert!(text.contains("[SSN_1]"));
@@ -141,7 +164,10 @@ fn write_through_the_backend_lands_in_the_private_folder_only() {
         Resolved::Folder(_) => panic!("expected a document"),
     }
 
-    let bad = host.backend().write(&handle, "../escape.md", "x").unwrap_err();
+    let bad = host
+        .backend()
+        .write(&handle, "../escape.md", "x")
+        .unwrap_err();
     assert!(matches!(bad, Error::Refused(_)), "{bad}");
 }
 
@@ -153,7 +179,9 @@ fn tokens_survive_a_reopen_of_the_same_data_dir() {
         let src = w.download("w2-acme-2025.txt");
         host.ingest(&[src], IngestMode::Move).unwrap();
         let h = host.backend().list().unwrap()[0].handle.clone();
-        let Resolved::Document(d) = host.backend().resolve(&h).unwrap() else { panic!() };
+        let Resolved::Document(d) = host.backend().resolve(&h).unwrap() else {
+            panic!()
+        };
         let text: String = d.pages.iter().map(|p| p.text.as_str()).collect();
         let i = text.find("[SSN_").unwrap();
         text[i..i + text[i..].find(']').unwrap() + 1].to_string()
@@ -169,10 +197,18 @@ fn tokens_survive_a_reopen_of_the_same_data_dir() {
         .find(|e| !e.handle.codename.as_str().starts_with("w2-"))
         .unwrap_or_else(|| panic!("the K-1 should be listed beside the W-2: {names:?}"))
         .handle;
-    assert!(k1.codename.as_str().contains("k1"), "K-1 codename should mention k1: {k1}");
-    let Resolved::Document(d) = host.backend().resolve(&k1).unwrap() else { panic!() };
+    assert!(
+        k1.codename.as_str().contains("k1"),
+        "K-1 codename should mention k1: {k1}"
+    );
+    let Resolved::Document(d) = host.backend().resolve(&k1).unwrap() else {
+        panic!()
+    };
     let text: String = d.pages.iter().map(|p| p.text.as_str()).collect();
-    assert!(text.contains(&first_token), "Jordan should still be {first_token} after reopen");
+    assert!(
+        text.contains(&first_token),
+        "Jordan should still be {first_token} after reopen"
+    );
 }
 
 #[test]

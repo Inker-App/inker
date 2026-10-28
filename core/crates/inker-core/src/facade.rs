@@ -14,6 +14,7 @@ use chrono::Utc;
 
 use crate::codename::{self, CodenamePolicy};
 use crate::index::{DerivedData, Index};
+use crate::peek;
 use crate::ports::{HostPaths, KeyStore};
 use crate::tokenize::{self, Tokenized};
 use crate::vault::{TokenScope, Vault, find_tokens};
@@ -126,19 +127,23 @@ fn doc_entry(r: &DocumentRecord) -> ListEntry {
 
 /// The text a detection covers, if it fits.
 fn detected_text<'a>(ex: &'a Extracted, d: &Detection) -> Option<&'a str> {
-    let text = match &d.field {
+    source_text(ex, d)?.get(d.span.start..d.span.end)
+}
+
+/// The page text (or form field value) a detection's span indexes into.
+fn source_text<'a>(ex: &'a Extracted, d: &Detection) -> Option<&'a str> {
+    match &d.field {
         Some(name) => ex
             .fields
             .iter()
             .find(|f| &f.name == name)
-            .map(|f| f.value.as_str())?,
+            .map(|f| f.value.as_str()),
         None => ex
             .pages
             .iter()
             .find(|p| p.page == d.page)
-            .map(|p| p.text.as_str())?,
-    };
-    text.get(d.span.start..d.span.end)
+            .map(|p| p.text.as_str()),
+    }
 }
 
 /// The organisation that names the document under `TypeOrgYear`: only an Org
@@ -477,8 +482,19 @@ impl Core {
     }
 
     /// Unanswered attention-card questions across all documents.
+    /// The peek context (`context_before`, `context_after`) is unsealed here;
+    /// the index only holds it sealed.
     pub fn pending_reviews(&self) -> Result<Vec<ReviewQuestion>> {
-        self.index.questions(None, false)
+        let mut qs = self.index.questions(None, false)?;
+        for q in &mut qs {
+            if let Some(sealed) = self.index.question_context(q.id)? {
+                let (before, after): (String, String) =
+                    serde_json::from_slice(&self.vault.unseal(&sealed)?)?;
+                q.context_before = before;
+                q.context_after = after;
+            }
+        }
+        Ok(qs)
     }
 
     /// Record the user's answer. When the last open question of a document is
@@ -629,6 +645,13 @@ impl Core {
         Ok(Some(id))
     }
 
+    /// Every document whose state is one of `states`, oldest first.
+    pub fn documents_in(&self, states: &[DocState]) -> Result<Vec<DocumentRecord>> {
+        let mut docs = self.index.list_documents()?;
+        docs.retain(|r| states.contains(&r.state));
+        Ok(docs)
+    }
+
     /// Move a document through the state machine (e.g. `Reading` with a
     /// status note while extraction runs, `Failed` when it cannot).
     pub fn set_state(
@@ -694,9 +717,19 @@ impl Core {
         }
         let sealed = self.vault.seal(&serde_json::to_vec(extracted)?)?;
         self.index.store_sealed_source(id, &sealed)?;
+        let page_count = u32::try_from(extracted.pages.len()).unwrap_or(u32::MAX);
         for (i, d) in &review {
-            self.index
+            let q = self
+                .index
                 .add_question(id, *i, d.page, &d.kind, d.review_prompt.as_deref())?;
+            let value_length = detected_text(extracted, d)
+                .map_or(0, |v| u32::try_from(v.chars().count()).unwrap_or(u32::MAX));
+            let context = source_text(extracted, d)
+                .map(|t| peek::context(t, d.span))
+                .unwrap_or_default();
+            let sealed = self.vault.seal(&serde_json::to_vec(&context)?)?;
+            self.index
+                .set_question_peek(q, value_length, page_count, &sealed)?;
         }
         self.index.set_state(id, DocState::NeedsAttention, None)?;
         tracing::info!(doc = %id.0, questions = review.len(), "needs attention");
@@ -897,6 +930,82 @@ mod tests {
             f.core.answer_review(qs[0].id, ReviewAnswer::LeaveIt),
             Err(Error::Index(_))
         ));
+    }
+
+    #[test]
+    fn question_carries_the_attention_card_peek() {
+        let f = fx();
+        let p1 = "Statement page one";
+        let p2 = "Please wire to 00000000000 ref 4471 today";
+        let ids = f
+            .core
+            .begin_ingest(
+                &[drop_file(&f, "w.txt", &format!("{p1}\n{p2}"))],
+                IngestMode::Move,
+            )
+            .unwrap();
+        let extracted = Extracted {
+            pages: vec![
+                PageText {
+                    page: 1,
+                    text: p1.into(),
+                    origin: TextOrigin::Ocr,
+                },
+                PageText {
+                    page: 2,
+                    text: p2.into(),
+                    origin: TextOrigin::Ocr,
+                },
+            ],
+            fields: vec![],
+        };
+        let mut det = d(p2, "00000000000", TokenKind::Account, true);
+        det.page = 2;
+        f.core
+            .complete_processing(
+                ids[0],
+                &extracted,
+                &[det],
+                DocKind("statement".into()),
+                None,
+            )
+            .unwrap();
+        let qs = f.core.pending_reviews().unwrap();
+        assert_eq!(qs.len(), 1);
+        let q = &qs[0];
+        assert_eq!(q.page, 2);
+        assert_eq!(q.page_count, 2);
+        assert_eq!(q.value_length, 11);
+        assert!(
+            q.context_before.ends_with("wire to "),
+            "{:?}",
+            q.context_before
+        );
+        assert!(q.context_after.starts_with(" ref"), "{:?}", q.context_after);
+        assert!(!q.context_after.contains("4471"), "{:?}", q.context_after);
+        let json = serde_json::to_string(q).unwrap();
+        assert!(!json.contains("00000000000"), "{json}");
+    }
+
+    #[test]
+    fn documents_in_lists_by_state() {
+        let f = fx();
+        let ids = f
+            .core
+            .begin_ingest(
+                &[drop_file(&f, "a.txt", "a"), drop_file(&f, "b.txt", "b")],
+                IngestMode::Move,
+            )
+            .unwrap();
+        f.core.set_state(ids[1], DocState::Reading, None).unwrap();
+        let reading = f.core.documents_in(&[DocState::Reading]).unwrap();
+        assert_eq!(reading.iter().map(|r| r.id).collect::<Vec<_>>(), [ids[1]]);
+        let both = f
+            .core
+            .documents_in(&[DocState::Queued, DocState::Reading])
+            .unwrap();
+        assert_eq!(both.len(), 2);
+        assert!(f.core.documents_in(&[]).unwrap().is_empty());
     }
 
     #[test]

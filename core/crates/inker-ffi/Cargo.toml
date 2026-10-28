@@ -35,6 +35,7 @@ inker-extract.workspace = true
 inker-host.workspace = true
 inker-ipc.workspace = true
 inker-mcp.workspace = true
+inker-pipeline.workspace = true
 tokio.workspace = true
 tokio-util = "0.7.20"
 serde.workspace = true

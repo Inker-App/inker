@@ -56,6 +56,9 @@ pub trait Backend: Send + Sync + fmt::Debug {
     fn recent_reads(&self, n: u32) -> Vec<ReadEvent>;
     /// Footer state.
     fn status(&self) -> Status;
+    /// `doctor` lines: whether the socket is live, the data dir, the private
+    /// folder. Never a document's content.
+    fn doctor(&self) -> Vec<String>;
     /// Stop background work (worker threads, the socket). Idempotent. The
     /// default does nothing.
     fn close(&self) {}

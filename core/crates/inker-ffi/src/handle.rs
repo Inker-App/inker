@@ -176,9 +176,11 @@ impl CoreHandle {
         agents::setup_agent(agent, dry_run)
     }
 
-    /// Stub: fixed text.
+    /// Whether the MCP socket is live, the data dir and the private folder.
     pub fn doctor(&self) -> DoctorReport {
-        agents::doctor()
+        DoctorReport {
+            lines: self.backend.doctor(),
+        }
     }
 
     pub fn status(&self) -> Status {

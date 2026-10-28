@@ -439,5 +439,6 @@ fn doctor_reports_lines() {
     let h = CoreHandle::preview(PreviewScenario::Empty);
     let r = h.doctor();
     assert!(!r.lines.is_empty());
-    assert!(r.lines.iter().any(|l| l.contains("preview backend")));
+    // The preview backend says what it is: no vault, no socket.
+    assert!(r.lines.iter().any(|l| l.contains("preview")), "{r:?}");
 }

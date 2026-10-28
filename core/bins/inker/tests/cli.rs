@@ -391,11 +391,16 @@ fn doctor_reports_each_agent_and_the_socket() {
         .args(["setup", "--agent", "cursor"])
         .assert()
         .success();
+    let data = format!("Data dir: {}", s.data().display());
+    let private = format!("Private folder: {}", s.home().join("Private").display());
     s.cmd().arg("doctor").assert().success().stdout(
         predicate::str::contains("Claude Code: not installed")
             .and(predicate::str::contains("Cursor: installed, registered"))
             .and(predicate::str::contains("beforeReadFile hook: yes"))
-            .and(predicate::str::contains("MCP: not running")),
+            .and(predicate::str::contains("MCP: not running (no socket at"))
+            .and(predicate::str::contains(data.as_str()))
+            .and(predicate::str::contains(private.as_str()))
+            .and(predicate::str::contains("preview").not()),
     );
     let mut host = s.serve(&[]);
     s.cmd()
@@ -404,6 +409,21 @@ fn doctor_reports_each_agent_and_the_socket() {
         .success()
         .stdout(predicate::str::contains("MCP: running"));
     sigterm(&mut host);
+}
+
+#[test]
+fn doctor_tells_a_stale_socket_from_a_live_one() {
+    let s = Sandbox::new();
+    std::fs::create_dir_all(s.data()).unwrap();
+    // A socket file nobody listens on, as a crashed app leaves it.
+    drop(std::os::unix::net::UnixListener::bind(s.socket()).unwrap());
+    s.cmd()
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "MCP: not running (stale socket at",
+        ));
 }
 
 #[test]

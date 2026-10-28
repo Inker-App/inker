@@ -1,5 +1,6 @@
-//! Agent setup and `doctor`. Stubs returning fixed plans until the writers in
-//! `inker-agents` are wired. The per-agent wording follows decision 5.3 and
+//! Agent setup and the `doctor` report. `setup_agent` is a stub returning
+//! fixed plans until the writers in `inker-agents` are wired; the doctor
+//! lines come from the backend. The per-agent wording follows decision 5.3 and
 //! section 3.8: none of these is called a "deny rule".
 
 use crate::error::FfiError;
@@ -29,7 +30,7 @@ pub struct Plan {
     pub steps: Vec<PlanStep>,
 }
 
-/// `inker doctor` output, one line per check.
+/// The doctor report, one line per check.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct DoctorReport {
     pub lines: Vec<String>,
@@ -101,13 +102,5 @@ pub fn setup_agent(agent: AgentKind, dry_run: bool) -> Result<Plan, FfiError> {
     })
 }
 
-/// Fixed text until the real checks are wired.
-pub fn doctor() -> DoctorReport {
-    DoctorReport {
-        lines: vec![
-            "core: preview backend (no vault, no detection)".into(),
-            "mcp: socket not opened by the preview backend".into(),
-            "agents: not checked yet".into(),
-        ],
-    }
-}
+/// The line for checks this report does not make yet.
+pub const AGENTS_NOT_CHECKED: &str = "agents: not checked yet";

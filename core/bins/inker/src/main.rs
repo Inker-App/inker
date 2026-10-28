@@ -442,12 +442,15 @@ fn print_plan(title: &str, plan: &Plan, dry: bool) {
 
 fn doctor(private: Option<String>, socket: Option<PathBuf>) -> Result<ExitCode> {
     let socket = socket.unwrap_or_else(paths::socket_path);
-    let running = std::os::unix::net::UnixStream::connect(&socket).is_ok();
-    println!(
-        "MCP: {} ({})",
-        if running { "running" } else { "not running" },
-        socket.display()
-    );
+    let shown = socket.display();
+    if std::os::unix::net::UnixStream::connect(&socket).is_ok() {
+        println!("MCP: running at {shown}");
+    } else if socket.exists() {
+        println!("MCP: not running (stale socket at {shown})");
+    } else {
+        println!("MCP: not running (no socket at {shown})");
+    }
+    println!("Data dir: {}", paths::data_dir().display());
     let env = env_for(private)?;
     println!("Private folder: {}", env.private.display());
     for s in inker_agents::doctor(&env) {

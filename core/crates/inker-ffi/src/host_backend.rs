@@ -111,6 +111,7 @@ pub struct HostBackend {
     host: Arc<Host>,
     shared: Arc<Shared>,
     private_folder_display: String,
+    data_dir: Utf8PathBuf,
     jobs: Mutex<Option<Sender<Job>>>,
     worker: Mutex<Option<JoinHandle<()>>>,
     server: Mutex<Option<SocketServer>>,
@@ -126,9 +127,11 @@ impl std::fmt::Debug for HostBackend {
 
 impl HostBackend {
     /// Wrap an open host and start the worker. Documents a previous run left
-    /// `Queued` are processed straight away.
+    /// `Queued`, or part way through (`Reading`, `Inking`: it died), are
+    /// processed straight away.
     pub fn new(host: Host, private_folder_display: &str) -> Result<Arc<Self>, FfiError> {
         let host = Arc::new(host);
+        let data_dir = host.core().paths().data_dir.clone();
         let shared = Arc::new(Shared {
             sink: Mutex::new(ChangeSink::noop()),
             snapshot: Mutex::new(Snapshot::default()),
@@ -143,6 +146,16 @@ impl HostBackend {
                 .spawn(move || run_worker(&host, &shared, rx))
                 .map_err(|_| backend_err("could not start the ingest worker"))?
         };
+        match inker_pipeline::recover(&host.core()) {
+            Ok(ids) if !ids.is_empty() => {
+                tracing::info!(count = ids.len(), "requeued interrupted documents");
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!(
+                kind = error_kind(&e),
+                "could not requeue interrupted documents"
+            ),
+        }
         let leftover = shared.refresh(&host);
         if !leftover.is_empty() {
             tracing::info!(count = leftover.len(), "resuming queued documents");
@@ -152,6 +165,7 @@ impl HostBackend {
             host,
             shared,
             private_folder_display: private_folder_display.to_string(),
+            data_dir,
             jobs: Mutex::new(Some(tx)),
             worker: Mutex::new(Some(worker)),
             server: Mutex::new(None),
@@ -395,6 +409,20 @@ impl Backend for HostBackend {
         }
     }
 
+    fn doctor(&self) -> Vec<String> {
+        let socket = lock(&self.server).as_ref().map(|s| s.path.clone());
+        let mcp = match socket {
+            Some(path) if self.listening() => format!("mcp: listening at {}", path.display()),
+            _ => "mcp: not listening".to_string(),
+        };
+        vec![
+            mcp,
+            format!("data dir: {}", self.data_dir),
+            format!("private folder: {}", self.private_folder_display),
+            crate::agents::AGENTS_NOT_CHECKED.to_string(),
+        ]
+    }
+
     fn close(&self) {
         self.shutdown();
     }
@@ -533,20 +561,24 @@ fn doc_item(rec: &DocumentRecord, pending: &[inker_core::ReviewQuestion]) -> Doc
     }
 }
 
-/// The attention card. The core keeps the value; the card gets the prompt
-/// and where to look.
+/// The attention card. The core keeps the value; the card gets the prompt,
+/// where to look, the words just before the value and the value's length.
 fn review_question(q: &inker_core::ReviewQuestion) -> ReviewQuestion {
+    let location = if q.page_count > 0 {
+        format!("page {} of {}", q.page, q.page_count)
+    } else {
+        format!("page {}", q.page)
+    };
     ReviewQuestion {
         id: q.id.0.to_string(),
         prompt: q
             .prompt
             .clone()
             .unwrap_or_else(|| DEFAULT_PROMPT.to_string()),
-        location: format!("page {}", q.page),
-        // VERIFY(core): the core does not expose the words before a held
-        // value or its length yet. Empty and 0 until it does.
-        context_before: String::new(),
-        value_length: 0,
+        location,
+        // The peek draws its own gap before the outline.
+        context_before: q.context_before.trim_end().to_string(),
+        value_length: q.value_length,
     }
 }
 

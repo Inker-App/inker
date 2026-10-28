@@ -470,7 +470,8 @@ impl DocState {
     ///
     /// Queued -> Reading -> Inking -> NeedsAttention | Ready | Failed;
     /// NeedsAttention -> Inking (after an answer); Queued | Reading -> Failed;
-    /// Failed -> Queued (retry).
+    /// Failed -> Queued (retry); Reading | Inking -> Queued (recovery after
+    /// the process died mid-processing).
     pub fn can_transition_to(self, to: DocState) -> bool {
         use DocState::*;
         self == to
@@ -485,6 +486,8 @@ impl DocState {
                     | (Queued, Failed)
                     | (Reading, Failed)
                     | (Failed, Queued)
+                    | (Reading, Queued)
+                    | (Inking, Queued)
             )
     }
 }
@@ -627,6 +630,20 @@ pub struct ReviewQuestion {
     pub answer: Option<ReviewAnswer>,
     pub created_at: DateTime<Utc>,
     pub answered_at: Option<DateTime<Utc>>,
+    /// Characters in the held span: the size of the card's dotted outline.
+    #[serde(default)]
+    pub value_length: u32,
+    /// Up to 24 characters of the text just before the held span on its
+    /// page, trimmed to a word boundary (a cut is marked with a leading `…`),
+    /// with any run of 4+ digits replaced by `…`. Empty when unknown.
+    #[serde(default)]
+    pub context_before: String,
+    /// The same, just after the span (a cut is marked with a trailing `…`).
+    #[serde(default)]
+    pub context_after: String,
+    /// Pages in the document, for "page 3 of 11". 0 when unknown.
+    #[serde(default)]
+    pub page_count: u32,
 }
 
 /// One audit-log row: an agent read a handle. Feeds the "Claude Code read
@@ -696,6 +713,9 @@ mod tests {
             (Reading, Failed),
             (Failed, Queued),
             (Inking, Inking),
+            // Recovery after a crash mid-processing.
+            (Reading, Queued),
+            (Inking, Queued),
         ];
         for (a, b) in legal {
             assert!(a.can_transition_to(b), "{a:?} -> {b:?}");
@@ -818,6 +838,19 @@ mod tests {
         let o: WriteOutcome =
             serde_json::from_str(r#"{"path":"/p/a.md","handle":"w2-2025-a"}"#).unwrap();
         assert_eq!(o.skipped_tokens, 0);
+    }
+
+    #[test]
+    fn review_question_peek_fields_default() {
+        let q: ReviewQuestion = serde_json::from_str(
+            r#"{"id":4,"document":"00000000-0000-0000-0000-000000000000","page":3,
+            "kind":"account","prompt":null,"answer":null,
+            "created_at":"2026-01-01T00:00:00Z","answered_at":null}"#,
+        )
+        .unwrap();
+        assert_eq!(q.value_length, 0);
+        assert_eq!(q.page_count, 0);
+        assert!(q.context_before.is_empty() && q.context_after.is_empty());
     }
 
     #[test]

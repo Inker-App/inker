@@ -300,3 +300,59 @@ fn an_agent_output_is_never_reprocessed() {
         "{text}"
     );
 }
+
+#[test]
+fn a_document_left_mid_processing_is_recovered_and_processed() {
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let root = Utf8PathBuf::from_path_buf(tmp.path().to_path_buf()).expect("utf8");
+    let downloads = root.join("Downloads");
+    fs::create_dir_all(&downloads).expect("mkdir");
+    let keys = MemoryKeyStore::with_key([7; 32]);
+    let open = || {
+        let core = Core::open(
+            HostPaths {
+                private_folder: root.join("Private"),
+                data_dir: root.join("data"),
+            },
+            &keys,
+        )
+        .expect("core");
+        let extractor = Extractor::new(PdfTextSource::new(), FixtureOcr::new());
+        Pipeline::new(core, extractor, PackSet::builtin().expect("packs"))
+            .with_model(Box::new(NoModel))
+    };
+
+    let src = downloads.join("w2-acme-2025.txt");
+    fs::copy(Utf8Path::new(SAMPLES).join("w2-acme-2025.txt"), &src).expect("copy");
+    let id = {
+        let p = open();
+        let id = p
+            .core()
+            .begin_ingest(&[src], IngestMode::Move)
+            .expect("ingest")[0];
+        // As if the app died while inking.
+        p.core()
+            .set_state(id, DocState::Reading, Some("reading"))
+            .expect("reading");
+        p.core()
+            .set_state(id, DocState::Inking, Some("inking"))
+            .expect("inking");
+        id
+    };
+    // The first pipeline, and with it the lock on the data dir, is gone.
+    let p = open();
+    assert_eq!(
+        p.core().document(id).expect("record").state,
+        DocState::Inking
+    );
+    let recovered = p.recover().expect("recover");
+    assert_eq!(recovered, vec![id]);
+    assert_eq!(
+        p.core().document(id).expect("record").state,
+        DocState::Queued
+    );
+    assert!(p.recover().expect("recover twice").is_empty());
+
+    let outcome = p.process(id);
+    assert_eq!(outcome.state, DocState::Ready, "{:?}", outcome.error);
+}

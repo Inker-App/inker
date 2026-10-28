@@ -631,7 +631,7 @@ public protocol CoreHandleProtocol: AnyObject, Sendable {
     func close() 
     
     /**
-     * Stub: fixed text.
+     * Whether the MCP socket is live, the data dir and the private folder.
      */
     func doctor()  -> DoctorReport
     
@@ -775,7 +775,7 @@ open func close()  {try! rustCall() {
 }
     
     /**
-     * Stub: fixed text.
+     * Whether the MCP socket is live, the data dir and the private folder.
      */
 open func doctor() -> DoctorReport  {
     return try!  FfiConverterTypeDoctorReport_lift(try! rustCall() {
@@ -1053,7 +1053,7 @@ public func FfiConverterTypeDocItem_lower(_ value: DocItem) -> RustBuffer {
 
 
 /**
- * `inker doctor` output, one line per check.
+ * The doctor report, one line per check.
  */
 public struct DoctorReport: Equatable, Hashable {
     public let lines: [String]
@@ -3195,7 +3195,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_inker_ffi_checksum_method_corehandle_close() != 28050) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inker_ffi_checksum_method_corehandle_doctor() != 43682) {
+    if (uniffi_inker_ffi_checksum_method_corehandle_doctor() != 12534) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_handle_string() != 4663) {

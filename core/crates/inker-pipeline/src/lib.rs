@@ -75,6 +75,12 @@ impl Pipeline {
         Ok(ids.into_iter().map(|id| self.process(id)).collect())
     }
 
+    /// Put every document a previous run left in `Reading` or `Inking` back
+    /// to `Queued`. See [`recover`].
+    pub fn recover(&self) -> Result<Vec<DocumentId>> {
+        recover(&self.core)
+    }
+
     /// Run extraction and detection for one queued document. Infallible from
     /// the caller's side: errors become a `Failed` record with a safe note.
     pub fn process(&self, id: DocumentId) -> Outcome {
@@ -139,6 +145,24 @@ impl Pipeline {
         self.core
             .complete_processing(id, &extracted, &detections, class.kind, class.year)
     }
+}
+
+/// Put every document a previous run left in `Reading` or `Inking` (the
+/// process died part way) back to `Queued`, so it is processed again.
+/// Returns their ids, oldest first. Call on open, before resuming the queue.
+/// A free function so a caller that holds only the [`Core`] (the FFI host
+/// backend, through `inker_host::Host`) can run it.
+pub fn recover(core: &Core) -> Result<Vec<DocumentId>> {
+    let stuck = core.documents_in(&[DocState::Reading, DocState::Inking])?;
+    let mut ids = Vec::with_capacity(stuck.len());
+    for rec in stuck {
+        core.set_state(rec.id, DocState::Queued, None)?;
+        ids.push(rec.id);
+    }
+    if !ids.is_empty() {
+        tracing::info!(count = ids.len(), "recovered interrupted documents");
+    }
+    Ok(ids)
 }
 
 /// A short, content-free label for logs.

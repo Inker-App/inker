@@ -319,6 +319,15 @@ impl Backend for PreviewBackend {
             private_folder_display: self.private_folder_display.clone(),
         }
     }
+
+    fn doctor(&self) -> Vec<String> {
+        vec![
+            "core: preview, no vault and no detection".into(),
+            "mcp: no socket in a preview".into(),
+            format!("private folder: {}", self.private_folder_display),
+            crate::agents::AGENTS_NOT_CHECKED.into(),
+        ]
+    }
 }
 
 // ---------------------------------------------------------------------------

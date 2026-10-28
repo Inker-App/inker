@@ -1396,6 +1396,7 @@ dependencies = [
  "inker-host",
  "inker-ipc",
  "inker-mcp",
+ "inker-pipeline",
  "serde",
  "serde_json",
  "tempfile",

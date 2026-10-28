@@ -14,7 +14,9 @@ use std::sync::{Mutex, MutexGuard};
 
 use camino::Utf8PathBuf;
 use inker_core::ports::{HostPaths, KeyStore};
-use inker_core::{AgentRead, Core, Description, DocumentId, Error, Handle, IngestMode, ListEntry, Result};
+use inker_core::{
+    AgentRead, Core, Description, DocumentId, Error, Handle, IngestMode, ListEntry, Result,
+};
 use inker_extract::{Extractor, FixtureOcr, PdfTextSource};
 use inker_mcp::{Backend, Resolved, WriteReceipt};
 use inker_packs::PackSet;
@@ -134,11 +136,15 @@ impl Host {
             .map_err(|e| Error::Detect(format!("packs: {e}")))?;
         let pipeline = Pipeline::new(core, extractor, packs);
         tracing::info!(private = %config.private_folder, data = %config.data_dir, "host open");
-        Ok(Self { pipeline: Mutex::new(pipeline) })
+        Ok(Self {
+            pipeline: Mutex::new(pipeline),
+        })
     }
 
     fn lock(&self) -> MutexGuard<'_, Pipeline> {
-        self.pipeline.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+        self.pipeline
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     /// The core, for the shell's queue and review calls.
@@ -184,7 +190,10 @@ impl Backend for Host {
 
     fn write(&self, h: &Handle, name: &str, content: &str) -> Result<WriteReceipt> {
         let out = self.lock().core().write(h, name, content)?;
-        Ok(WriteReceipt { path: out.path, handle: out.handle })
+        Ok(WriteReceipt {
+            path: out.path,
+            handle: out.handle,
+        })
     }
 
     fn note_read(&self, agent: &str, h: &Handle) {

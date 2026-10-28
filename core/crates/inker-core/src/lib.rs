@@ -17,6 +17,7 @@ pub mod facade;
 pub mod fsutil;
 pub mod index;
 pub mod ingest;
+pub mod peek;
 pub mod ports;
 pub mod rehydrate;
 pub mod tokenize;

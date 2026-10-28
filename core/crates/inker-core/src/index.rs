@@ -27,7 +27,7 @@ use crate::{
 };
 
 /// Current schema version.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 const MIGRATIONS: &[&str] = &[
     // 1
@@ -99,12 +99,20 @@ const MIGRATIONS: &[&str] = &[
         source     TEXT NOT NULL
     );
     "#,
+    // 2: the attention card's peek. The context is sealed with the vault key,
+    // because the words near a held value can be personal.
+    r#"
+    ALTER TABLE review_questions ADD COLUMN value_length INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE review_questions ADD COLUMN page_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE review_questions ADD COLUMN context BLOB;
+    "#,
 ];
 
 const DOC_COLS: &str = "id, codename, path, original_name, kind, year, state, inked, folder_id, ingest, \
                         created_at, updated_at, status_note";
 const FOLDER_COLS: &str = "id, codename, path, created_at";
-const Q_COLS: &str = "id, doc_id, page, kind, prompt, answer, created_at, answered_at";
+const Q_COLS: &str =
+    "id, doc_id, page, kind, prompt, answer, created_at, answered_at, value_length, page_count";
 
 /// Treated form fields, role map and treatment counts for one document.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -223,6 +231,10 @@ fn question_from_row(row: &Row<'_>) -> rusqlite::Result<ReviewQuestion> {
             Some(a) => Some(parse_ts(&a).map_err(|e| conv(7, e))?),
             None => None,
         },
+        value_length: row.get(8)?,
+        context_before: String::new(),
+        context_after: String::new(),
+        page_count: row.get(9)?,
     })
 }
 
@@ -659,6 +671,36 @@ impl Index {
         Ok(QuestionId(conn.last_insert_rowid()))
     }
 
+    /// Record what the attention card shows around a question's held value:
+    /// its length, the document's page count, and the context, which the
+    /// caller has sealed.
+    pub fn set_question_peek(
+        &self,
+        id: QuestionId,
+        value_length: u32,
+        page_count: u32,
+        sealed_context: &[u8],
+    ) -> Result<()> {
+        self.conn().execute(
+            "UPDATE review_questions SET value_length=?2, page_count=?3, context=?4 WHERE id=?1",
+            params![id.0, value_length, page_count, sealed_context],
+        )?;
+        Ok(())
+    }
+
+    /// The sealed context of a question, if one was recorded.
+    pub fn question_context(&self, id: QuestionId) -> Result<Option<Vec<u8>>> {
+        Ok(self
+            .conn()
+            .query_row(
+                "SELECT context FROM review_questions WHERE id=?1",
+                [id.0],
+                |r| r.get::<_, Option<Vec<u8>>>(0),
+            )
+            .optional()?
+            .flatten())
+    }
+
     /// Questions for one document (or all), oldest first.
     pub fn questions(
         &self,
@@ -693,7 +735,8 @@ impl Index {
     /// Record the user's answer. Each question is answered once.
     pub fn answer_question(&self, id: QuestionId, answer: ReviewAnswer) -> Result<ReviewQuestion> {
         let n = self.conn().execute(
-            "UPDATE review_questions SET answer=?2, answered_at=?3 WHERE id=?1 AND answer IS NULL",
+            "UPDATE review_questions SET answer=?2, answered_at=?3, context=NULL \
+             WHERE id=?1 AND answer IS NULL",
             params![id.0, enum_str(&answer)?, ts(Utc::now())],
         )?;
         if n == 0 {
@@ -854,6 +897,31 @@ mod tests {
         let ix = Index::open(&p).unwrap();
         assert_eq!(ix.schema_version().unwrap(), SCHEMA_VERSION);
         assert_eq!(ix.document(r.id).unwrap().unwrap(), r_roundtrip(&r));
+    }
+
+    #[test]
+    fn upgrades_a_version_1_index() {
+        let d = tempfile::tempdir().unwrap();
+        let p = Utf8PathBuf::from_path_buf(d.path().join("index.db")).unwrap();
+        {
+            let conn = Connection::open(&p).unwrap();
+            conn.execute_batch(
+                "CREATE TABLE schema_version (version INTEGER NOT NULL);\
+                 INSERT INTO schema_version (version) VALUES (1);",
+            )
+            .unwrap();
+            conn.execute_batch(MIGRATIONS[0]).unwrap();
+        }
+        let ix = Index::open(&p).unwrap();
+        assert_eq!(ix.schema_version().unwrap(), 2);
+        let r = doc("a", None);
+        ix.insert_document(&r, false).unwrap();
+        let q = ix
+            .add_question(r.id, 0, 1, &TokenKind::Account, None)
+            .unwrap();
+        assert_eq!(ix.question(q).unwrap().unwrap().value_length, 0);
+        ix.set_question_peek(q, 9, 1, b"x").unwrap();
+        assert_eq!(ix.question(q).unwrap().unwrap().value_length, 9);
     }
 
     // Timestamps round-trip at microsecond precision.
@@ -1047,8 +1115,21 @@ mod tests {
             .unwrap();
         assert_eq!(ix.questions(Some(r.id), false).unwrap().len(), 2);
         assert_eq!(ix.questions(None, false).unwrap().len(), 2);
+        ix.set_question_peek(q1, 11, 2, b"sealed").unwrap();
+        let q = ix.question(q1).unwrap().unwrap();
+        assert_eq!((q.value_length, q.page_count), (11, 2));
+        // The index only ever holds the context sealed.
+        assert!(q.context_before.is_empty() && q.context_after.is_empty());
+        assert_eq!(
+            ix.question_context(q1).unwrap().as_deref(),
+            Some(&b"sealed"[..])
+        );
+        assert_eq!(ix.question_context(q2).unwrap(), None);
         let ans = ix.answer_question(q1, ReviewAnswer::InkIt).unwrap();
         assert_eq!(ans.answer, Some(ReviewAnswer::InkIt));
+        // Answered: the card is gone, so is its context.
+        assert_eq!(ix.question_context(q1).unwrap(), None);
+        assert_eq!(ix.question(q1).unwrap().unwrap().value_length, 11);
         assert!(ans.answered_at.is_some());
         assert!(matches!(
             ix.answer_question(q1, ReviewAnswer::LeaveIt),

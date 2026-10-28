@@ -169,7 +169,11 @@ fn a_held_note_shows_its_question_without_the_value_and_answering_makes_it_ready
     assert_eq!(d.state, DocState::NeedsAttention, "{d:#?}");
     let question = d.question.expect("a held document carries its question");
     assert!(!question.prompt.is_empty());
-    assert!(question.location.contains('1'), "{}", question.location);
+    assert_eq!(question.location, "page 1 of 1");
+    // The peek: the words before the value and the outline's size, never the
+    // value.
+    assert_eq!(question.context_before, "Wire confirmation");
+    assert_eq!(question.value_length, 11);
     let n = counter(&h);
 
     h.answer(question.id.clone(), ReviewAnswer::InkIt).unwrap();
@@ -275,6 +279,33 @@ fn queued_documents_left_by_a_previous_run_are_processed_on_open() {
     assert_eq!(docs(&q).len(), 1);
 }
 
+#[test]
+fn a_document_left_inking_by_a_crash_is_processed_on_open() {
+    let w = World::new();
+    let src = w.download("w2-acme-2025.txt");
+    {
+        let host = inker_host::Host::open(inker_host::HostConfig {
+            private_folder: Utf8PathBuf::from(s(&w.private())),
+            data_dir: Utf8PathBuf::from(s(&w.data())),
+            packs_dir: None,
+        })
+        .unwrap();
+        // The app died while inking: the record never left `Inking`.
+        let core = host.core();
+        let id = core
+            .begin_ingest(&[Utf8PathBuf::from(src)], inker_core::IngestMode::Move)
+            .unwrap()[0];
+        core.set_state(id, inker_core::DocState::Reading, Some("reading"))
+            .unwrap();
+        core.set_state(id, inker_core::DocState::Inking, Some("inking"))
+            .unwrap();
+    }
+    let h = w.open();
+    let q = wait_queue(&h, |q| docs(q).iter().any(|d| d.state == DocState::Ready));
+    assert_eq!(docs(&q).len(), 1);
+    assert_no_value(&q);
+}
+
 // ---------------------------------------------------------------------------
 // status, socket, close
 // ---------------------------------------------------------------------------
@@ -297,6 +328,27 @@ fn status_reports_the_socket_listening_and_close_takes_it_down() {
     assert!(!h.status().mcp_listening);
     assert!(!w.socket().exists(), "close removes the socket");
     h.close(); // idempotent
+}
+
+#[test]
+fn doctor_reports_the_socket_the_data_dir_and_the_private_folder() {
+    let w = World::new();
+    let h = w.open();
+    wait_for("the socket", || h.status().mcp_listening.then_some(()));
+    let r = h.doctor();
+    let has = |needle: &str| r.lines.iter().any(|l| l.contains(needle));
+    assert!(has("mcp: listening"), "{r:?}");
+    assert!(has(&s(&w.socket())), "{r:?}");
+    assert!(has(&format!("data dir: {}", s(&w.data()))), "{r:?}");
+    assert!(
+        has(&format!("private folder: {}", s(&w.private()))),
+        "{r:?}"
+    );
+    assert!(!has("preview"), "{r:?}");
+
+    h.close();
+    let r = h.doctor();
+    assert!(r.lines.iter().any(|l| l == "mcp: not listening"), "{r:?}");
 }
 
 #[test]
