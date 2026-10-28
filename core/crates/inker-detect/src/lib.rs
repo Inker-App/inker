@@ -14,6 +14,7 @@ pub mod names;
 pub mod rules;
 pub mod shape;
 pub mod template;
+pub mod unplaced;
 mod util;
 
 pub use util::detection;
@@ -25,7 +26,7 @@ use inker_core::{Detection, DetectionSource, Extracted, PageText, Result, Treatm
 use inker_packs::PackSet;
 
 /// The detection pipeline: templates, rules, names, addresses, the model (if
-/// any), then fail-closed; overlaps merged, roles attached from template fields.
+/// any), then fail-closed and, on form pages, unplaced values; overlaps merged, roles attached from template fields.
 #[derive(Debug)]
 pub struct Detector<'a> {
     packs: &'a PackSet,
@@ -96,7 +97,23 @@ impl<'a> Detector<'a> {
                         .map(|(_, s)| (s.start, s.end)),
                 )
                 .collect();
-            merged.extend(failclosed::find(page, &covered));
+            let form = matched.as_ref().filter(|m| m.pages.contains(&page.page));
+            // On a form page, box labels are fixed wording: a "name" near
+            // a label that is itself label text is not held.
+            let labels =
+                form.map_or_else(Vec::new, |m| template::label_spans(&page.text, m.template));
+            let fc: Vec<Detection> = failclosed::find(page, &covered)
+                .into_iter()
+                .filter(|d| !util::overlaps(&labels, d.span.start, d.span.end))
+                .collect();
+            // On a form page, what is still unplaced and shaped like a value
+            // is held too: IRS text layers list values apart from labels.
+            if let Some(m) = form {
+                let mut covered = covered;
+                covered.extend(fc.iter().map(|d| (d.span.start, d.span.end)));
+                merged.extend(unplaced::find(page, m.template, self.packs, &covered));
+            }
+            merged.extend(fc);
         }
         let mut held = Vec::new();
         for (name, p) in &field_pages {
@@ -125,6 +142,7 @@ impl<'a> Detector<'a> {
             }
         }
 
+        unplaced::settle(&extracted.pages, &mut out);
         let class = classify::classify(extracted, matched.as_ref(), &out);
         if class.kind.as_str() == classify::BANK_STATEMENT {
             failclosed::settle_statement(&extracted.pages, &mut out);

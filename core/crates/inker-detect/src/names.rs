@@ -43,6 +43,10 @@ const ORG_SUFFIXES: &[&str] = &[
     "llc",
     "l.l.c.",
     "llp",
+    "lp",
+    "l.p.",
+    "ltd",
+    "ltd.",
     "corp",
     "corp.",
     "corporation",
@@ -281,7 +285,7 @@ const STATE_NAMES: &[&str] = &[
 /// Organisations ending in a suffix, anywhere on a line.
 static ORG_RUN: LazyLock<Regex> = LazyLock::new(|| {
     re(
-        r"(?:[A-Z][A-Za-z'’&.-]*[ ]){1,4}(?:Credit[ ]Union|Bank|Trust|Inc\.?|Incorporated|LLC|L\.L\.C\.|LLP|Corp\.?|Corporation|Company|Co\.|N\.A\.)(?:,[ ]N\.A\.)?(?:[^A-Za-z]|$)",
+        r"(?:[A-Z][A-Za-z'’&.-]*[ ]){1,4}(?:Credit[ ]Union|Bank|Trust|Inc\.?|Incorporated|LLC|L\.L\.C\.|LLP|LP|L\.P\.|Ltd\.?|Corp\.?|Corporation|Company|Co\.|N\.A\.)(?:,[ ]N\.A\.)?(?:[^A-Za-z]|$)",
     )
 });
 

@@ -37,27 +37,27 @@ treatment = "keep"
 
 [[fields]]
 id = "D"
-label = '\bD\s+Check if this is a publicly traded partnership[^\n]*'
+label = '\bD\s+Check if this is a publicly traded partnership(?: \(PTP\))?'
 kind = "keep"
 treatment = "keep"
 
 [[fields]]
 id = "E"
-label = '''\bE\s+Partner['’]s (?:SSN or TIN|identifying number)[^\n]*'''
+label = '''\bE\s+Partner['’]s (?:SSN or TIN(?: \(Do not use TIN of a disregarded entity\. See instructions\.\))?|identifying number)'''
 kind = "ssn"
 treatment = "tokenize"
 role = "recipient"
 
 [[fields]]
 id = "F_name"
-label = '\bF\s+Name, address, city, state, and ZIP code for partner[^\n]*'
+label = '\bF\s+Name, address, city, state, and ZIP code for partner(?: entered in E\.(?: See instructions\.)?)?'
 kind = "person"
 treatment = "tokenize"
 role = "recipient"
 
 [[fields]]
 id = "F_address"
-label = '\bF\s+Name, address, city, state, and ZIP code for partner[^\n]*'
+label = '\bF\s+Name, address, city, state, and ZIP code for partner(?: entered in E\.(?: See instructions\.)?)?'
 kind = "address"
 treatment = "generalize"
 role = "recipient"
@@ -65,15 +65,27 @@ skip_lines = 1
 lines = 2
 
 [[fields]]
+id = "G"
+label = '\bG\s+(?:X\s+)?General partner or LLC member-manager(?: (?:X )?Limited partner or other LLC member)?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "H1"
+label = '\bH1\s+(?:X\s+)?Domestic partner(?: (?:X )?Foreign partner)?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
 id = "H2_tin"
-label = '\bH2\s+If the partner is a disregarded entity[^\n]*'
+label = '''\bH2\s+If the partner is a disregarded entity(?: \(DE\))?, enter the partner['’]s:(?: TIN Name)?'''
 kind = "ein"
 treatment = "tokenize"
 role = "recipient"
 
 [[fields]]
 id = "H2_name"
-label = '\bH2\s+If the partner is a disregarded entity[^\n]*'
+label = '''\bH2\s+If the partner is a disregarded entity(?: \(DE\))?, enter the partner['’]s:(?: TIN Name)?'''
 kind = "org"
 treatment = "tokenize"
 role = "recipient"
@@ -86,7 +98,7 @@ treatment = "keep"
 
 [[fields]]
 id = "J"
-label = '''\bJ\s+Partner['’]s share of profit, loss, and capital[^\n]*'''
+label = '''\bJ\s+Partner['’]s share of profit, loss, and capital(?: \(see instructions\):?)?'''
 kind = "keep"
 treatment = "keep"
 
@@ -99,6 +111,18 @@ treatment = "keep"
 [[fields]]
 id = "L"
 label = '''\bL\s+Partner['’]s Capital Account Analysis'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "M"
+label = '\bM\s+Did the partner contribute property with a built-in gain \(loss\)\?'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "N"
+label = '''\bN\s+Partner['’]s Share of Net Unrecognized Section 704\(c\) Gain or \(Loss\)'''
 kind = "keep"
 treatment = "keep"
 

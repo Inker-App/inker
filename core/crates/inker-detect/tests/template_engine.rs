@@ -389,3 +389,20 @@ fn dates_and_table_rows() {
         .unwrap();
     assert_eq!(dob.treatment, Treatment::Tokenize);
 }
+
+#[test]
+fn boilerplate_lines_are_never_values() {
+    let b = demo_b();
+    let p = PackSet {
+        packs: vec![
+            Pack::from_sources(MANIFEST, &[("demo", DEMO), ("demo-b", &b)])
+                .unwrap()
+                .with_boilerplate("Part II   Information About the Payer\n"),
+        ],
+    };
+    let text = "Demo Statement 2025\nRecipient's name\nPart II   Information About the Payer\nPayer's name\n";
+    let e = doc(text, TextOrigin::TextLayer);
+    let m = template::match_template(&e, &p).unwrap();
+    let out = template::apply(&e, &m);
+    assert!(out.detections.is_empty(), "{:?}", values(text, &out));
+}

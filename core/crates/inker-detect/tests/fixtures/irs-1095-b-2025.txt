@@ -1,0 +1,76 @@
+
+
+Form 1095-B 2025Department of the Treasury  
+Internal Revenue Service
+ Health Coverage
+
+ Do not attach to your tax return. Keep for your records.
+Go to www.irs.gov/Form1095B for instructions and the latest information.
+ OMB No. 1545-2252
+
+560118
+
+VOID
+
+CORRECTED
+
+Part I   Responsible Individual
+
+1   Name of responsible individual–First name, middle name, last name 2   Social security number (SSN) or other TIN 3   Date of birth (if SSN or other TIN is not available)
+
+4   Street address (including apartment no.) 5   City or town 6   State or province 7   Country and ZIP or foreign postal code
+
+8   Enter letter identifying Origin of the Health Coverage (see instructions for codes):  . . . . .
+ 9   Reserved
+
+Part II   Information About Certain Employer-Sponsored Coverage (see instructions)
+
+10  Employer name 11  Employer identification number (EIN)
+
+12  Street address (including room or suite no.) 13  City or town 14  State or province 15  Country and ZIP or foreign postal code
+
+Part III   Issuer or Other Coverage Provider (see instructions)
+
+16  Name 17  Employer identification number (EIN) 18  Contact telephone number
+
+19  Street address (including room or suite no.) 20  City or town 21  State or province 22  Country and ZIP or foreign postal code
+
+Part IV   Covered Individuals (Enter the information for each covered individual.)
+
+(a) Name of covered individual(s) 
+First name, middle initial, last name (b) SSN or other TIN (c) DOB (if SSN or other 
+TIN is not available) (d) Covered 
+all 12 months (e) Months of coverage
+
+                                      Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec
+
+23
+
+24
+
+25
+
+26
+
+27
+
+28
+
+For Privacy Act and Paperwork Reduction Act Notice, see separate instructions. Cat. No. 60704B Form 1095-B (2025) Created 9/24/25
+Pat R Example
+945-67-8901
+77 Oak Ave
+Boise
+ID
+US 83702
+C
+Northwind Health Plan
+89-0001122
+(208) 555-0142
+900 Main St
+Boise
+ID
+US 83702
+Pat R Example
+945-67-8901
+X

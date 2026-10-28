@@ -66,17 +66,23 @@ lines = 2
 
 [[fields]]
 id = "F2_tin"
-label = '\bF2\s+If the shareholder is a disregarded entity[^\n]*'
+label = '''\bF2\s+If the shareholder is a disregarded entity(?: \(DE\), enter the shareholder['’]s:|, a trust, an estate, or a nominee or similar person, enter the individual or entity responsible for reporting:)(?: TIN Name)?'''
 kind = "ein"
 treatment = "tokenize"
 role = "recipient"
 
 [[fields]]
 id = "F2_name"
-label = '\bF2\s+If the shareholder is a disregarded entity[^\n]*'
+label = '''\bF2\s+If the shareholder is a disregarded entity(?: \(DE\), enter the shareholder['’]s:|, a trust, an estate, or a nominee or similar person, enter the individual or entity responsible for reporting:)(?: TIN Name)?'''
 kind = "org"
 treatment = "tokenize"
 role = "recipient"
+
+[[fields]]
+id = "F3"
+label = '\bF3\s+What type of entity is this shareholder\??'
+kind = "keep"
+treatment = "keep"
 
 [[fields]]
 id = "G"

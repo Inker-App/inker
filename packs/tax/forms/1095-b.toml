@@ -8,7 +8,7 @@ year = '(?s)1095-B.{0,80}?\b(20\d{2})\b'
 
 [[fields]]
 id = "1"
-label = '\b1\s+Name of responsible individual[^\n]*'
+label = '\b1\s+Name of responsible individual(?:\s*[—–-]\s*First name, middle name, last name)?'
 kind = "person"
 treatment = "tokenize"
 role = "recipient"
@@ -22,7 +22,7 @@ role = "recipient"
 
 [[fields]]
 id = "3"
-label = '\b3\s+Date of birth[^\n]*'
+label = '\b3\s+Date of birth(?: \(if SSN or other TIN is not available\))?'
 kind = "dob"
 treatment = "tokenize"
 role = "recipient"
@@ -58,7 +58,7 @@ value = "line"
 
 [[fields]]
 id = "8"
-label = '\b8\s+Enter letter identifying Origin of the Health Coverage[^\n]*'
+label = '\b8\s+Enter letter identifying Origin of the Health Coverage(?: \(see instructions for codes\):?)?'
 kind = "keep"
 treatment = "keep"
 
@@ -279,3 +279,10 @@ kind = "dob"
 treatment = "tokenize"
 role = "recipient"
 value = "date"
+
+# The page footer: fixed text, so the box above it never reads it as a value.
+[[fields]]
+id = "privacy_notice"
+label = 'For Privacy Act and Paperwork Reduction Act Notice, see separate instructions\.'
+kind = "keep"
+treatment = "keep"

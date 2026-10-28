@@ -1,0 +1,80 @@
+# Fixed IRS wording that is never a typed value. One line per entry, matched
+# against a whole line or a whole column segment of a form page, ignoring
+# case, whitespace runs and dash or apostrophe variants. Lines starting with
+# `#` are comments.
+#
+# Taken from the IRS recipient-copy text layers in
+# core/crates/inker-detect/tests/fixtures/irs-*.txt: every line that reads the
+# same on two or more forms, and the section headers that sit between boxes. Form numbers, OMB numbers, revision dates and
+# box numbers vary per form and are recognised by shape instead
+# (core/crates/inker-detect/src/unplaced.rs).
+
+# Title block.
+Copy B
+For Recipient
+Copy B For Recipient
+For Payer/ Borrower
+Department of the Treasury - Internal Revenue Service
+Department of the Treasury
+Internal Revenue Service
+CORRECTED (if checked)
+CORRECTED
+VOID
+Instructions for Recipient
+Keep for your records
+(keep for your records)
+
+# The penalty notice, as it wraps beside the title.
+This is important tax
+information and is
+being furnished to
+the IRS. If you are
+required to file a
+return, a negligence
+penalty or other
+sanction may be
+imposed on you if
+this income is
+taxable and the IRS
+determines that it
+has not been
+reported.
+This is important tax information and is being furnished to the IRS.
+
+# Payer and recipient labels.
+PAYER’S name, street address, city or town, state or province, country, ZIP
+or foreign postal code, and telephone no.
+PAYER’S TIN RECIPIENT’S TIN
+RECIPIENT’S name
+Street address (including apt. no.)
+City or town, state or province, country, and ZIP or foreign postal code
+Account number (see instructions)
+
+# W-2 copy lines.
+Copy B—To Be Filed With Employee’s FEDERAL Tax Return.
+Copy C—For EMPLOYEE’S RECORDS
+Copy 1—For State, City, or Local Tax Department
+Copy 2—To Be Filed With Employee’s State, City, or Local Income Tax Return
+
+# Section headers (1095-B, 1095-C, Schedule K-1).
+Part I   Responsible Individual
+Part II   Information About Certain Employer-Sponsored Coverage (see instructions)
+Part III   Issuer or Other Coverage Provider (see instructions)
+Part IV   Covered Individuals (Enter the information for each covered individual.)
+Part I Employee
+Applicable Large Employer Member (Employer)
+Part II Employee Offer of Coverage Employee’s Age on January 1 Plan Start Month (enter 2-digit number):
+Information About the Partnership Part I
+Information About the Partner Part II
+Information About the Corporation Part I
+Information About the Shareholder Part II
+Final K-1  Amended K-1
+Beginning  Ending
+
+# The IRS's own form-ID numbers printed in the header of each page.
+651123
+671124
+560118
+560220
+600120
+600220

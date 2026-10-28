@@ -358,3 +358,35 @@ fn misc_2025_and_2026_boxes_follow_their_revisions() {
         assert_eq!(labels("1099-misc-2026", text), [id], "{text}");
     }
 }
+
+#[test]
+fn boilerplate_lines_parse_and_match_loosely() {
+    let lines = inker_packs::parse_boilerplate("# a comment\n\nCopy B\n  For   Recipient  \n");
+    assert_eq!(lines, ["copy b", "for recipient"]);
+    let p = Pack::from_sources(MANIFEST, &[("demo", DEMO)])
+        .unwrap()
+        .with_boilerplate("Department of the Treasury - Internal Revenue Service\n");
+    let set = PackSet { packs: vec![p] };
+    // Wrapped spacing, an em dash and case do not matter; a partial line does.
+    assert!(set.is_boilerplate("Department of the  Treasury\u{2014}Internal Revenue Service"));
+    assert!(set.is_boilerplate("  department of the treasury - internal revenue service "));
+    assert!(!set.is_boilerplate("Department of the Treasury"));
+    assert!(!set.is_boilerplate(""));
+}
+
+#[test]
+fn tax_pack_ships_its_boilerplate() {
+    for set in [
+        PackSet::builtin().unwrap(),
+        PackSet::load_dir(&tax_dir()).unwrap(),
+    ] {
+        assert!(set.packs[0].boilerplate.len() >= 5);
+        for line in [
+            "Copy B",
+            "For Recipient",
+            "Department of the Treasury - Internal Revenue Service",
+        ] {
+            assert!(set.is_boilerplate(line), "{line}");
+        }
+    }
+}

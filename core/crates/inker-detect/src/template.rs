@@ -23,6 +23,8 @@ pub struct TemplateMatch<'a> {
     /// Pages where every anchor matched.
     pub pages: Vec<u32>,
     pub year: Option<u16>,
+    /// The packs the template came from, for their boilerplate lines.
+    pub packs: &'a PackSet,
 }
 
 /// A stretch of page text that belongs to a field with a role.
@@ -104,6 +106,7 @@ pub fn match_template<'a>(extracted: &Extracted, packs: &'a PackSet) -> Option<T
                 template: t,
                 pages,
                 year,
+                packs,
             },
         ));
     }
@@ -152,6 +155,22 @@ fn first_year(re: &Regex, text: &str) -> Option<u16> {
     })
 }
 
+/// Byte spans of every field label and anchor of `t` in `text`: fixed form
+/// wording, never a value.
+pub fn label_spans(text: &str, t: &FormTemplate) -> Vec<(usize, usize)> {
+    t.fields
+        .iter()
+        .map(|f| &f.label)
+        .chain(&t.anchors)
+        .flat_map(|r| r.find_iter(text).map(|m| (m.start(), m.end())))
+        .collect()
+}
+
+/// Byte spans of revision dates ("Rev. 4-2025") in `text`.
+pub(crate) fn revisions(text: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
+    REVISION.find_iter(text).map(|m| (m.start(), m.end()))
+}
+
 /// `text` with revision dates blanked (same length, so offsets hold).
 fn mask_revisions(text: &str) -> String {
     REVISION
@@ -189,6 +208,7 @@ pub fn apply(extracted: &Extracted, m: &TemplateMatch<'_>) -> TemplateOutput {
         let page_ctx = Page {
             text,
             template: t,
+            packs: m.packs,
             labels: &labels,
         };
         for f in &t.fields {
@@ -313,17 +333,21 @@ fn acroform(extracted: &Extracted, t: &FormTemplate, out: &mut TemplateOutput) {
 struct Page<'a> {
     text: &'a str,
     template: &'a FormTemplate,
+    packs: &'a PackSet,
     /// Every label match on the page, sorted.
     labels: &'a [(usize, usize)],
 }
 
 impl Page<'_> {
     /// True when the value candidate `[s, e)` is label text: a label match
-    /// on the page (labels wrap over lines) overlaps it, or the rest of its
-    /// line, not just its column segment, matches a label.
+    /// on the page (labels wrap over lines) overlaps it, the rest of its
+    /// line, not just its column segment, matches a label, or it or the rest
+    /// of its line is a boilerplate line of the pack.
     fn is_label(&self, s: usize, e: usize) -> bool {
         let le = self.text[e..].find('\n').map_or(self.text.len(), |i| e + i);
-        self.labels.iter().any(|&(a, b)| a < e && s < b)
+        self.packs.is_boilerplate(&self.text[s..e])
+            || self.packs.is_boilerplate(&self.text[s..le])
+            || self.labels.iter().any(|&(a, b)| a < e && s < b)
             || self
                 .template
                 .fields

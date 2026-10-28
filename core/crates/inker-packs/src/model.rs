@@ -34,6 +34,42 @@ pub struct PackSet {
 pub struct Pack {
     pub manifest: Manifest,
     pub forms: Vec<FormTemplate>,
+    /// Fixed form wording that is never a typed value (`boilerplate.txt`),
+    /// normalised by [`normalise_line`].
+    pub boilerplate: Vec<String>,
+}
+
+/// The optional file of boilerplate lines in a pack directory.
+pub const BOILERPLATE_FILE: &str = "boilerplate.txt";
+
+/// Parse `boilerplate.txt`: one line per entry; blank lines and lines
+/// starting with `#` are skipped. Entries come back normalised.
+pub fn parse_boilerplate(text: &str) -> Vec<String> {
+    text.lines()
+        .filter(|l| !l.trim_start().starts_with('#'))
+        .map(normalise_line)
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// A line as boilerplate is compared: dash variants as `-`, curly
+/// apostrophes as `'`, whitespace runs as one space, trimmed, lowercase.
+pub fn normalise_line(line: &str) -> String {
+    let folded: String = line
+        .chars()
+        .map(|c| match c {
+            '\u{2010}'..='\u{2015}' | '\u{2212}' => '-',
+            '\u{2018}' | '\u{2019}' => '\'',
+            _ => c,
+        })
+        .collect();
+    folded
+        .replace('-', " - ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace(" - ", "-")
+        .to_lowercase()
 }
 
 /// `pack.toml`.
@@ -151,8 +187,12 @@ impl PackSet {
                 forms.push((stem, text));
             }
         }
+        let boilerplate = TAX_PACK
+            .get_file(BOILERPLATE_FILE)
+            .and_then(|f| f.contents_utf8())
+            .unwrap_or_default();
         Ok(Self {
-            packs: vec![Pack::from_sources(manifest, &forms)?],
+            packs: vec![Pack::from_sources(manifest, &forms)?.with_boilerplate(boilerplate)],
         })
     }
 
@@ -194,8 +234,14 @@ impl PackSet {
             .iter()
             .map(|(a, b)| (a.as_str(), b.as_str()))
             .collect();
+        let bp_path = dir.join(BOILERPLATE_FILE);
+        let boilerplate = if bp_path.is_file() {
+            read(&bp_path)?
+        } else {
+            String::new()
+        };
         Ok(Self {
-            packs: vec![Pack::from_sources(&manifest, &forms)?],
+            packs: vec![Pack::from_sources(&manifest, &forms)?.with_boilerplate(&boilerplate)],
         })
     }
 
@@ -210,6 +256,12 @@ impl PackSet {
     /// Every form template across packs, in pack then manifest order.
     pub fn forms(&self) -> impl Iterator<Item = &FormTemplate> {
         self.packs.iter().flat_map(|p| p.forms.iter())
+    }
+
+    /// True when `line` is, in full, a boilerplate line of some pack.
+    pub fn is_boilerplate(&self, line: &str) -> bool {
+        let n = normalise_line(line);
+        !n.is_empty() && self.packs.iter().any(|p| p.boilerplate.contains(&n))
     }
 
     /// Short codename segment for a document kind, e.g. `1099int`.
@@ -250,7 +302,14 @@ impl Pack {
         Ok(Self {
             manifest,
             forms: out,
+            boilerplate: Vec::new(),
         })
+    }
+
+    /// This pack with the boilerplate lines parsed from `text` added.
+    pub fn with_boilerplate(mut self, text: &str) -> Self {
+        self.boilerplate.extend(parse_boilerplate(text));
+        self
     }
 }
 

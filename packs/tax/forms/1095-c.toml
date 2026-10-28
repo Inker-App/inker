@@ -8,7 +8,7 @@ year = '(?s)1095-C.{0,80}?\b(20\d{2})\b'
 
 [[fields]]
 id = "1"
-label = '\b1\s+Name of employee[^\n]*'
+label = '\b1\s+Name of employee(?: \(first name, middle initial, last name\))?'
 kind = "person"
 treatment = "tokenize"
 role = "employee"
@@ -408,3 +408,10 @@ kind = "dob"
 treatment = "tokenize"
 role = "employee"
 value = "date"
+
+# The page footer: fixed text, so the box above it never reads it as a value.
+[[fields]]
+id = "privacy_notice"
+label = 'For Privacy Act and Paperwork Reduction Act Notice, see separate instructions\.'
+kind = "keep"
+treatment = "keep"

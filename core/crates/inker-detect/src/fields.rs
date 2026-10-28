@@ -6,7 +6,7 @@ use inker_core::{Detection, FormField, PageText, TextOrigin, TokenKind};
 
 use crate::failclosed::held;
 use crate::shape;
-use crate::util::overlaps;
+use crate::util::{overlaps, uncovered};
 
 /// Fail-closed confidence for a value no detector could place.
 const CONF: f32 = 0.3;
@@ -72,26 +72,4 @@ pub fn hold_rest(page: &PageText, covered: &[(usize, usize)]) -> Vec<Detection> 
             held(page.page, s, e, kind, "unplaced_field", CONF, prompt.into())
         })
         .collect()
-}
-
-/// The parts of `[start, end)` outside every covered span, in order.
-fn uncovered(start: usize, end: usize, covered: &[(usize, usize)]) -> Vec<(usize, usize)> {
-    let mut cuts: Vec<(usize, usize)> = covered
-        .iter()
-        .filter(|&&(s, e)| s < end && start < e)
-        .copied()
-        .collect();
-    cuts.sort_unstable();
-    let mut out = Vec::new();
-    let mut pos = start;
-    for (s, e) in cuts {
-        if s > pos {
-            out.push((pos, s));
-        }
-        pos = pos.max(e);
-    }
-    if pos < end {
-        out.push((pos, end));
-    }
-    out
 }

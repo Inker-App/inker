@@ -108,6 +108,18 @@ fn unlabelled_orgs_need_a_suffix() {
         one(TokenKind::Org, "Northwind Federal Credit Union", None)
     );
     assert!(found("Jane Doe went home").is_empty());
+    // Partnerships (Schedule K-1) and limited companies.
+    for org in [
+        "Coho Partners LP",
+        "Coho Partners L.P.",
+        "Fourth Coffee Ltd",
+    ] {
+        assert_eq!(
+            found(&format!("{org}\n")),
+            one(TokenKind::Org, org, None),
+            "{org}"
+        );
+    }
 }
 
 #[test]

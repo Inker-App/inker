@@ -27,14 +27,29 @@ fn city_line() -> String {
     )
 }
 
-static FULL: LazyLock<Regex> = LazyLock::new(|| {
-    let street = format!(
+/// A street line: number, words, a street suffix; or a PO box.
+fn street() -> String {
+    format!(
         r"(?:(?:P\.?[ ]?O\.?|Post[ ]Office)[ ]+Box[ ]+\d+|\d{{1,6}}[A-Z]?(?:[ ](?:North|South|East|West|NE|NW|SE|SW|[NSEW]\.?))?(?:[ ][A-Z0-9][A-Za-z0-9'-]*){{1,4}}?[ ](?:{SUFFIXES})\b\.?(?:[ ](?:NE|NW|SE|SW|[NSEW])\b)?)"
-    );
-    let unit = r"(?:,?[ ](?:(?:Apt|Apartment|Unit|Suite|Ste|Fl|Floor|Rm|Room)\.?[ ]?#?|#)[ ]?[A-Za-z0-9-]+)?";
+    )
+}
+
+/// An apartment, unit, suite or floor after a street.
+const UNIT: &str =
+    r"(?:,?[ ](?:(?:Apt|Apartment|Unit|Suite|Ste|Fl|Floor|Rm|Room)\.?[ ]?#?|#)[ ]?[A-Za-z0-9-]+)?";
+
+static FULL: LazyLock<Regex> = LazyLock::new(|| {
     let sep = r"(?:[ \t]*,[ \t]*|[ \t]*\r?\n[ \t]*|[ \t]+)";
-    re(&format!(r"\b{street}{unit}{sep}{}", city_line()))
+    re(&format!(r"\b{}{UNIT}{sep}{}", street(), city_line()))
 });
+
+static STREET_LINE: LazyLock<Regex> = LazyLock::new(|| re(&format!(r"^{}{UNIT}$", street())));
+
+/// True when `s` is, in full, a street line with no city ("77 Oak Ave",
+/// "500 Harbor Blvd Suite 200"), as forms print it in a box of its own.
+pub fn is_street_line(s: &str) -> bool {
+    STREET_LINE.is_match(s)
+}
 
 static CITY_LINE: LazyLock<Regex> = LazyLock::new(|| re(&format!(r"\b{}", city_line())));
 

@@ -8,14 +8,14 @@ year = '(?s)1099-B.{0,80}?\b(20\d{2})\b'
 
 [[fields]]
 id = "payer_name"
-label = '''PAYER['’]S name, street address(?:, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)|[^\n]*)'''
+label = '''PAYER['’]S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)'''
 kind = "org"
 treatment = "tokenize"
 role = "payer"
 
 [[fields]]
 id = "payer_address"
-label = '''PAYER['’]S name, street address(?:, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)|[^\n]*)'''
+label = '''PAYER['’]S name, street address, city or town, state or province, country, ZIP or foreign postal code, and telephone (?:no\.?|number)'''
 kind = "address"
 treatment = "generalize"
 role = "payer"
@@ -53,7 +53,7 @@ value = "line"
 
 [[fields]]
 id = "recipient_city"
-label = 'City or town, state or province(?:, country, and ZIP or foreign postal code|[^\n]*)'
+label = 'City or town, state or province, country, and ZIP or foreign postal code'
 kind = "address"
 treatment = "generalize"
 role = "recipient"
@@ -122,13 +122,13 @@ treatment = "keep"
 
 [[fields]]
 id = "2"
-label = '\b2\s+Short-term gain or loss[^\n]*'
+label = '\b2\s+Short-term gain or loss(?: Long-term gain or loss)?(?: Ordinary)?'
 kind = "keep"
 treatment = "keep"
 
 [[fields]]
 id = "3"
-label = '\b3\s+If checked, proceeds from:?[^\n]*'
+label = '\b3\s+If checked, proceeds from:?'
 kind = "keep"
 treatment = "keep"
 
@@ -146,13 +146,13 @@ treatment = "keep"
 
 [[fields]]
 id = "6"
-label = '\b6\s+Reported to IRS:?[^\n]*'
+label = '\b6\s+Reported to IRS:?'
 kind = "keep"
 treatment = "keep"
 
 [[fields]]
 id = "7"
-label = '\b7\s+If checked, loss is not allowed[^\n]*'
+label = '\b7\s+If checked, loss is not allowed(?: based on amount in 1d)?'
 kind = "keep"
 treatment = "keep"
 
@@ -164,13 +164,13 @@ treatment = "keep"
 
 [[fields]]
 id = "9"
-label = '\b9\s+Unrealized profit or \(loss\) on open contracts[^\n]*'
+label = '\b9\s+Unrealized profit or \(loss\) on open contracts(?:\s*[—–-]\s*12/31/\d{4})?'
 kind = "keep"
 treatment = "keep"
 
 [[fields]]
 id = "10"
-label = '\b10\s+Unrealized profit or \(loss\) on open contracts[^\n]*'
+label = '\b10\s+Unrealized profit or \(loss\) on open contracts(?:\s*[—–-]\s*12/31/\d{4})?'
 kind = "keep"
 treatment = "keep"
 
