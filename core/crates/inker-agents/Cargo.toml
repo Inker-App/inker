@@ -1,0 +1,21 @@
+[package]
+name = "inker-agents"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+inker-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+indexmap = { version = "2.14.2", features = ["serde"] }
+thiserror.workspace = true
+tracing.workspace = true
+toml_edit = "0.25.17"
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[lints]
+workspace = true

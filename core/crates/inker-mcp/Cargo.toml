@@ -1,0 +1,25 @@
+[package]
+name = "inker-mcp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+inker-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+camino.workspace = true
+tokio.workspace = true
+# rmcp 3.x has had breaking minors (stack-decision.md risk 4): pin exactly.
+rmcp = { version = "=3.8.0", default-features = false, features = ["server", "transport-io"] }
+schemars = "1.2.3"
+tokio-util = "0.7.20"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[lints]
+workspace = true
