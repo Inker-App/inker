@@ -1301,11 +1301,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "camino",
  "clap",
  "inker-agents",
  "inker-core",
  "inker-detect",
  "inker-extract",
+ "inker-host",
  "inker-ipc",
  "inker-mcp",
  "inker-packs",
@@ -1389,6 +1391,22 @@ dependencies = [
  "thiserror",
  "tracing",
  "uniffi",
+]
+
+[[package]]
+name = "inker-host"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "getrandom 0.3.4",
+ "inker-core",
+ "inker-detect",
+ "inker-extract",
+ "inker-mcp",
+ "inker-packs",
+ "inker-pipeline",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

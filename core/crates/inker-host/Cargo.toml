@@ -1,0 +1,23 @@
+[package]
+name = "inker-host"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+inker-core.workspace = true
+inker-extract.workspace = true
+inker-detect.workspace = true
+inker-packs.workspace = true
+inker-pipeline.workspace = true
+inker-mcp.workspace = true
+camino.workspace = true
+tracing.workspace = true
+getrandom = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints]
+workspace = true

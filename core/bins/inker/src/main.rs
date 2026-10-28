@@ -8,11 +8,14 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
+use camino::Utf8PathBuf;
 use clap::{Parser, Subcommand, ValueEnum};
 use inker_agents::codex::CodexOptions;
 use inker_agents::guard::{self, Decision};
 use inker_agents::{Agent, DryRun, Env, Plan};
+use inker_core::{DocState, Handle, HandleStyle, IngestMode};
+use inker_host::{Host, HostConfig};
 use inker_ipc::{host, paths, shim};
 use inker_mcp::{Backend, FakeBackend, McpClient, ServerOptions};
 use serde_json::json;
@@ -44,6 +47,9 @@ enum Cmd {
         no_always_load: bool,
         #[arg(long)]
         socket: Option<PathBuf>,
+        /// The private folder (default `~/Private`). Ignored with `--fake`.
+        #[arg(long)]
+        private: Option<String>,
     },
     /// The stdio shim agents launch: forwards MCP to the running app.
     Mcp {
@@ -85,8 +91,19 @@ enum Cmd {
         #[arg(long, value_enum, default_value = "claude")]
         format: GuardFormat,
     },
-    /// Add a document (not available yet).
-    Ingest { path: PathBuf },
+    /// Move (or copy) files into the private folder and ink them, without
+    /// the app. Refuses while the app is serving, to keep one writer.
+    Ingest {
+        /// Files or folders to add.
+        #[arg(required = true)]
+        paths: Vec<PathBuf>,
+        /// The private folder (default `~/Private`).
+        #[arg(long)]
+        private: Option<String>,
+        /// Copy instead of move.
+        #[arg(long)]
+        copy: bool,
+    },
     /// List handles held by the running app.
     List {
         #[arg(long)]
@@ -166,7 +183,8 @@ fn run(cmd: Cmd) -> Result<ExitCode> {
             stdio,
             no_always_load,
             socket,
-        } => serve(fake, stdio, !no_always_load, socket),
+            private,
+        } => serve(fake, stdio, !no_always_load, socket, private),
         Cmd::Mcp { socket } => {
             let socket = socket.unwrap_or_else(paths::socket_path);
             match runtime()?.block_on(shim::run(&socket)) {
@@ -200,11 +218,11 @@ fn run(cmd: Cmd) -> Result<ExitCode> {
         }
         Cmd::Doctor { private, socket } => doctor(private, socket),
         Cmd::Guard { path, format } => guard_cmd(&path, format),
-        Cmd::Ingest { path } => Err(anyhow!(
-            "ingest is not available yet: it needs the core pipeline, which the app hosts. \
-             Drop {} on the INKER menu bar icon instead.",
-            path.display()
-        )),
+        Cmd::Ingest {
+            paths: files,
+            private,
+            copy,
+        } => ingest(files, private, copy),
         Cmd::List { json, socket } => client_call(socket, "list", json!({}), json),
         Cmd::Resolve {
             handle,
@@ -219,22 +237,73 @@ fn run(cmd: Cmd) -> Result<ExitCode> {
     }
 }
 
-/// The real core, once `inker-core`'s `Core` facade implements `Backend`.
-///
-/// WIRE: construct `inker_core::Core` here (open the vault and index from
-/// `paths::data_dir()`) and return it as `Arc<dyn Backend>`. Until then
-/// `inker serve` requires `--fake`.
-fn real_backend() -> Option<Arc<dyn Backend>> {
-    None
+fn utf8(p: PathBuf) -> Result<Utf8PathBuf> {
+    Utf8PathBuf::from_path_buf(p).map_err(|p| anyhow!("path is not UTF-8: {}", p.display()))
 }
 
-fn serve(fake: bool, stdio: bool, always_load: bool, socket: Option<PathBuf>) -> Result<ExitCode> {
+/// Open the real core: vault, index and key under the data dir, documents in
+/// the private folder. The CLI uses the file key store; the app uses the
+/// Keychain.
+fn open_host(private: Option<String>) -> Result<Host> {
+    let config = HostConfig {
+        private_folder: utf8(resolve_private(private)?)?,
+        data_dir: utf8(paths::data_dir())?,
+        packs_dir: None,
+    };
+    Host::open(config).context("opening the core")
+}
+
+fn ingest(files: Vec<PathBuf>, private: Option<String>, copy: bool) -> Result<ExitCode> {
+    if paths::socket_path().exists() {
+        bail!(
+            "INKER is serving on {}; drop the files on the app instead, or stop it and retry",
+            paths::socket_path().display()
+        );
+    }
+    let host = open_host(private)?;
+    let files = files.into_iter().map(utf8).collect::<Result<Vec<_>>>()?;
+    let mode = if copy {
+        IngestMode::Copy
+    } else {
+        IngestMode::Move
+    };
+    let outcomes = host.ingest(&files, mode)?;
+    let mut all_ok = true;
+    for o in outcomes {
+        let rec = host.core().document(o.id)?;
+        let word = match rec.state {
+            DocState::Ready => "ready",
+            DocState::NeedsAttention => "needs you",
+            DocState::Failed => "failed",
+            DocState::Queued => "queued",
+            DocState::Reading => "reading",
+            DocState::Inking => "inking",
+        };
+        all_ok &= rec.state == DocState::Ready;
+        let handle = Handle::new(rec.codename).render(HandleStyle::Octopus);
+        match rec.status_note {
+            Some(note) if rec.state != DocState::Ready => println!("{handle}\t{word}\t{note}"),
+            _ => println!("{handle}\t{word}\t{} inked", rec.inked),
+        }
+    }
+    Ok(if all_ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    })
+}
+
+fn serve(
+    fake: bool,
+    stdio: bool,
+    always_load: bool,
+    socket: Option<PathBuf>,
+    private: Option<String>,
+) -> Result<ExitCode> {
     let backend: Arc<dyn Backend> = if fake {
         Arc::new(FakeBackend::sample())
     } else {
-        real_backend().ok_or_else(|| {
-            anyhow!("the real core is not wired into the CLI yet; run `inker serve --fake` for the synthetic data set")
-        })?
+        Arc::new(open_host(private)?)
     };
     let options = ServerOptions { always_load };
     let rt = runtime()?;
@@ -445,11 +514,6 @@ mod tests {
     fn change_lines_marks_additions_and_removals() {
         assert_eq!(change_lines(Some("a\nb\n"), "a\nc\n"), ["- b", "+ c"]);
         assert_eq!(change_lines(None, "x\n"), ["+ x"]);
-    }
-
-    #[test]
-    fn real_backend_is_not_wired_yet() {
-        assert!(real_backend().is_none());
     }
 
     #[test]

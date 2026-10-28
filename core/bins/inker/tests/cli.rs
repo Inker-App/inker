@@ -130,16 +130,6 @@ fn instructions_prints_the_server_instructions() {
 }
 
 #[test]
-fn serve_without_fake_explains_and_fails() {
-    let s = Sandbox::new();
-    s.cmd()
-        .arg("serve")
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("--fake"));
-}
-
-#[test]
 fn serve_fake_hosts_the_socket_and_stops_on_sigterm() {
     let s = Sandbox::new();
     let mut child = s.serve(&[]);
@@ -311,16 +301,6 @@ fn client_commands_without_app_fail_clearly() {
 }
 
 #[test]
-fn ingest_is_not_wired_yet() {
-    let s = Sandbox::new();
-    s.cmd()
-        .args(["ingest", "/nonexistent/file.pdf"])
-        .assert()
-        .failure()
-        .stderr(predicate::str::contains("not available yet"));
-}
-
-#[test]
 fn setup_dry_run_shows_the_plan_and_writes_nothing() {
     let s = Sandbox::new();
     s.cmd()
@@ -483,4 +463,137 @@ fn logs_to_a_pipe_have_no_ansi_escapes() {
     BufReader::new(stderr).read_to_string(&mut log).unwrap();
     assert!(log.contains("tool=resolve"), "{log}");
     assert!(!log.contains('\u{1b}'), "{log:?}");
+}
+
+const SAMPLES: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../samples/synthetic");
+
+impl Sandbox {
+    fn private(&self) -> PathBuf {
+        self.dir.path().join("Private")
+    }
+    /// `inker serve --private <sandbox>` with the real core, waiting for the socket.
+    fn serve_real(&self) -> Child {
+        let child = self
+            .std_cmd()
+            .args(["serve", "--private"])
+            .arg(self.private())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        wait_for_socket(&self.socket());
+        child
+    }
+    fn download(&self, name: &str) -> PathBuf {
+        let downloads = self.dir.path().join("Downloads");
+        std::fs::create_dir_all(&downloads).unwrap();
+        let dst = downloads.join(name);
+        std::fs::copy(Path::new(SAMPLES).join(name), &dst).unwrap();
+        dst
+    }
+}
+
+#[test]
+fn ingest_moves_a_file_and_prints_its_handle() {
+    let s = Sandbox::new();
+    let src = s.download("w2-acme-2025.txt");
+    let out = s
+        .cmd()
+        .args(["ingest", "--private"])
+        .arg(s.private())
+        .arg(&src)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let out = String::from_utf8(out).unwrap();
+    assert!(out.contains("🐙/w2-"), "{out}");
+    assert!(out.contains("ready"), "{out}");
+    assert!(
+        !out.contains("900-12-3456"),
+        "a real value reached stdout: {out}"
+    );
+    assert!(
+        !src.exists(),
+        "the original should have moved out of Downloads"
+    );
+    assert!(s.private().join("w2-acme-2025.txt").exists());
+}
+
+#[test]
+fn ingest_copy_keeps_the_original() {
+    let s = Sandbox::new();
+    let src = s.download("1099-int-harbor-2025.txt");
+    s.cmd()
+        .args(["ingest", "--copy", "--private"])
+        .arg(s.private())
+        .arg(&src)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("🐙/"));
+    assert!(src.exists());
+}
+
+#[test]
+fn serve_real_core_lists_and_resolves_an_ingested_document() {
+    let s = Sandbox::new();
+    let src = s.download("w2-acme-2025.txt");
+    s.cmd()
+        .args(["ingest", "--private"])
+        .arg(s.private())
+        .arg(&src)
+        .assert()
+        .success();
+
+    let mut host = s.serve_real();
+    let list = s
+        .cmd()
+        .args(["list", "--socket"])
+        .arg(s.socket())
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let list = String::from_utf8(list).unwrap();
+    let handle = list
+        .split_whitespace()
+        .find(|w| w.starts_with("🐙/w2-"))
+        .unwrap_or_else(|| panic!("no W-2 handle in list output: {list}"))
+        .to_string();
+
+    let text = s
+        .cmd()
+        .args(["resolve", "--socket"])
+        .arg(s.socket())
+        .arg(&handle)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let text = String::from_utf8(text).unwrap();
+    assert!(text.contains("[SSN_"), "{text}");
+    assert!(
+        !text.contains("900-12-3456"),
+        "real value over the socket: {text}"
+    );
+
+    host.kill().unwrap();
+    host.wait().unwrap();
+}
+
+#[test]
+fn serve_real_core_refuses_when_the_private_folder_is_not_utf8_or_missing_parent() {
+    let s = Sandbox::new();
+    // A private folder under a file cannot be created.
+    let blocker = s.dir.path().join("blocker");
+    std::fs::write(&blocker, b"x").unwrap();
+    s.cmd()
+        .args(["serve", "--private"])
+        .arg(blocker.join("Private"))
+        .assert()
+        .failure();
 }

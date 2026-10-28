@@ -10,6 +10,7 @@ members = [
   "crates/inker-ffi",
   "crates/inker-agents",
   "crates/inker-pipeline",
+  "crates/inker-host",
   "bins/inker",
 ]
 
@@ -29,6 +30,7 @@ inker-ipc = { path = "crates/inker-ipc" }
 inker-mcp = { path = "crates/inker-mcp" }
 inker-agents = { path = "crates/inker-agents" }
 inker-pipeline = { path = "crates/inker-pipeline" }
+inker-host = { path = "crates/inker-host" }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
