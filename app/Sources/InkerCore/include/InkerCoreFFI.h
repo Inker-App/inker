@@ -250,6 +250,27 @@ typedef void (*UniffiCallbackInterfaceQueueListenerMethod0)(uint64_t, void* _Non
     );
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_HOST_PROVIDERS_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_HOST_PROVIDERS_METHOD0
+typedef void (*UniffiCallbackInterfaceHostProvidersMethod0)(uint64_t, RustBuffer* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_HOST_PROVIDERS_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_HOST_PROVIDERS_METHOD1
+typedef void (*UniffiCallbackInterfaceHostProvidersMethod1)(uint64_t, RustBuffer, RustBuffer* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_HOST_PROVIDERS_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_HOST_PROVIDERS_METHOD2
+typedef void (*UniffiCallbackInterfaceHostProvidersMethod2)(uint64_t, RustBuffer, RustBuffer* _Nonnull, 
+        RustCallStatus *_Nonnull uniffiCallStatus
+    );
+
+#endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_QUEUE_LISTENER
 #define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_QUEUE_LISTENER
 typedef struct UniffiVTableCallbackInterfaceQueueListener {
@@ -257,6 +278,17 @@ typedef struct UniffiVTableCallbackInterfaceQueueListener {
     UniffiCallbackInterfaceClone _Nonnull uniffiClone;
     UniffiCallbackInterfaceQueueListenerMethod0 _Nonnull queueChanged;
 } UniffiVTableCallbackInterfaceQueueListener;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_HOST_PROVIDERS
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_HOST_PROVIDERS
+typedef struct UniffiVTableCallbackInterfaceHostProviders {
+    UniffiCallbackInterfaceFree _Nonnull uniffiFree;
+    UniffiCallbackInterfaceClone _Nonnull uniffiClone;
+    UniffiCallbackInterfaceHostProvidersMethod0 _Nonnull loadOrCreateKey;
+    UniffiCallbackInterfaceHostProvidersMethod1 _Nonnull pdfText;
+    UniffiCallbackInterfaceHostProvidersMethod2 _Nonnull ocr;
+} UniffiVTableCallbackInterfaceHostProviders;
 
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_CLONE_COREHANDLE
@@ -271,7 +303,7 @@ void uniffi_inker_ffi_fn_free_corehandle(uint64_t handle, RustCallStatus *_Nonnu
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_CONSTRUCTOR_COREHANDLE_OPEN
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_CONSTRUCTOR_COREHANDLE_OPEN
-uint64_t uniffi_inker_ffi_fn_constructor_corehandle_open(RustBuffer private_folder, RustBuffer data_dir, RustCallStatus *_Nonnull out_status
+uint64_t uniffi_inker_ffi_fn_constructor_corehandle_open(RustBuffer private_folder, RustBuffer data_dir, uint64_t providers, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_CONSTRUCTOR_COREHANDLE_PREVIEW
@@ -287,6 +319,11 @@ void uniffi_inker_ffi_fn_method_corehandle_answer(uint64_t ptr, RustBuffer quest
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_CLEAR_LISTENER
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_CLEAR_LISTENER
 void uniffi_inker_ffi_fn_method_corehandle_clear_listener(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_CLOSE
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_CLOSE
+void uniffi_inker_ffi_fn_method_corehandle_close(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_DOCTOR
@@ -332,6 +369,11 @@ RustBuffer uniffi_inker_ffi_fn_method_corehandle_status(uint64_t ptr, RustCallSt
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_INIT_CALLBACK_VTABLE_QUEUELISTENER
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_INIT_CALLBACK_VTABLE_QUEUELISTENER
 void uniffi_inker_ffi_fn_init_callback_vtable_queuelistener(const UniffiVTableCallbackInterfaceQueueListener* _Nonnull vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_INIT_CALLBACK_VTABLE_HOSTPROVIDERS
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_INIT_CALLBACK_VTABLE_HOSTPROVIDERS
+void uniffi_inker_ffi_fn_init_callback_vtable_hostproviders(const UniffiVTableCallbackInterfaceHostProviders* _Nonnull vtable
 );
 #endif
 #ifndef UNIFFI_FFIDEF_FFI_INKER_FFI_RUSTBUFFER_ALLOC
@@ -606,6 +648,12 @@ uint16_t uniffi_inker_ffi_checksum_method_corehandle_clear_listener(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_CLOSE
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_CLOSE
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_close(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_DOCTOR
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_DOCTOR
 uint16_t uniffi_inker_ffi_checksum_method_corehandle_doctor(void
@@ -669,6 +717,24 @@ uint16_t uniffi_inker_ffi_checksum_constructor_corehandle_preview(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_QUEUELISTENER_QUEUE_CHANGED
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_QUEUELISTENER_QUEUE_CHANGED
 uint16_t uniffi_inker_ffi_checksum_method_queuelistener_queue_changed(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_HOSTPROVIDERS_LOAD_OR_CREATE_KEY
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_HOSTPROVIDERS_LOAD_OR_CREATE_KEY
+uint16_t uniffi_inker_ffi_checksum_method_hostproviders_load_or_create_key(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_HOSTPROVIDERS_PDF_TEXT
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_HOSTPROVIDERS_PDF_TEXT
+uint16_t uniffi_inker_ffi_checksum_method_hostproviders_pdf_text(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_HOSTPROVIDERS_OCR
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_HOSTPROVIDERS_OCR
+uint16_t uniffi_inker_ffi_checksum_method_hostproviders_ocr(void
     
 );
 #endif

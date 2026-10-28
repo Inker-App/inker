@@ -31,12 +31,22 @@ required-features = ["bindgen"]
 
 [dependencies]
 inker-core.workspace = true
+inker-extract.workspace = true
+inker-host.workspace = true
+inker-ipc.workspace = true
+inker-mcp.workspace = true
+tokio.workspace = true
+tokio-util = "0.7.20"
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 camino.workspace = true
+chrono.workspace = true
 uniffi = { version = "=0.32.2" }
+
+[dev-dependencies]
+tempfile = "3"
 
 [lints]
 workspace = true

@@ -557,6 +557,24 @@ fileprivate struct FfiConverterString: FfiConverter {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterTimestamp: FfiConverterRustBuffer {
     typealias SwiftType = Date
 
@@ -605,6 +623,12 @@ public protocol CoreHandleProtocol: AnyObject, Sendable {
     func answer(questionId: String, answer: ReviewAnswer) throws 
     
     func clearListener() 
+    
+    /**
+     * Stop the MCP socket and the ingest worker. Call on quit; dropping the
+     * handle does the same. Unprocessed drops stay queued for the next open.
+     */
+    func close() 
     
     /**
      * Stub: fixed text.
@@ -690,15 +714,18 @@ open class CoreHandle: CoreHandleProtocol, @unchecked Sendable {
 
     
     /**
-     * Open the core. Until the real core is wired this returns the live
-     * preview backend: drops are simulated and files are never touched.
+     * Open the real core: vault, index and key in `data_dir`, documents in
+     * `private_folder`, and the MCP socket at `<data_dir>/inker.sock`. The
+     * key, PDF text and OCR come from `providers` (Keychain, PDFKit, Vision).
+     * Drops then really move or copy files.
      */
-public static func `open`(privateFolder: String, dataDir: String)throws  -> CoreHandle  {
+public static func `open`(privateFolder: String, dataDir: String, providers: HostProviders)throws  -> CoreHandle  {
     return try  FfiConverterTypeCoreHandle_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
         uniffiCallStatus in
     uniffi_inker_ffi_fn_constructor_corehandle_open(
         FfiConverterString.lower(privateFolder),
-        FfiConverterString.lower(dataDir),uniffiCallStatus
+        FfiConverterString.lower(dataDir),
+        FfiConverterCallbackInterfaceHostProviders_lower(providers),uniffiCallStatus
     )
 })
 }
@@ -730,6 +757,18 @@ open func answer(questionId: String, answer: ReviewAnswer)throws   {try rustCall
 open func clearListener()  {try! rustCall() {
         uniffiCallStatus in
     uniffi_inker_ffi_fn_method_corehandle_clear_listener(
+            self.uniffiCloneHandle(),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * Stop the MCP socket and the ingest worker. Call on quit; dropping the
+     * handle does the same. Unprocessed drops stay queued for the next open.
+     */
+open func close()  {try! rustCall() {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_close(
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 }
@@ -1063,6 +1102,181 @@ public func FfiConverterTypeDoctorReport_lift(_ buf: RustBuffer) throws -> Docto
 #endif
 public func FfiConverterTypeDoctorReport_lower(_ value: DoctorReport) -> RustBuffer {
     return FfiConverterTypeDoctorReport.lower(value)
+}
+
+
+/**
+ * Everything a provider read from one file.
+ */
+public struct ExtractedFfi: Equatable, Hashable {
+    public let pages: [ExtractedPage]
+    public let fields: [ExtractedField]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(pages: [ExtractedPage], fields: [ExtractedField]) {
+        self.pages = pages
+        self.fields = fields
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ExtractedFfi: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExtractedFfi: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExtractedFfi {
+        return
+            try ExtractedFfi(
+                pages: FfiConverterSequenceTypeExtractedPage.read(from: &buf), 
+                fields: FfiConverterSequenceTypeExtractedField.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ExtractedFfi, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeExtractedPage.write(value.pages, into: &buf)
+        FfiConverterSequenceTypeExtractedField.write(value.fields, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtractedFfi_lift(_ buf: RustBuffer) throws -> ExtractedFfi {
+    return try FfiConverterTypeExtractedFfi.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtractedFfi_lower(_ value: ExtractedFfi) -> RustBuffer {
+    return FfiConverterTypeExtractedFfi.lower(value)
+}
+
+
+/**
+ * An AcroForm widget: PDFKit's `fieldName` and `widgetStringValue`.
+ */
+public struct ExtractedField: Equatable, Hashable {
+    public let name: String
+    public let value: String
+    public let page: UInt32?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, value: String, page: UInt32?) {
+        self.name = name
+        self.value = value
+        self.page = page
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ExtractedField: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExtractedField: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExtractedField {
+        return
+            try ExtractedField(
+                name: FfiConverterString.read(from: &buf), 
+                value: FfiConverterString.read(from: &buf), 
+                page: FfiConverterOptionUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ExtractedField, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.value, into: &buf)
+        FfiConverterOptionUInt32.write(value.page, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtractedField_lift(_ buf: RustBuffer) throws -> ExtractedField {
+    return try FfiConverterTypeExtractedField.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtractedField_lower(_ value: ExtractedField) -> RustBuffer {
+    return FfiConverterTypeExtractedField.lower(value)
+}
+
+
+/**
+ * One page of text as PDFKit or Vision read it. `page` is 1-based.
+ */
+public struct ExtractedPage: Equatable, Hashable {
+    public let page: UInt32
+    public let text: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(page: UInt32, text: String) {
+        self.page = page
+        self.text = text
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ExtractedPage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeExtractedPage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ExtractedPage {
+        return
+            try ExtractedPage(
+                page: FfiConverterUInt32.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ExtractedPage, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.page, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtractedPage_lift(_ buf: RustBuffer) throws -> ExtractedPage {
+    return try FfiConverterTypeExtractedPage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeExtractedPage_lower(_ value: ExtractedPage) -> RustBuffer {
+    return FfiConverterTypeExtractedPage.lower(value)
 }
 
 
@@ -2191,6 +2405,85 @@ public func FfiConverterTypePreviewScenario_lower(_ value: PreviewScenario) -> R
 
 
 /**
+ * What a Swift provider throws. The reason must be safe to log: no document
+ * text, no values, no file names.
+ */
+public 
+enum ProviderError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    case Failed(reason: String
+    )
+
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension ProviderError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProviderError: FfiConverterRustBuffer {
+    typealias SwiftType = ProviderError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProviderError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .Failed(
+            reason: try FfiConverterString.read(from: &buf)
+            )
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ProviderError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        
+        case let .Failed(reason):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(reason, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProviderError_lift(_ buf: RustBuffer) throws -> ProviderError {
+    return try FfiConverterTypeProviderError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProviderError_lower(_ value: ProviderError) -> RustBuffer {
+    return FfiConverterTypeProviderError.lower(value)
+}
+
+
+/**
  * The user's answer on the attention card. Mirrors `inker_core::ReviewAnswer`.
  */
 
@@ -2263,6 +2556,208 @@ public func FfiConverterTypeReviewAnswer_lower(_ value: ReviewAnswer) -> RustBuf
     return FfiConverterTypeReviewAnswer.lower(value)
 }
 
+
+
+
+
+/**
+ * Implemented in Swift: Keychain, PDFKit and Vision. Called from Rust
+ * background threads, never the main thread, and may block.
+ */
+public protocol HostProviders: AnyObject, Sendable {
+    
+    /**
+     * The 32-byte vault key, created and stored on first use.
+     */
+    func loadOrCreateKey() throws  -> Data
+    
+    /**
+     * The PDF's text layer and form fields, or `None` when it has no usable
+     * text layer (a scan).
+     */
+    func pdfText(path: String) throws  -> ExtractedFfi?
+    
+    /**
+     * OCR of an image, or of every page of a scanned PDF.
+     */
+    func ocr(path: String) throws  -> ExtractedFfi
+    
+}
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceHostProviders {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceHostProviders = UniffiVTableCallbackInterfaceHostProviders(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterCallbackInterfaceHostProviders.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface HostProviders: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterCallbackInterfaceHostProviders.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface HostProviders: handle missing in uniffiClone")
+            }
+        },
+        loadOrCreateKey: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> Data in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceHostProviders.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try uniffiObj.loadOrCreateKey(
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterData.lower($0) }
+            uniffiTraitInterfaceCallWithError(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn,
+                lowerError: FfiConverterTypeProviderError_lower
+            )
+        },
+        pdfText: { (
+            uniffiHandle: UInt64,
+            path: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> ExtractedFfi? in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceHostProviders.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try uniffiObj.pdfText(
+                     path: try FfiConverterString.lift(path)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterOptionTypeExtractedFfi.lower($0) }
+            uniffiTraitInterfaceCallWithError(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn,
+                lowerError: FfiConverterTypeProviderError_lower
+            )
+        },
+        ocr: { (
+            uniffiHandle: UInt64,
+            path: RustBuffer,
+            uniffiOutReturn: UnsafeMutablePointer<RustBuffer>,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> ExtractedFfi in
+                guard let uniffiObj = try? FfiConverterCallbackInterfaceHostProviders.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try uniffiObj.ocr(
+                     path: try FfiConverterString.lift(path)
+                )
+            }
+
+            
+            let writeReturn = { uniffiOutReturn.pointee = FfiConverterTypeExtractedFfi_lower($0) }
+            uniffiTraitInterfaceCallWithError(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn,
+                lowerError: FfiConverterTypeProviderError_lower
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    //
+    // `nonisolated(unsafe)` is needed under Swift 6 strict concurrency.
+    // This is safe because the pointee is initialized once during static init
+    // and never mutated by either side of the FFI.  Its fields are C function pointers.
+    nonisolated(unsafe) static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceHostProviders> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceHostProviders>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitHostProviders() {
+    uniffi_inker_ffi_fn_init_callback_vtable_hostproviders(UniffiCallbackInterfaceHostProviders.vtablePtr)
+}
+
+// FfiConverter protocol for callback interfaces
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterCallbackInterfaceHostProviders {
+    fileprivate static let handleMap = UniffiHandleMap<HostProviders>()
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+extension FfiConverterCallbackInterfaceHostProviders : FfiConverter {
+    typealias SwiftType = HostProviders
+    typealias FfiType = UInt64
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lift(_ handle: UInt64) throws -> SwiftType {
+        try handleMap.get(handle: handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func lower(_ v: SwiftType) -> UInt64 {
+        return handleMap.insert(obj: v)
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public static func write(_ v: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(v))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceHostProviders_lift(_ handle: UInt64) throws -> HostProviders {
+    return try FfiConverterCallbackInterfaceHostProviders.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterCallbackInterfaceHostProviders_lower(_ v: HostProviders) -> UInt64 {
+    return FfiConverterCallbackInterfaceHostProviders.lower(v)
+}
 
 
 
@@ -2408,6 +2903,30 @@ public func FfiConverterCallbackInterfaceQueueListener_lower(_ v: QueueListener)
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
+    typealias SwiftType = UInt32?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt32.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt32.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
     typealias SwiftType = String?
 
@@ -2424,6 +2943,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterString.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeExtractedFfi: FfiConverterRustBuffer {
+    typealias SwiftType = ExtractedFfi?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeExtractedFfi.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeExtractedFfi.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -2498,6 +3041,56 @@ fileprivate struct FfiConverterSequenceTypeDocItem: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeDocItem.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeExtractedField: FfiConverterRustBuffer {
+    typealias SwiftType = [ExtractedField]
+
+    public static func write(_ value: [ExtractedField], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeExtractedField.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ExtractedField] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ExtractedField]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeExtractedField.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeExtractedPage: FfiConverterRustBuffer {
+    typealias SwiftType = [ExtractedPage]
+
+    public static func write(_ value: [ExtractedPage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeExtractedPage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ExtractedPage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ExtractedPage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeExtractedPage.read(from: &buf))
         }
         return seq
     }
@@ -2599,6 +3192,9 @@ private let initializationResult: InitializationResult = {
     if (uniffi_inker_ffi_checksum_method_corehandle_clear_listener() != 1314) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_inker_ffi_checksum_method_corehandle_close() != 28050) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_inker_ffi_checksum_method_corehandle_doctor() != 43682) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -2623,7 +3219,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_inker_ffi_checksum_method_corehandle_status() != 43568) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inker_ffi_checksum_constructor_corehandle_open() != 46787) {
+    if (uniffi_inker_ffi_checksum_constructor_corehandle_open() != 26525) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_constructor_corehandle_preview() != 32264) {
@@ -2632,7 +3228,17 @@ private let initializationResult: InitializationResult = {
     if (uniffi_inker_ffi_checksum_method_queuelistener_queue_changed() != 44264) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_inker_ffi_checksum_method_hostproviders_load_or_create_key() != 9757) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_inker_ffi_checksum_method_hostproviders_pdf_text() != 56330) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_inker_ffi_checksum_method_hostproviders_ocr() != 43673) {
+        return InitializationResult.apiChecksumMismatch
+    }
 
+    uniffiCallbackInitHostProviders()
     uniffiCallbackInitQueueListener()
     return InitializationResult.ok
 }()

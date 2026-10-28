@@ -33,8 +33,8 @@ impl fmt::Debug for ChangeSink {
     }
 }
 
-/// What the shell needs from the core. `PreviewBackend` fakes it; the real
-/// `inker_core::Core` will implement it once wired.
+/// What the shell needs from the core. `HostBackend` is the real one;
+/// `PreviewBackend` fakes it for SwiftUI previews and tests.
 ///
 /// Implementations must be callable from any thread and must never put a real
 /// sensitive value into anything they return.
@@ -56,4 +56,7 @@ pub trait Backend: Send + Sync + fmt::Debug {
     fn recent_reads(&self, n: u32) -> Vec<ReadEvent>;
     /// Footer state.
     fn status(&self) -> Status;
+    /// Stop background work (worker threads, the socket). Idempotent. The
+    /// default does nothing.
+    fn close(&self) {}
 }

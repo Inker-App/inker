@@ -33,7 +33,9 @@ This:
 3. `xcodebuild -create-xcframework -library libinker_ffi.a -headers Sources/InkerCore/include`
    into `Frameworks/InkerCoreFFI.xcframework` (git-ignored).
 4. Prints the `native-static-libs` the Rust lib needs. Compare with `linkerSettings` in
-   `Package.swift` (today: CoreFoundation). Add any missing framework there.
+   `Package.swift` (today: CoreFoundation). Add any missing framework there. The static lib
+   now includes the whole core (pipeline, PDF parsing, tokio for the socket); Security,
+   PDFKit and Vision are used from Swift only and are linked by its `import`s.
 
 The generated Swift and header are committed as a starting point (first generated on Linux
 with `scripts/build-rust.sh --bindings-only`). Re-run the script after any change to the FFI
@@ -73,23 +75,65 @@ cover the pure logic in the `InkerKit` target, which has no AppKit dependency:
 - Gray-Scott reaction-diffusion (golden values, steady state, growth, wrap-around);
 - the octopus rig (`build(T)` and the rotation, golden values);
 - handles, drop collection and the drop dialog copy, folder-picker warnings, agent rows,
-  preferences, relative time, copy feedback and the queue view-model.
+  preferences, relative time, copy feedback and the queue view-model;
+- the providers' pure logic (`ProviderText`, `VaultKey`).
 
 The tests were written before the code they cover, but they have **not been compiled or run
 yet**: this package was written on Linux without a Swift toolchain. Expect a first round of
 compile fixes; see the `// VERIFY:` comments.
 
-The Rust side is tested separately: `cd core && cargo test -p inker-ffi`.
+The Rust side is tested separately: `cd core && cargo test -p inker-ffi` (the FFI surface,
+`HostBackend` over a real core on a temp dir, the MCP socket, and the provider adapters with
+a Rust fake in place of Swift).
 
 ## What is real and what is a stub
 
-- `CoreHandle.open(...)` returns the Rust `PreviewBackend`: drops are simulated (queued,
-  reading, inking, ready; one file in four of a folder is held for the attention card) and
-  **files are never moved or read**. The real `inker_core::Core` gets wired as another
-  `Backend` in `inker-ffi`; the Swift side does not change.
+- `CoreHandle.open(privateFolder:dataDir:providers:)` opens the **real core** (`inker_host::Host`
+  behind `HostBackend` in `core/crates/inker-ffi`). Drops really move or copy files into the
+  private folder, and they are read, detected and inked. `AppDelegate` passes
+  `~/Library/Application Support/sh.inker` as the data dir (vault, index, `inker.lock`,
+  `inker.sock`); that is the path `inker_ipc::paths::data_dir()` gives on macOS, so the
+  `inker mcp` shim finds the socket. Only one process can open a data dir: a second INKER (or
+  `inker serve`) fails `open`, and the app falls back to an empty preview.
+- `providers` is the UniFFI callback interface `HostProviders`, implemented by
+  `Sources/InkerApp/Providers/MacProviders.swift`:
+
+  | Method | Swift | Notes |
+  | --- | --- | --- |
+  | `loadOrCreateKey() -> Data` | `KeychainKeyStore` | generic password, service `sh.inker.vault`, account `vault-key`; 32 bytes from `SecRandomCopyBytes` on first use. Asked once, at open. |
+  | `pdfText(path:) -> ExtractedFfi?` | `PDFKitTextSource` | `PDFPage.string` per page plus widget `fieldName`/`widgetStringValue`; nil when every page is blank and no field is filled, which sends the file to OCR. |
+  | `ocr(path:) -> ExtractedFfi` | `VisionOcrSource` | PDF pages rendered at 200 dpi, images (PNG, JPEG, HEIC) decoded by ImageIO upright; `RecognizeDocumentsRequest` on macOS 26, `VNRecognizeTextRequest` otherwise. |
+
+  Rust calls them from its ingest worker thread, never the main thread, and they may block.
+  Anything they throw becomes a failed document (or a failed `open`, for the key); throw
+  `ProviderError.Failed(reason:)` with a reason that names no file, value or text. The pure
+  shaping (blank detection, page numbering, line joining, field dedupe, reading order, render
+  size) is `InkerKit/Providers/ProviderText.swift`, covered by `ProviderTextTests`.
+- **The MCP socket runs inside the app.** `open` also starts `inker_ipc::host::serve` on
+  `<data dir>/inker.sock` (0600, in a 0700 dir) on a tokio runtime in a background thread.
+  Agents reach it through `inker mcp`. `status().mcpListening` is true while the socket is
+  bound; if another process already holds it, the queue still works and `mcpListening` stays false.
+  An agent's read or write refreshes the queue and fires the listener, so the "read by" line
+  updates live.
+- `handle.close()` (called from `applicationWillTerminate`) stops the socket, removes
+  `inker.sock`, and stops the worker after the document in hand. Documents still queued are
+  processed at the next launch. Dropping the handle does the same.
+- `ingest` returns once the files are moved and their rows exist (`queued`); processing runs
+  on one worker thread, in drop order, and the listener fires after each state change.
+  `queue()` and `recentReads()` read a snapshot and never wait on the core.
+  `ingest` and `answer` do take the core's lock, so they can wait for the document being
+  processed to finish (seconds for a long scan).
+- Not yet from the core: the attention card's `contextBefore` is empty and `valueLength` is 0,
+  and `location` is "page N" without the page count.
+- `CoreHandle.preview(scenario:)` still returns the Rust `PreviewBackend` for SwiftUI previews
+  and `INKER_PREVIEW`.
 - `setup_agent` returns fixed plans and refuses non-dry runs; `doctor` returns fixed text.
 - The settings gear opens a small placeholder menu (handle style, set up agents, quit).
   There is no settings design yet.
+
+On Linux and in Rust tests, `CoreHandle::open_with_rust_providers(private, data)` opens the same
+core with the file key store (`<data dir>/vault.key`) and the pure-Rust extractor. It is
+Rust-only and not in the Swift bindings.
 
 ## Codesigning and notarization (later)
 

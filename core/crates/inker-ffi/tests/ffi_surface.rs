@@ -63,27 +63,8 @@ fn wait_until(handle: &CoreHandle, pred: impl Fn(&[QueueItem]) -> bool) -> Vec<Q
 // open / status
 // ---------------------------------------------------------------------------
 
-#[test]
-fn open_starts_with_an_empty_queue_and_a_listening_status() {
-    let h = CoreHandle::open("/Users/test/Private".into(), "/tmp/inker-data".into()).unwrap();
-    assert!(h.queue().is_empty());
-    let s = h.status();
-    assert!(s.mcp_listening);
-    assert_eq!(s.private_folder_display, "/Users/test/Private");
-}
-
-#[test]
-fn open_shortens_home_to_tilde_in_the_display_path() {
-    let home = std::env::var("HOME").unwrap();
-    let h = CoreHandle::open(format!("{home}/Private"), "/tmp/inker-data".into()).unwrap();
-    assert_eq!(h.status().private_folder_display, "~/Private");
-}
-
-#[test]
-fn open_rejects_an_empty_private_folder() {
-    let err = CoreHandle::open(String::new(), "/tmp/x".into()).unwrap_err();
-    assert!(matches!(err, FfiError::InvalidArgument { .. }));
-}
+// `open` now opens the real core and the socket: see tests/host_backend.rs
+// and tests/providers.rs. The display path is unit-tested in `handle`.
 
 // ---------------------------------------------------------------------------
 // handle_string

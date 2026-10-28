@@ -27,8 +27,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
         }
     }
 
+    /// Stop the MCP socket and the ingest worker. Drops not yet processed stay
+    /// queued and resume at the next launch.
+    func applicationWillTerminate(_ notification: Notification) {
+        store?.handle.close()
+    }
+
     /// `INKER_PREVIEW=empty|processing|attention|ready` freezes the popover in
-    /// one board. Otherwise `open`, which today is the live preview backend.
+    /// one board. Otherwise `open`: the real core, with the Keychain, PDFKit
+    /// and Vision as its providers, serving MCP on `<data dir>/inker.sock`.
     private func makeHandle() -> CoreHandle {
         let env = ProcessInfo.processInfo.environment
         switch env["INKER_PREVIEW"] {
@@ -41,13 +48,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
         let home = FileManager.default.homeDirectoryForCurrentUser
         let settings = AppSettings(store: UserDefaults.standard)
         let privateFolder = settings.privateFolderPath ?? FolderPickerWarnings.defaultFolder(home: home).path
+        // Must match `inker_ipc::paths::data_dir()` on macOS, which is where
+        // the `inker mcp` shim looks for the socket. The core creates it 0700.
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("INKER", isDirectory: true)
-        if let support {
-            try? FileManager.default.createDirectory(at: support, withIntermediateDirectories: true)
-        }
+            .appendingPathComponent("sh.inker", isDirectory: true)
         do {
-            return try CoreHandle.open(privateFolder: privateFolder, dataDir: support?.path ?? "")
+            return try CoreHandle.open(privateFolder: privateFolder, dataDir: support?.path ?? "",
+                                       providers: MacProviders())
         } catch {
             log.error("core open failed, using an empty preview: \(String(describing: error), privacy: .public)")
             return CoreHandle.preview(scenario: .empty)

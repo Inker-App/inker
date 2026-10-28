@@ -2,15 +2,20 @@
 
 use std::fmt;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use camino::Utf8PathBuf;
 use inker_core::types::{Codename, Handle};
+use inker_extract::Extractor;
+use inker_host::{Host, HostConfig};
 
 use crate::agents::{self, AgentKind, DoctorReport, Plan};
 use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
+use crate::host_backend::{HostBackend, core_error};
 use crate::preview::{PreviewBackend, PreviewScenario};
+use crate::providers::{
+    HostProviders, ProviderKeyStore, ProviderOcrSource, ProviderTextSource, SharedProviders,
+};
 use crate::types::{HandleStyle, IngestMode, QueueItem, ReadEvent, ReviewAnswer, Status};
 
 /// Implemented in Swift. Fired on any queue change, from a background thread;
@@ -25,9 +30,6 @@ pub trait QueueListener: Send + Sync {
 }
 
 type ListenerSlot = Arc<Mutex<Option<Box<dyn QueueListener>>>>;
-
-/// Simulated pipeline step for the live preview backend `open` returns.
-const LIVE_TICK: Duration = Duration::from_millis(700);
 
 #[derive(uniffi::Object)]
 pub struct CoreHandle {
@@ -60,27 +62,69 @@ impl CoreHandle {
         }));
         Arc::new(Self { backend, listener })
     }
-}
 
-#[uniffi::export]
-impl CoreHandle {
-    /// Open the core. Until the real core is wired this returns the live
-    /// preview backend: drops are simulated and files are never touched.
-    #[uniffi::constructor]
-    pub fn open(private_folder: String, data_dir: String) -> Result<Arc<Self>, FfiError> {
+    /// Open the real core with the pure-Rust providers: the file key store in
+    /// the data dir, `pdf-extract` for text layers and fixture OCR. For Linux,
+    /// the CLI's tests and this crate's tests. Starts the socket like `open`.
+    pub fn open_with_rust_providers(
+        private_folder: String,
+        data_dir: String,
+    ) -> Result<Arc<Self>, FfiError> {
+        Self::open_host(private_folder, data_dir, Host::open)
+    }
+
+    fn open_host(
+        private_folder: String,
+        data_dir: String,
+        open: impl FnOnce(HostConfig) -> inker_core::Result<Host>,
+    ) -> Result<Arc<Self>, FfiError> {
         if private_folder.trim().is_empty() {
             return Err(FfiError::InvalidArgument {
                 reason: "private folder is empty".into(),
             });
         }
-        tracing::debug!(
-            data_dir_set = !data_dir.is_empty(),
-            "opening preview backend"
+        if data_dir.trim().is_empty() {
+            return Err(FfiError::InvalidArgument {
+                reason: "data dir is empty".into(),
+            });
+        }
+        let config = HostConfig {
+            private_folder: Utf8PathBuf::from(private_folder.as_str()),
+            data_dir: Utf8PathBuf::from(data_dir.as_str()),
+            packs_dir: None,
+        };
+        let socket = config.data_dir.join(inker_ipc::paths::SOCKET_NAME);
+        let host = open(config).map_err(|e| core_error(&e))?;
+        let home = std::env::var("HOME").ok();
+        let backend = HostBackend::new(host, &display_path(&private_folder, home.as_deref()))?;
+        if let Err(e) = backend.serve_socket(socket.into_std_path_buf()) {
+            tracing::warn!(error = %e, "MCP socket not started");
+        }
+        Ok(Self::with_backend(backend))
+    }
+}
+
+#[uniffi::export]
+impl CoreHandle {
+    /// Open the real core: vault, index and key in `data_dir`, documents in
+    /// `private_folder`, and the MCP socket at `<data_dir>/inker.sock`. The
+    /// key, PDF text and OCR come from `providers` (Keychain, PDFKit, Vision).
+    /// Drops then really move or copy files.
+    #[uniffi::constructor]
+    pub fn open(
+        private_folder: String,
+        data_dir: String,
+        providers: Box<dyn HostProviders>,
+    ) -> Result<Arc<Self>, FfiError> {
+        let providers: SharedProviders = Arc::from(providers);
+        let extractor = Extractor::new(
+            ProviderTextSource(providers.clone()),
+            ProviderOcrSource(providers.clone()),
         );
-        let display = display_path(&private_folder);
-        Ok(Self::with_backend(Arc::new(PreviewBackend::live(
-            &display, LIVE_TICK,
-        ))))
+        let keystore = ProviderKeyStore(providers);
+        Self::open_host(private_folder, data_dir, |config| {
+            Host::open_with_keystore(config, extractor, &keystore)
+        })
     }
 
     /// A handle frozen in one of the four popover states, for SwiftUI previews.
@@ -140,11 +184,17 @@ impl CoreHandle {
     pub fn status(&self) -> Status {
         self.backend.status()
     }
+
+    /// Stop the MCP socket and the ingest worker. Call on quit; dropping the
+    /// handle does the same. Unprocessed drops stay queued for the next open.
+    pub fn close(&self) {
+        self.backend.close();
+    }
 }
 
-/// `/Users/x/Private` -> `~/Private` when it is under `$HOME`.
-fn display_path(path: &str) -> String {
-    if let Ok(home) = std::env::var("HOME") {
+/// `/Users/x/Private` -> `~/Private` when it is under `home`.
+fn display_path(path: &str, home: Option<&str>) -> String {
+    if let Some(home) = home {
         let home = home.trim_end_matches('/');
         if !home.is_empty()
             && let Some(rest) = path.strip_prefix(home)
@@ -154,4 +204,29 @@ fn display_path(path: &str) -> String {
         }
     }
     path.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_path_shortens_home_to_a_tilde() {
+        assert_eq!(
+            display_path("/Users/x/Private", Some("/Users/x")),
+            "~/Private"
+        );
+        assert_eq!(
+            display_path("/Users/x/Private", Some("/Users/x/")),
+            "~/Private"
+        );
+        assert_eq!(display_path("/Users/x", Some("/Users/x")), "~");
+        assert_eq!(
+            display_path("/Users/xy/Private", Some("/Users/x")),
+            "/Users/xy/Private"
+        );
+        assert_eq!(display_path("/Volumes/P", Some("/Users/x")), "/Volumes/P");
+        assert_eq!(display_path("/Users/x/P", None), "/Users/x/P");
+        assert_eq!(display_path("/Users/x/P", Some("")), "/Users/x/P");
+    }
 }
