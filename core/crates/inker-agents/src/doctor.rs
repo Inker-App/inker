@@ -6,7 +6,7 @@ use crate::codex::PROFILE;
 use crate::ojson::{self, J};
 use crate::plan::read_optional;
 use crate::teach::{TEACH_START, TEACHING_LINE};
-use crate::{Agent, Env, claude, codex, cursor};
+use crate::{Agent, Env, claude, claude_desktop, codex, cursor};
 
 /// One agent's status.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,6 +35,20 @@ fn has_block(path: &Path) -> bool {
 
 fn installed(env: &Env, bin: &str, dir: &str) -> bool {
     env.which(bin).is_some() || env.home.join(dir).is_dir()
+}
+
+fn claude_desktop_status(env: &Env) -> AgentStatus {
+    AgentStatus {
+        agent: Agent::ClaudeDesktop,
+        installed: claude_desktop::installed(env),
+        registered: ojson::get(
+            &json(&claude_desktop::config_path(env)),
+            &["mcpServers", "inker"],
+        )
+        .is_some(),
+        // A chat app has no file tools to fence off and no rules file to teach.
+        layers: Vec::new(),
+    }
 }
 
 fn claude_status(env: &Env) -> AgentStatus {
@@ -115,5 +129,10 @@ fn codex_status(env: &Env) -> AgentStatus {
 
 /// Status of every agent, in [`Agent::ALL`] order.
 pub fn doctor(env: &Env) -> Vec<AgentStatus> {
-    vec![claude_status(env), cursor_status(env), codex_status(env)]
+    vec![
+        claude_desktop_status(env),
+        claude_status(env),
+        cursor_status(env),
+        codex_status(env),
+    ]
 }

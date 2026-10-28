@@ -363,6 +363,125 @@ fn setup_claude_writes_settings() {
     assert!(settings.contains(" guard --path "));
 }
 
+const DESKTOP_CONFIG: &str = "Library/Application Support/Claude/claude_desktop_config.json";
+
+#[test]
+fn setup_claude_desktop_registers_the_running_binary() {
+    let s = Sandbox::new();
+    s.cmd()
+        .args(["setup", "--agent", "claude-desktop"])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("== Claude Desktop ==")
+                .and(predicate::str::contains("Quit Claude")),
+        );
+    let v: Value =
+        serde_json::from_str(&std::fs::read_to_string(s.home().join(DESKTOP_CONFIG)).unwrap())
+            .unwrap();
+    let bin = cargo_bin("inker").canonicalize().unwrap();
+    assert_eq!(
+        v["mcpServers"]["inker"],
+        json!({"command": bin.to_str().unwrap(), "args": ["mcp"], "env": {}})
+    );
+    // Only Claude Desktop was touched.
+    assert!(!s.home().join(".claude").exists());
+    s.cmd()
+        .args(["setup", "--agent", "claude-desktop"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Nothing to change."));
+}
+
+#[test]
+fn setup_all_puts_claude_desktop_first() {
+    let s = Sandbox::new();
+    let out = s
+        .cmd()
+        .args(["setup", "--agent", "all", "--dry-run"])
+        .output()
+        .unwrap();
+    let out = String::from_utf8(out.stdout).unwrap();
+    let desktop = out.find("== Claude Desktop ==").expect(&out);
+    let code = out.find("== Claude Code ==").expect(&out);
+    assert!(desktop < code, "{out}");
+    assert!(out.contains("claude_desktop_config.json"), "{out}");
+}
+
+#[test]
+fn setup_claude_desktop_refuses_a_malformed_config() {
+    let s = Sandbox::new();
+    let p = s.home().join(DESKTOP_CONFIG);
+    std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+    std::fs::write(&p, "{ not json").unwrap();
+    s.cmd()
+        .args(["setup", "--agent", "claude-desktop"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("fix or remove"));
+    assert_eq!(std::fs::read_to_string(&p).unwrap(), "{ not json");
+}
+
+#[test]
+fn bundle_writes_an_mcpb_holding_the_binary() {
+    let s = Sandbox::new();
+    let out = s.dir.path().join("out/INKER.mcpb");
+    s.cmd()
+        .args(["bundle", "--out"])
+        .arg(&out)
+        .args(["--version", "9.8.7"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(out.to_str().unwrap()));
+    let mut z = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+    let mut m = String::new();
+    z.by_name("manifest.json")
+        .unwrap()
+        .read_to_string(&mut m)
+        .unwrap();
+    let m: Value = serde_json::from_str(&m).unwrap();
+    assert_eq!(m["name"], json!("inker"));
+    assert_eq!(m["version"], json!("9.8.7"));
+    assert_eq!(
+        m["server"]["mcp_config"]["command"],
+        json!("${__dirname}/inker")
+    );
+    let mut bin = Vec::new();
+    let mut f = z.by_name("inker").unwrap();
+    assert_eq!(f.unix_mode().unwrap() & 0o111, 0o111);
+    f.read_to_end(&mut bin).unwrap();
+    assert_eq!(bin, std::fs::read(cargo_bin("inker")).unwrap());
+}
+
+#[test]
+fn bundle_takes_another_binary_and_defaults_the_version() {
+    let s = Sandbox::new();
+    let out = s.dir.path().join("INKER.mcpb");
+    let signed = s.dir.path().join("signed-inker");
+    std::fs::write(&signed, b"stand-in for a signed build").unwrap();
+    s.cmd()
+        .args(["bundle", "--out"])
+        .arg(&out)
+        .arg("--binary")
+        .arg(&signed)
+        .assert()
+        .success();
+    let mut z = zip::ZipArchive::new(std::fs::File::open(&out).unwrap()).unwrap();
+    let mut m = String::new();
+    z.by_name("manifest.json")
+        .unwrap()
+        .read_to_string(&mut m)
+        .unwrap();
+    let m: Value = serde_json::from_str(&m).unwrap();
+    assert_eq!(m["version"], json!(env!("CARGO_PKG_VERSION")));
+    let mut bin = String::new();
+    z.by_name("inker")
+        .unwrap()
+        .read_to_string(&mut bin)
+        .unwrap();
+    assert_eq!(bin, "stand-in for a signed build");
+}
+
 #[test]
 fn teach_writes_agents_md_in_cwd() {
     let s = Sandbox::new();
@@ -394,7 +513,8 @@ fn doctor_reports_each_agent_and_the_socket() {
     let data = format!("Data dir: {}", s.data().display());
     let private = format!("Private folder: {}", s.home().join("Private").display());
     s.cmd().arg("doctor").assert().success().stdout(
-        predicate::str::contains("Claude Code: not installed")
+        predicate::str::contains("Claude Desktop: not installed")
+            .and(predicate::str::contains("Claude Code: not installed"))
             .and(predicate::str::contains("Cursor: installed, registered"))
             .and(predicate::str::contains("beforeReadFile hook: yes"))
             .and(predicate::str::contains("MCP: not running (no socket at"))

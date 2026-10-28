@@ -3,7 +3,7 @@ mod common;
 
 use common::TestHome;
 use inker_agents::codex::CodexOptions;
-use inker_agents::{Agent, AgentStatus, DryRun, claude, codex, cursor, doctor};
+use inker_agents::{Agent, AgentStatus, DryRun, claude, claude_desktop, codex, cursor, doctor};
 
 fn status(all: &[AgentStatus], a: Agent) -> AgentStatus {
     all.iter().find(|s| s.agent == a).unwrap().clone()
@@ -13,7 +13,10 @@ fn status(all: &[AgentStatus], a: Agent) -> AgentStatus {
 fn empty_home_reports_nothing_installed() {
     let t = TestHome::new();
     let all = doctor(&t.env);
-    assert_eq!(all.len(), 3);
+    assert_eq!(all.len(), 4);
+    let order: Vec<Agent> = all.iter().map(|s| s.agent).collect();
+    assert_eq!(order, Agent::ALL);
+    assert_eq!(Agent::ALL[0], Agent::ClaudeDesktop);
     for s in &all {
         assert!(!s.installed && !s.registered, "{s:?}");
         assert!(s.layers.iter().all(|(_, on)| !on), "{s:?}");
@@ -34,6 +37,7 @@ fn config_dir_or_binary_counts_as_installed() {
 #[test]
 fn after_setup_everything_is_in_place() {
     let t = TestHome::new();
+    claude_desktop::setup(&t.env, DryRun(false)).unwrap();
     claude::setup(&t.env, DryRun(false)).unwrap();
     cursor::setup(&t.env, DryRun(false)).unwrap();
     codex::setup(
@@ -89,4 +93,23 @@ fn a_different_private_folder_is_not_covered() {
         1,
         "only the CLAUDE.md line: {c:?}"
     );
+}
+
+#[test]
+fn claude_desktop_is_reported_and_has_no_exclusion_layers() {
+    let mut t = TestHome::new();
+    let d = status(&doctor(&t.env), Agent::ClaudeDesktop);
+    assert!(!d.installed && !d.registered, "{d:?}");
+    assert!(d.layers.is_empty(), "{d:?}");
+    assert_eq!(Agent::ClaudeDesktop.name(), "Claude Desktop");
+
+    let apps = t.dir.path().join("Applications");
+    std::fs::create_dir_all(apps.join("Claude.app")).unwrap();
+    t.env.applications = apps;
+    let d = status(&doctor(&t.env), Agent::ClaudeDesktop);
+    assert!(d.installed && !d.registered, "{d:?}");
+
+    claude_desktop::setup(&t.env, DryRun(false)).unwrap();
+    let d = status(&doctor(&t.env), Agent::ClaudeDesktop);
+    assert!(d.installed && d.registered, "{d:?}");
 }

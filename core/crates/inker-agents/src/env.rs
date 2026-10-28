@@ -15,6 +15,9 @@ pub struct Env {
     pub private: PathBuf,
     /// `$PATH`, for finding agent binaries.
     pub path_var: Option<OsString>,
+    /// Where apps are installed: `/Applications` for real, `<home>/Applications`
+    /// in a hermetic [`Env::for_home`].
+    pub applications: PathBuf,
     pub claude_running: bool,
     pub cursor_running: bool,
 }
@@ -27,6 +30,7 @@ impl Env {
             inker_bin: inker_bin.to_path_buf(),
             private: private.to_path_buf(),
             path_var: None,
+            applications: home.join("Applications"),
             claude_running: false,
             cursor_running: false,
         }
@@ -36,6 +40,7 @@ impl Env {
     pub fn detect(home: &Path, inker_bin: &Path, private: &Path) -> Self {
         Self {
             path_var: std::env::var_os("PATH"),
+            applications: PathBuf::from("/Applications"),
             claude_running: process_running("claude"),
             cursor_running: process_running(if cfg!(target_os = "macos") {
                 "Cursor"

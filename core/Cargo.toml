@@ -50,3 +50,7 @@ missing_debug_implementations = "warn"
 [workspace.lints.clippy]
 unwrap_used = "warn"
 expect_used = "warn"
+
+# Debug builds compress the 170 MB debug binary in the bundle tests; keep zlib fast.
+[profile.dev.package.zlib-rs]
+opt-level = 3

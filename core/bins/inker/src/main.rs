@@ -25,7 +25,7 @@ use tokio_util::sync::CancellationToken;
 #[command(
     name = "inker",
     version,
-    about = "INKER: let coding agents work on private documents without seeing the values"
+    about = "INKER: let Claude and other agents work on private documents without seeing the values"
 )]
 struct Cli {
     #[command(subcommand)]
@@ -58,7 +58,8 @@ enum Cmd {
     },
     /// Print the MCP server instructions.
     Instructions,
-    /// Configure agents: MCP registration, exclusion of the private folder, the teaching line.
+    /// Register INKER with the Claude app, or configure a coding agent (MCP
+    /// registration, exclusion of the private folder, the teaching line).
     Setup {
         #[arg(long, value_enum)]
         agent: AgentArg,
@@ -71,6 +72,19 @@ enum Cmd {
         /// Codex only: make an "inker" permission profile the default. Replaces sandbox_mode.
         #[arg(long)]
         codex_permission_profile: bool,
+    },
+    /// Build the Claude Desktop Extension (`.mcpb`) around this binary.
+    Bundle {
+        /// Where to write the bundle, e.g. dist/INKER.mcpb.
+        #[arg(long)]
+        out: PathBuf,
+        /// Version to put in manifest.json (default: this binary's version).
+        #[arg(long)]
+        version: Option<String>,
+        /// Bundle this binary instead of the running one (e.g. a signed,
+        /// notarized universal build).
+        #[arg(long)]
+        binary: Option<PathBuf>,
     },
     /// Add the line that explains 🐙/ handles to ./AGENTS.md.
     Teach {
@@ -131,6 +145,9 @@ enum Cmd {
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum AgentArg {
+    /// The Claude desktop app (chat).
+    ClaudeDesktop,
+    /// Claude Code.
     Claude,
     Cursor,
     Codex,
@@ -210,6 +227,21 @@ fn run(cmd: Cmd) -> Result<ExitCode> {
                 permission_profile: codex_permission_profile,
             },
         ),
+        Cmd::Bundle {
+            out,
+            version,
+            binary,
+        } => {
+            let version = version.unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+            let binary = match binary {
+                Some(b) => b,
+                None => inker_bin()?,
+            };
+            let written = inker_agents::mcpb::build_bundle(&utf8(out)?, &utf8(binary)?, &version)
+                .context("building the bundle")?;
+            println!("wrote {written}");
+            Ok(ExitCode::SUCCESS)
+        }
         Cmd::Teach { dry_run } => {
             let cwd = std::env::current_dir()?;
             let plan = inker_agents::teach_project(&cwd, DryRun(dry_run))?;
@@ -373,6 +405,7 @@ fn setup(
 ) -> Result<ExitCode> {
     let env = env_for(private)?;
     let agents: &[Agent] = match agent {
+        AgentArg::ClaudeDesktop => &[Agent::ClaudeDesktop],
         AgentArg::Claude => &[Agent::ClaudeCode],
         AgentArg::Cursor => &[Agent::Cursor],
         AgentArg::Codex => &[Agent::Codex],
@@ -383,6 +416,7 @@ fn setup(
     }
     for a in agents {
         let plan = match a {
+            Agent::ClaudeDesktop => inker_agents::claude_desktop::setup(&env, dry),
             Agent::ClaudeCode => inker_agents::claude::setup(&env, dry),
             Agent::Cursor => inker_agents::cursor::setup(&env, dry),
             Agent::Codex => inker_agents::codex::setup(&env, codex, dry),

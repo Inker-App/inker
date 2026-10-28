@@ -56,3 +56,16 @@ fn process_running_sees_this_test_binary_and_not_nonsense() {
         .collect();
     assert!(inker_agents::env::process_running(&name), "{name}");
 }
+
+#[test]
+fn applications_folder_is_hermetic_in_tests_and_real_when_detected() {
+    let t = TestHome::new();
+    assert_eq!(t.env.applications, t.home().join("Applications"));
+    let home = tempfile::tempdir().unwrap();
+    let env = inker_agents::Env::detect(
+        home.path(),
+        "/x/inker".as_ref(),
+        &home.path().join("Private"),
+    );
+    assert_eq!(env.applications, std::path::Path::new("/Applications"));
+}
