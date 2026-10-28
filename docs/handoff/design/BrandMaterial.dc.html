@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>INKER material</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#151515}a:hover{color:#000}
+input[type=range]{accent-color:#151515}
+</style>
+</helmet>
+<div style="width: 1200px; height: 700px; box-sizing: border-box; padding: 56px; display: flex; flex-direction: column; gap: 28px; background: #E6E4DE; color: #151515; font-family: 'Archivo', sans-serif">
+  <div style="display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 20px; border-bottom: 1px solid rgba(21,21,21,0.2)">
+    <h1 style="margin: 0; font-size: 13px; font-weight: 600; font-stretch: 125%; letter-spacing: 0.24em">THE MATERIAL</h1>
+    <span style="font-size: 12px; color: #5A5853">A live reaction-diffusion field drawn on the ink grid. Pooled on the left, dispersing to the right.</span>
+  </div>
+  <canvas data-ink="material" role="img" aria-label="Animated ink field that grows maze-like pools on the left and breaks into dots on the right. Click to drop ink." style="display: block; width: 1088px; height: 420px; cursor: crosshair; touch-action: none"></canvas>
+  <div style="display: flex; align-items: center; gap: 20px">
+    <label for="spread" style="font-size: 11px; font-weight: 600; font-stretch: 125%; letter-spacing: 0.2em">WHERE IT BREAKS</label>
+    <input id="spread" type="range" min="10" max="95" value="{{spreadPct}}" onChange="{{onSpread}}" style="width: 320px">
+    <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #5A5853; width: 40px">{{spreadPct}}%</span>
+    <span style="margin-left: auto; font-size: 12px; color: #5A5853">Click or drag on the field to drop ink.</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":700}}'>
+var INK = '#151515';
+function rng(s){return function(){s|=0;s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function field(b,cell,o){o=o||{};var n=b.w*b.h,r=rng(o.seed||7),p=o.join==null?1:o.join,jr=new Uint8Array(n),jd=new Uint8Array(n),k=new Float32Array(n);for(var i=0;i<n;i++){var x=i%b.w,y=(i/b.w)|0;jr[i]=((b.up&&!(x&1))||r()<p)?1:0;jd[i]=((b.up&&!(y&1))||r()<p)?1:0;k[i]=0.75+0.5*r();}return{w:b.w,h:b.h,base:b.a,v:new Float32Array(b.a),jr:jr,jd:jd,k:k,diag:!!o.diag,cell:cell,gap:o.gap==null?cell*0.08:o.gap,ox:o.ox||0,oy:o.oy||0,dx:new Float32Array(n),dy:new Float32Array(n),vx:new Float32Array(n),vy:new Float32Array(n)};}
+function ss(a,b,x){x=(x-a)/(b-a);x=x<0?0:x>1?1:x;return x*x*(3-2*x);}
+function poly(ctx,p){var s=0,i,n=p.length;for(i=0;i<n;i++){var q=p[(i+1)%n];s+=p[i][0]*q[1]-q[0]*p[i][1];}if(s<0)p.reverse();ctx.moveTo(p[0][0],p[0][1]);for(i=1;i<n;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();}
+function ctr(F,i){var c=F.cell;return[F.ox+(i%F.w)*c+c/2+F.dx[i],F.oy+((i/F.w)|0)*c+c/2+F.dy[i]];}
+function bridge(ctx,F,i,j,R,sh){var rb=R*ss(0.55,0.9,Math.min(F.v[i],F.v[j]))-sh;if(rb<=0)return;var a=ctr(F,i),b=ctr(F,j),ex=b[0]-a[0],ey=b[1]-a[1],L=Math.hypot(ex,ey);if(L<0.001||L>F.cell*1.6)return;var nx=-ey/L*rb,ny=ex/L*rb;poly(ctx,[[a[0]+nx,a[1]+ny],[b[0]+nx,b[1]+ny],[b[0]-nx,b[1]-ny],[a[0]-nx,a[1]-ny]]);}
+function inkPath(ctx,F,sh){var w=F.w,h=F.h,R=F.cell/2-F.gap/2,x,y,i;ctx.beginPath();for(y=0;y<h;y++)for(x=0;x<w;x++){i=y*w+x;var v=F.v[i];if(v<0.02)continue;var c=ctr(F,i),r=R*Math.min(1,v)-sh;if(r>0){ctx.moveTo(c[0]+r,c[1]);ctx.arc(c[0],c[1],r,0,6.2832);}var jr=x<w-1&&F.jr[i]&&F.v[i+1]>0.02,jd=y<h-1&&F.jd[i]&&F.v[i+w]>0.02;if(jr)bridge(ctx,F,i,i+1,R,sh);if(jd)bridge(ctx,F,i,i+w,R,sh);if(jr&&jd&&F.jd[i+1]&&F.jr[i+w]&&R-sh>0&&Math.min(v,F.v[i+1],F.v[i+w],F.v[i+w+1])>0.88){var a=ctr(F,i),b=ctr(F,i+1),d=ctr(F,i+w+1),e=ctr(F,i+w);if(Math.hypot(d[0]-a[0],d[1]-a[1])<F.cell*1.8)poly(ctx,[a,b,d,e]);}}}
+function drawInk(ctx,F,ink,paper,lw){ctx.fillStyle=ink;inkPath(ctx,F,0);ctx.fill();if(lw){ctx.fillStyle=paper;inkPath(ctx,F,lw);ctx.fill();}}
+function setup(el,W,H){var d=window.devicePixelRatio||1;el.width=Math.round(W*d);el.height=Math.round(H*d);var ctx=el.getContext('2d');ctx.setTransform(d,0,0,d,0,0);return ctx;}
+function track(el,W,H){var P={x:null,y:null,down:false,click:false};function pos(e){var r=el.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height];}el.addEventListener('pointermove',function(e){var q=pos(e);P.x=q[0];P.y=q[1];});el.addEventListener('pointerleave',function(){P.x=null;P.down=false;});el.addEventListener('pointerdown',function(e){var q=pos(e);P.down=true;P.click=true;P.cx=q[0];P.cy=q[1];});el.addEventListener('pointerup',function(){P.down=false;});return P;}
+function loop(fn){var last=performance.now(),id,on=true;function f(t){if(!on)return;var dt=Math.min(0.033,Math.max(0,(t-last)/1000));last=t;fn(dt,t/1000);id=requestAnimationFrame(f);}id=requestAnimationFrame(f);return function(){on=false;cancelAnimationFrame(id);};}
+function find(sel,cb){var tries=0;(function look(){var el=document.querySelector(sel);if(el)cb(el);else if(tries++<240)requestAnimationFrame(look);})();}
+
+function makeRD(gw,gh,seedCount,seed){
+  var n=gw*gh,U=new Float32Array(n).fill(1),V=new Float32Array(n),U2=new Float32Array(n),V2=new Float32Array(n),r=rng(seed);
+  function drop(cx,cy,s){for(var y=-s;y<=s;y++)for(var x=-s;x<=s;x++){var X=((cx+x)%gw+gw)%gw,Y=((cy+y)%gh+gh)%gh;V[Y*gw+X]=1;}}
+  function step(){var f=0.0545,k=0.062;for(var y=0;y<gh;y++){var ym=((y-1+gh)%gh)*gw,y0=y*gw,yp=((y+1)%gh)*gw;for(var x=0;x<gw;x++){var xm=(x-1+gw)%gw,xp=(x+1)%gw,i=y0+x;
+    var lu=-U[i]+0.2*(U[y0+xm]+U[y0+xp]+U[ym+x]+U[yp+x])+0.05*(U[ym+xm]+U[ym+xp]+U[yp+xm]+U[yp+xp]);
+    var lv=-V[i]+0.2*(V[y0+xm]+V[y0+xp]+V[ym+x]+V[yp+x])+0.05*(V[ym+xm]+V[ym+xp]+V[yp+xm]+V[yp+xp]);
+    var u=U[i],v=V[i],uvv=u*v*v;U2[i]=u+(lu-uvv+f*(1-u));V2[i]=v+(0.5*lv+uvv-(k+f)*v);}}
+    var t=U;U=U2;U2=t;t=V;V=V2;V2=t;}
+  for(var q=0;q<seedCount;q++)drop(r()*gw|0,r()*gh|0,1+(r()*2|0));
+  return{drop:drop,step:step,V:function(){return V;}};
+}
+
+function start(el,self){
+  if(el.__inkStop)el.__inkStop();
+  var W=1088,H=420,ctx=setup(el,W,H),P=track(el,W,H),c=10,gw=(W/c)|0,gh=(H/c)|0,n=gw*gh;
+  var rd=makeRD(gw,gh,70,5);for(var q=0;q<500;q++)rd.step();
+  var F=field({w:gw,h:gh,a:new Float32Array(n).fill(1)},c,{gap:1.2});
+  var stop=loop(function(dt,t){
+    if(P.click){P.click=false;rd.drop((P.cx/c)|0,(P.cy/c)|0,3);}
+    if(P.down&&P.x!=null)rd.drop((P.x/c)|0,(P.y/c)|0,1);
+    for(var s=0;s<8;s++)rd.step();
+    var V=rd.V(),sp=self.spread==null?0.55:self.spread;
+    for(var y=0;y<gh;y++)for(var x=0;x<gw;x++){var i=y*gw+x;
+      var q2=x/gw-sp+0.06*Math.sin(y*0.31+t*0.7)+0.04*Math.sin(x*0.17-t*0.5);
+      var m=1-ss(-0.05,0.35,q2),vv=ss(0.1,0.28,V[i]);
+      F.v[i]=vv*(0.32+0.68*m)*(1-ss(0.45,0.7,q2));}
+    ctx.clearRect(0,0,W,H);
+    drawInk(ctx,F,INK,null,0);
+  });
+  el.__inkStop=stop;return stop;
+}
+
+class Component extends DCLogic {
+  componentDidMount(){var self=this;find('canvas[data-ink="material"]',function(el){self.stopInk=start(el,self);});}
+  componentWillUnmount(){if(this.stopInk)this.stopInk();}
+  renderVals(){
+    var self=this;
+    var pct=(this.state&&this.state.spreadPct!=null)?this.state.spreadPct:55;
+    return{spreadPct:pct,onSpread:function(e){var v=+e.target.value;self.spread=v/100;self.setState({spreadPct:v});}};
+  }
+}
+</script>
+</body>
+</html>

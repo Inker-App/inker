@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Popover, everything ready</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#444}a:hover{color:#111}
+</style>
+</helmet>
+<div style="width: 360px; height: 440px; box-sizing: border-box; display: flex; flex-direction: column; background: #ffffff; color: #111111; font-family: -apple-system, system-ui, 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.4; border: 1px solid #d0d0d0; border-radius: 10px; overflow: hidden">
+  <div style="display: flex; align-items: center; justify-content: space-between; height: 40px; padding: 0 14px; border-bottom: 1px solid #e8e8e8">
+    <div style="display: flex; align-items: center; gap: 8px">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#111111" stroke-width="1.5" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.5"></rect><path d="M5 7V5a3 3 0 0 1 6 0v2"></path></svg>
+      <span style="font-weight: 600; font-size: 12px">~/Private</span>
+    </div>
+    <button type="button" aria-label="Settings" style="display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; background: transparent; color: #777777">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="2"></circle><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"></path></svg>
+    </button>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: center; height: 56px; margin: 10px 14px 0; border: 1px dashed #d0d0d0; border-radius: 8px; color: #9a9a9a; font-size: 12px">Drop more</div>
+
+  <div style="flex: 1; display: flex; flex-direction: column; padding: 10px 14px 0; overflow: hidden">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0 8px; border-bottom: 1px solid #e8e8e8">
+      <div style="display: flex; flex-direction: column">
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; font-weight: 600">🔒/taxes-2025</span>
+        <span style="font-size: 11px; color: #777777">4 files · all ready · 23 items swapped</span>
+      </div>
+      <button type="button" style="height: 24px; padding: 0 10px; border: 1px solid #c9c9c9; border-radius: 6px; background: #111111; color: #ffffff; font: inherit; font-size: 11px; font-weight: 500">Copied</button>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0 9px 12px; border-bottom: 1px solid #f0f0f0">
+      <div style="display: flex; flex-direction: column">
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">🔒/w2-acme-2025</span>
+        <span style="font-size: 11px; color: #777777">W-2 · 6 swapped</span>
+      </div>
+      <button type="button" style="height: 22px; padding: 0 8px; border: 1px solid #c9c9c9; border-radius: 5px; background: #ffffff; font: inherit; font-size: 11px; color: #111111">Copy</button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0 9px 12px; border-bottom: 1px solid #f0f0f0">
+      <div style="display: flex; flex-direction: column">
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">🔒/1099int-chase-2025</span>
+        <span style="font-size: 11px; color: #777777">1099-INT · 4 swapped</span>
+      </div>
+      <button type="button" style="height: 22px; padding: 0 8px; border: 1px solid #c9c9c9; border-radius: 5px; background: #ffffff; font: inherit; font-size: 11px; color: #111111">Copy</button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0 9px 12px; border-bottom: 1px solid #f0f0f0">
+      <div style="display: flex; flex-direction: column">
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">🔒/receipt-4471</span>
+        <span style="font-size: 11px; color: #777777">scan · 2 swapped</span>
+      </div>
+      <button type="button" style="height: 22px; padding: 0 8px; border: 1px solid #c9c9c9; border-radius: 5px; background: #ffffff; font: inherit; font-size: 11px; color: #111111">Copy</button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 0 9px 12px">
+      <div style="display: flex; flex-direction: column">
+        <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px">🔒/closing-statement-2025</span>
+        <span style="font-size: 11px; color: #777777">closing statement · 11 swapped</span>
+      </div>
+      <button type="button" style="height: 22px; padding: 0 8px; border: 1px solid #c9c9c9; border-radius: 5px; background: #ffffff; font: inherit; font-size: 11px; color: #111111">Copy</button>
+    </div>
+  </div>
+
+  <div style="display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 14px; border-top: 1px solid #e8e8e8; font-size: 11px; color: #777777">
+    <span>Claude Code read 🔒/w2-acme-2025 2 min ago</span>
+    <span>MCP running</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":360,"height":440}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

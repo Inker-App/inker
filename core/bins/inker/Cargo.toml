@@ -1,0 +1,26 @@
+[package]
+name = "inker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "inker"
+path = "src/main.rs"
+
+[dependencies]
+inker-core.workspace = true
+inker-extract.workspace = true
+inker-detect.workspace = true
+inker-packs.workspace = true
+inker-ipc.workspace = true
+inker-mcp.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4", features = ["derive"] }
+
+[lints]
+workspace = true

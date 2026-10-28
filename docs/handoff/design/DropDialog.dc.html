@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>First drop: move or copy</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#444}a:hover{color:#111}
+</style>
+</helmet>
+<div style="width: 440px; height: 236px; box-sizing: border-box; padding: 24px 24px 20px; display: flex; flex-direction: column; gap: 14px; background: #ffffff; color: #111111; font-family: -apple-system, system-ui, 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.45; border: 1px solid #d0d0d0; border-radius: 12px">
+  <div style="display: flex; flex-direction: column; gap: 4px">
+    <h1 style="margin: 0; font-size: 15px; font-weight: 600">Move these 4 files out of ~/Downloads?</h1>
+    <p style="margin: 0; color: #555555">Agents can usually read ~/Downloads. Moving leaves no copy behind. You can still open them from ~/Private like any other file.</p>
+  </div>
+
+  <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: #333333"><input type="checkbox"> Always do this, don't ask again</label>
+
+  <div style="margin-top: auto; display: flex; justify-content: flex-end; gap: 8px">
+    <button type="button" style="height: 32px; padding: 0 14px; border: 1px solid #c9c9c9; border-radius: 6px; background: #ffffff; font: inherit; color: #111111">Copy instead</button>
+    <button type="button" style="height: 32px; padding: 0 16px; border: none; border-radius: 6px; background: #111111; color: #ffffff; font: inherit; font-weight: 500">Move</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":440,"height":236}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

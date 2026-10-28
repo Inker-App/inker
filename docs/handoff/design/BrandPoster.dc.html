@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>INKER poster</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#151515}a:hover{color:#000}
+</style>
+</helmet>
+<div style="width: 790px; height: 1120px; box-sizing: border-box; padding: 56px 56px 48px; display: flex; flex-direction: column; background: {{paper}}; color: #151515; font-family: 'Archivo', sans-serif">
+  <canvas data-ink="poster" role="img" aria-label="INKER octopus mark drawn in merged ink cells. Hover to scatter it." style="display: block; width: 678px; height: 640px; touch-action: none"></canvas>
+  <div style="margin-top: 88px; display: flex; flex-direction: column; align-items: center; gap: 14px">
+    <h1 style="margin: 0; font-size: 64px; font-weight: 300; font-stretch: 125%; letter-spacing: 0.1em; line-height: 1">INKER</h1>
+    <p style="margin: 0; font-size: 14px; font-weight: 600; font-stretch: 112%; letter-spacing: 0.18em">YOUR AGENT SEES THE SHAPE, NOT THE SECRET</p>
+  </div>
+  <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px; font-size: 12px; font-weight: 500; font-stretch: 110%; letter-spacing: 0.5em; line-height: 1.2">
+    <div style="text-align: justify; text-align-last: justify">SENSITIVE FILES STAY ON YOUR MACHINE</div>
+    <div style="text-align: justify; text-align-last: justify">REDACTED LOCALLY / SERVED OVER MCP</div>
+    <div style="text-align: justify; text-align-last: justify">INKER.SH / MENU BAR APP / 2026</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"paper":{"editor":"color","default":"#E6E4DE","options":["#E6E4DE","#FFFFFF","#DCD9D1"]},"seams":{"editor":"range","default":0.16,"min":0,"max":0.5,"step":0.02},"$preview":{"width":790,"height":1120}}'>
+var INK = '#151515';
+function rng(s){return function(){s|=0;s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function bits(rows){var h=rows.length,w=0,x,y;for(y=0;y<h;y++)w=Math.max(w,rows[y].length);var a=new Float32Array(w*h);for(y=0;y<h;y++)for(x=0;x<w;x++)a[y*w+x]=rows[y].charAt(x)==='#'?1:0;return{w:w,h:h,a:a};}
+function field(b,cell,o){o=o||{};var n=b.w*b.h,r=rng(o.seed||7),p=o.join==null?1:o.join,jr=new Uint8Array(n),jd=new Uint8Array(n),k=new Float32Array(n);for(var i=0;i<n;i++){var x=i%b.w,y=(i/b.w)|0;jr[i]=((b.up&&!(x&1))||r()<p)?1:0;jd[i]=((b.up&&!(y&1))||r()<p)?1:0;k[i]=0.75+0.5*r();}return{w:b.w,h:b.h,base:b.a,v:new Float32Array(b.a),jr:jr,jd:jd,k:k,diag:!!o.diag,cell:cell,gap:o.gap==null?cell*0.08:o.gap,ox:o.ox||0,oy:o.oy||0,dx:new Float32Array(n),dy:new Float32Array(n),vx:new Float32Array(n),vy:new Float32Array(n)};}
+function ss(a,b,x){x=(x-a)/(b-a);x=x<0?0:x>1?1:x;return x*x*(3-2*x);}
+function poly(ctx,p){var s=0,i,n=p.length;for(i=0;i<n;i++){var q=p[(i+1)%n];s+=p[i][0]*q[1]-q[0]*p[i][1];}if(s<0)p.reverse();ctx.moveTo(p[0][0],p[0][1]);for(i=1;i<n;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();}
+function ctr(F,i){var c=F.cell;return[F.ox+(i%F.w)*c+c/2+F.dx[i],F.oy+((i/F.w)|0)*c+c/2+F.dy[i]];}
+function bridge(ctx,F,i,j,R,sh){var rb=R*ss(0.55,0.9,Math.min(F.v[i],F.v[j]))-sh;if(rb<=0)return;var a=ctr(F,i),b=ctr(F,j),ex=b[0]-a[0],ey=b[1]-a[1],L=Math.hypot(ex,ey);if(L<0.001||L>F.cell*1.6)return;var nx=-ey/L*rb,ny=ex/L*rb;poly(ctx,[[a[0]+nx,a[1]+ny],[b[0]+nx,b[1]+ny],[b[0]-nx,b[1]-ny],[a[0]-nx,a[1]-ny]]);}
+function inkPath(ctx,F,sh){var w=F.w,h=F.h,R=F.cell/2-F.gap/2,x,y,i;ctx.beginPath();for(y=0;y<h;y++)for(x=0;x<w;x++){i=y*w+x;var v=F.v[i];if(v<0.02)continue;var c=ctr(F,i),r=R*Math.min(1,v)-sh;if(r>0){ctx.moveTo(c[0]+r,c[1]);ctx.arc(c[0],c[1],r,0,6.2832);}var jr=x<w-1&&F.jr[i]&&F.v[i+1]>0.02,jd=y<h-1&&F.jd[i]&&F.v[i+w]>0.02;if(jr)bridge(ctx,F,i,i+1,R,sh);if(jd)bridge(ctx,F,i,i+w,R,sh);if(F.diag&&y<h-1){if(x<w-1&&F.base[i+w+1]>0&&!F.base[i+1]&&!F.base[i+w])bridge(ctx,F,i,i+w+1,R,sh);if(x>0&&F.base[i+w-1]>0&&!F.base[i-1]&&!F.base[i+w])bridge(ctx,F,i,i+w-1,R,sh);}if(jr&&jd&&F.jd[i+1]&&F.jr[i+w]&&R-sh>0&&Math.min(v,F.v[i+1],F.v[i+w],F.v[i+w+1])>0.88){var a=ctr(F,i),b=ctr(F,i+1),d=ctr(F,i+w+1),e=ctr(F,i+w);if(Math.hypot(d[0]-a[0],d[1]-a[1])<F.cell*1.8)poly(ctx,[a,b,d,e]);}}}
+function drawInk(ctx,F,ink,paper,lw){ctx.fillStyle=ink;inkPath(ctx,F,0);ctx.fill();if(lw){ctx.fillStyle=paper;inkPath(ctx,F,lw);ctx.fill();}}
+function physics(F,P,rad,dt){var n=F.w*F.h;for(var i=0;i<n;i++){if(F.base[i]<0.01)continue;var k=F.k[i],ax=-F.dx[i]*38*k-F.vx[i]*6.5,ay=-F.dy[i]*38*k-F.vy[i]*6.5;if(P&&P.x!=null){var p=ctr(F,i),ex=p[0]-P.x,ey=p[1]-P.y,d=Math.hypot(ex,ey);if(d<rad&&d>0.01){var f=(1-d/rad)*rad*44/k;ax+=ex/d*f;ay+=ey/d*f;}}F.vx[i]+=ax*dt;F.vy[i]+=ay*dt;F.dx[i]+=F.vx[i]*dt;F.dy[i]+=F.vy[i]*dt;}}
+function cohesion(F,i){return 1-0.55*ss(0,F.cell*1.4,Math.hypot(F.dx[i],F.dy[i]));}
+function setup(el,W,H){var d=window.devicePixelRatio||1;el.width=Math.round(W*d);el.height=Math.round(H*d);var ctx=el.getContext('2d');ctx.setTransform(d,0,0,d,0,0);return ctx;}
+function track(el,W,H){var P={x:null,y:null,down:false,click:false};function pos(e){var r=el.getBoundingClientRect();return[(e.clientX-r.left)*W/r.width,(e.clientY-r.top)*H/r.height];}el.addEventListener('pointermove',function(e){var q=pos(e);P.x=q[0];P.y=q[1];});el.addEventListener('pointerleave',function(){P.x=null;P.down=false;});el.addEventListener('pointerdown',function(e){var q=pos(e);P.down=true;P.click=true;P.cx=q[0];P.cy=q[1];});el.addEventListener('pointerup',function(){P.down=false;});return P;}
+function loop(fn){var last=performance.now(),id,on=true;function f(t){if(!on)return;var dt=Math.min(0.033,Math.max(0,(t-last)/1000));last=t;fn(dt,t/1000);id=requestAnimationFrame(f);}id=requestAnimationFrame(f);return function(){on=false;cancelAnimationFrame(id);};}
+function find(sel,cb){var tries=0;(function look(){var el=document.querySelector(sel);if(el)cb(el);else if(tries++<240)requestAnimationFrame(look);})();}
+
+var OCTO=[
+'......#####......',
+'.....#######.....',
+'....#########....',
+'....#########....',
+'....##.###.##....',
+'....#########....',
+'....#########....',
+'....#.#.#.#.#....',
+'....#.#.#.#.#....',
+'.####.#.#.#.####.',
+'.#....#.#.#....#.',
+'.#.####.#.####.#.',
+'.#.#....#....#.#.',
+'.#.#.##.#.##.#.#.',
+'.###..#.#.#..###.',
+'......###.#......'];
+
+function start(el,self){
+  if(el.__inkStop)el.__inkStop();
+  var W=678,H=640,ctx=setup(el,W,H),P=track(el,W,H),b=bits(OCTO),cell=W/b.w,F=null,seam=-1;
+  var stop=loop(function(dt,t){
+    var s=self.props.seams==null?0.16:self.props.seams;
+    if(s!==seam){seam=s;F=field(b,cell,{join:1-s,seed:11,oy:(H-b.h*cell)/2});}
+    physics(F,P,120,dt);
+    for(var i=0;i<F.v.length;i++){var x=i%F.w,y=(i/F.w)|0;F.v[i]=F.base[i]*cohesion(F,i)*(0.93+0.07*Math.sin(t*1.3-y*0.45+x*0.2));}
+    ctx.clearRect(0,0,W,H);
+    drawInk(ctx,F,INK,null,0);
+  });
+  el.__inkStop=stop;return stop;
+}
+
+class Component extends DCLogic {
+  componentDidMount(){var self=this;find('canvas[data-ink="poster"]',function(el){self.stopInk=start(el,self);});}
+  componentWillUnmount(){if(this.stopInk)this.stopInk();}
+  renderVals(){return{paper:this.props.paper ?? '#E6E4DE'};}
+}
+</script>
+</body>
+</html>

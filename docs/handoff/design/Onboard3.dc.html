@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Onboarding 3: how it works</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#444}a:hover{color:#111}
+</style>
+</helmet>
+<div style="width: 520px; height: 420px; box-sizing: border-box; padding: 36px 40px 28px; display: flex; flex-direction: column; gap: 24px; background: #ffffff; color: #111111; font-family: -apple-system, system-ui, 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.45; border: 1px solid #d9d9d9; border-radius: 12px">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 11px; color: #777777; letter-spacing: 0.04em; text-transform: uppercase">Step 3 of 3</div>
+    <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em">Drop here, not in the chat</h1>
+    <p style="margin: 0; color: #555555">Instead of dragging a file into Claude or Cursor, drag it onto the lock in your menu bar.</p>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; justify-content: center; height: 72px; border: 1px dashed #bdbdbd; border-radius: 8px; color: #777777; font-size: 12px">drop files or folders</div>
+      <div style="font-weight: 600; font-size: 12px">1. Drop</div>
+      <p style="margin: 0; font-size: 12px; color: #555555">The file moves into your private folder and gets reviewed on the spot.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; align-items: center; justify-content: center; height: 72px; border: 1px solid #e3e3e3; border-radius: 8px; background: #fafafa; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 12px; color: #111111">🔒/w2-acme-2025</div>
+      <div style="font-weight: 600; font-size: 12px">2. Copy the handle</div>
+      <p style="margin: 0; font-size: 12px; color: #555555">It's on your clipboard as soon as the file is ready.</p>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; flex-direction: column; justify-content: center; gap: 4px; height: 72px; padding: 0 10px; box-sizing: border-box; border: 1px solid #e3e3e3; border-radius: 8px; font-size: 11px; color: #333333">
+        <div style="color: #777777">you</div>
+        <div>check <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace">🔒/w2-acme-2025</span> against my 1099s</div>
+      </div>
+      <div style="font-weight: 600; font-size: 12px">3. Paste it in the chat</div>
+      <p style="margin: 0; font-size: 12px; color: #555555">The agent reads a version with names, SSNs and account numbers swapped for placeholders.</p>
+    </div>
+  </div>
+
+  <div style="margin-top: auto; display: flex; justify-content: space-between; gap: 8px">
+    <a href="Onboard2.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; color: #555555; text-decoration: none">Back</a>
+    <a href="PopoverEmpty.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 16px; border-radius: 6px; background: #111111; color: #ffffff; text-decoration: none; font-weight: 500">Done</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":520,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+# Rust
+core/target/
+target/
+# Swift
+app/.build/
+app/*.xcodeproj/xcuserdata/
+app/build/
+*.xcframework/
+# Node (tools only; the website lives in its own repo)
+node_modules/
+# OS
+.DS_Store
+# Local
+*.log
+.env
+.env.*
+# Never commit anything that could be a real document
+*.pdf
+*.heic
+*.HEIC
+*.jpg
+*.jpeg
+*.png
+!samples/synthetic/**/*.pdf
+!samples/synthetic/**/*.png
+!docs/**/*.png

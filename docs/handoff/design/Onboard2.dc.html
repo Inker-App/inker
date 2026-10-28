@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Onboarding 2: connect the MCP</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#444}a:hover{color:#111}
+</style>
+</helmet>
+<div style="width: 520px; height: 420px; box-sizing: border-box; padding: 36px 40px 28px; display: flex; flex-direction: column; gap: 20px; background: #ffffff; color: #111111; font-family: -apple-system, system-ui, 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.45; border: 1px solid #d9d9d9; border-radius: 12px">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 11px; color: #777777; letter-spacing: 0.04em; text-transform: uppercase">Step 2 of 3</div>
+    <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em">Give your agents the key</h1>
+    <p style="margin: 0; color: #555555">Agents can't open the folder. They ask this app, and get back a version with the sensitive parts swapped out.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; border: 1px solid #e3e3e3; border-radius: 6px">
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #e3e3e3">
+      <span style="font-weight: 500">Claude Code</span>
+      <span style="font-size: 12px; color: #555555">Added</span>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #e3e3e3">
+      <span style="font-weight: 500">Cursor</span>
+      <button type="button" style="height: 26px; padding: 0 10px; border: 1px solid #c9c9c9; border-radius: 6px; background: #ffffff; font: inherit; font-size: 12px; color: #111111">Add</button>
+    </div>
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px">
+      <span style="font-weight: 500">Codex</span>
+      <button type="button" style="height: 26px; padding: 0 10px; border: 1px solid #c9c9c9; border-radius: 6px; background: #ffffff; font: inherit; font-size: 12px; color: #111111">Add</button>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <span style="font-size: 12px; font-weight: 600">Anything else</span>
+      <button type="button" style="height: 24px; padding: 0 8px; border: none; border-radius: 4px; background: transparent; font: inherit; font-size: 12px; color: #555555; text-decoration: underline">Copy</button>
+    </div>
+    <pre style="margin: 0; padding: 10px 12px; border: 1px solid #e3e3e3; border-radius: 6px; background: #fafafa; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 11px; line-height: 1.5; color: #333333; white-space: pre-wrap">{ "mcpServers": { "private": { "command": "[APP BINARY]", "args": ["mcp"] } } }</pre>
+  </div>
+
+  <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: #333333"><input type="checkbox" checked style="margin-top: 2px"> Also add a line to CLAUDE.md and .cursorrules so the agent knows what a <span style="font-family: ui-monospace, 'SF Mono', Menlo, monospace">🔒/</span> reference is</label>
+
+  <div style="margin-top: auto; display: flex; justify-content: space-between; gap: 8px">
+    <a href="Main.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 12px; border-radius: 6px; color: #555555; text-decoration: none">Back</a>
+    <a href="Onboard3.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 16px; border-radius: 6px; background: #111111; color: #ffffff; text-decoration: none; font-weight: 500">Continue</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":520,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

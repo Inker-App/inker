@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Onboarding 1: your private folder</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#E6E4DE}a:hover{color:#fff}
+input[type=checkbox]{accent-color:#E6E4DE}
+</style>
+</helmet>
+<div style="width: 560px; height: 540px; box-sizing: border-box; padding: 32px 40px 28px; display: flex; flex-direction: column; gap: 20px; background: #0D0F10; color: #E6E4DE; font-family: 'Archivo', sans-serif; font-size: 13px; line-height: 1.45; border: 1px solid rgba(230,228,222,0.14); border-radius: 12px">
+  <canvas data-ink="ob1" role="img" aria-label="Halftone eyeballs crowding around a Downloads folder, staring at it" style="display: block; width: 480px; height: 120px; background: #08090A; border-radius: 8px"></canvas>
+
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 11px; font-weight: 600; font-stretch: 125%; letter-spacing: 0.2em; color: #8A8C8E">STEP 1 OF 3</div>
+    <h1 style="margin: 0; font-size: 22px; font-weight: 400; font-stretch: 112%; letter-spacing: 0.01em">Pick a folder they can't see</h1>
+    <p style="margin: 0; color: #8A8C8E">Agents can read anything in their workspace, Downloads included. Your private folder lives outside it.</p>
+  </div>
+
+  <div style="display: flex; gap: 8px">
+    <label for="home" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Private folder</label>
+    <input id="home" type="text" value="~/Private" style="flex: 1; box-sizing: border-box; height: 36px; padding: 0 12px; border: 1px solid rgba(230,228,222,0.2); border-radius: 6px; background: #08090A; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #E6E4DE">
+    <button type="button" style="height: 36px; padding: 0 14px; border: 1px solid rgba(230,228,222,0.2); border-radius: 6px; background: transparent; font: inherit; color: #E6E4DE">Choose…</button>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <div style="font-size: 11px; font-weight: 600; font-stretch: 125%; letter-spacing: 0.2em">KEEP THESE AGENTS OUT</div>
+    <div style="display: flex; flex-direction: column; border-top: 1px solid rgba(230,228,222,0.14)">
+      <label style="display: flex; align-items: center; justify-content: space-between; height: 40px; border-bottom: 1px solid rgba(230,228,222,0.14)"><span>Claude Code <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8A8C8E">~/.claude/settings.json</span></span><input type="checkbox" checked aria-label="Add deny rule for Claude Code"></label>
+      <label style="display: flex; align-items: center; justify-content: space-between; height: 40px; border-bottom: 1px solid rgba(230,228,222,0.14)"><span>Cursor <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8A8C8E">~/.cursor/mcp.json</span></span><input type="checkbox" checked aria-label="Add deny rule for Cursor"></label>
+      <label style="display: flex; align-items: center; justify-content: space-between; height: 40px; border-bottom: 1px solid rgba(230,228,222,0.14)"><span>Codex <span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8A8C8E">~/.codex/config.toml</span></span><input type="checkbox" checked aria-label="Add deny rule for Codex"></label>
+    </div>
+    <p style="margin: 0; font-size: 12px; color: #8A8C8E">A deny rule is a polite request. The folder being out of reach does the real work.</p>
+  </div>
+
+  <div style="margin-top: auto; display: flex; justify-content: flex-end">
+    <a href="AppOnboard2.dc.html" style="display: inline-flex; align-items: center; height: 36px; padding: 0 18px; border-radius: 6px; background: #E6E4DE; color: #0D0F10; text-decoration: none; font-weight: 600">Continue</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":560,"height":540}}'>
+var PAPER='#E6E4DE',RED='#E0473E',MUTE='#8A8C8E';
+function rng(s){return function(){s|=0;s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function ss(a,b,x){x=(x-a)/(b-a);x=x<0?0:x>1?1:x;return x*x*(3-2*x);}
+function n3(x,y,z){var l=Math.hypot(x,y,z)||1;return[x/l,y/l,z/l];}
+function setup(el,W,H){var d=window.devicePixelRatio||1;el.width=Math.round(W*d);el.height=Math.round(H*d);var ctx=el.getContext('2d');ctx.setTransform(d,0,0,d,0,0);return ctx;}
+function track(el,W,H){var P={x:null,y:null};el.addEventListener('pointermove',function(e){var r=el.getBoundingClientRect();P.x=(e.clientX-r.left)*W/r.width;P.y=(e.clientY-r.top)*H/r.height;});el.addEventListener('pointerleave',function(){P.x=null;});return P;}
+function loop(fn){var last=performance.now(),id,on=true;function f(t){if(!on)return;var dt=Math.min(0.033,Math.max(0,(t-last)/1000));last=t;fn(dt,t/1000);id=requestAnimationFrame(f);}id=requestAnimationFrame(f);return function(){on=false;cancelAnimationFrame(id);};}
+function find(sel,cb){var tries=0;(function look(){var el=document.querySelector(sel);if(el)cb(el);else if(tries++<240)requestAnimationFrame(look);})();}
+function put(p,x,y,b,C){if(b<0.015)return;var r=C/2*Math.min(1.05,Math.sqrt(b));p.moveTo(x+r,y);p.arc(x,y,r,0,6.2832);}
+var LGT=n3(-0.45,-0.55,0.7),HV=n3(LGT[0],LGT[1],LGT[2]+1);
+function mkEye(x,y,R,r){return{x:x,y:y,R:R,yaw:0,pitch:0,ty:0,tp:0,ry:0,rp:0,next:r()*2,dart:0,bt:-1,nb:1+r()*4,ph:r()*6.283,spin:r()*6.283,lid:0,r:r};}
+function eyeStep(E,dt,t,tx,ty){var r=E.r;if(t>E.next){E.next=t+0.4+r()*2.4;E.dart=r()<0.45?t+0.3+r()*0.8:0;E.ry=(r()-0.5)*1.9;E.rp=(r()-0.5)*1.3;}
+  if(tx!=null&&t>E.dart){var g=n3(tx-E.x,ty-E.y,160);E.ty=Math.atan2(g[0],g[2]);E.tp=Math.asin(g[1]);}else{E.ty=E.ry;E.tp=E.rp;}
+  var k=Math.min(1,dt*18);E.yaw+=(E.ty-E.yaw)*k;E.pitch+=(E.tp-E.pitch)*k;
+  if(t>E.nb&&E.bt<0)E.bt=t;E.lid=0;if(E.bt>=0){var u=(t-E.bt)/0.2;if(u>=1){E.bt=-1;E.nb=t+2+r()*5;}else E.lid=Math.sin(Math.PI*u);}}
+function eyeDraw(main,acc,E,C,t,W,H,squint){var cx=E.x+Math.sin(t*0.7+E.ph)*2,cy=E.y+Math.cos(t*0.9+E.ph)*1.5,R=E.R,lid=Math.max(E.lid,squint||0),cp=Math.cos(E.pitch),gx=Math.sin(E.yaw)*cp,gy=Math.sin(E.pitch),gz=Math.cos(E.yaw)*cp;
+  var i0=Math.max(0,Math.floor((cx-R)/C)),i1=Math.min(Math.floor(W/C)-1,Math.ceil((cx+R)/C)),j0=Math.max(0,Math.floor((cy-R)/C)),j1=Math.min(Math.floor(H/C)-1,Math.ceil((cy+R)/C));
+  for(var j=j0;j<=j1;j++)for(var i=i0;i<=i1;i++){var px=(i+0.5)*C,py=(j+0.5)*C,dx=(px-cx)/R,dy=(py-cy)/R,d2=dx*dx+dy*dy;if(d2>1)continue;
+    var z=Math.sqrt(1-d2),lam=Math.max(0,dx*LGT[0]+dy*LGT[1]+z*LGT[2]),sp=Math.pow(Math.max(0,dx*HV[0]+dy*HV[1]+z*HV[2]),48),b,isI=false;
+    if(Math.abs(dy)>1-lid)b=0.05+0.3*lam;
+    else{var ca=dx*gx+dy*gy+z*gz;if(ca>0.955)b=sp*0.35;else if(ca>0.83){var ang=Math.atan2(dy-gy*ca,dx-gx*ca);b=(0.32+0.48*lam)*(0.72+0.28*Math.sin(ang*14+E.spin))*ss(0.83,0.85,ca)+sp*0.3;isI=true;}else b=(0.08+0.72*lam)*(0.55+0.45*Math.sqrt(z))+sp*0.3;}
+    put(isI?acc:main,px,py,b,C);}}
+
+function start(el,self){
+  if(el.__inkStop)el.__inkStop();
+  var W=480,H=120,ctx=setup(el,W,H),P=track(el,W,H),C=4,r=rng(12),fx=240,fy=62;
+  var eyes=[[64,44,24],[124,86,18],[176,32,16],[312,34,18],[356,84,22],[424,48,26],[22,94,12],[460,98,10]].map(function(a){return mkEye(a[0],a[1],a[2],r);});
+  var stop=loop(function(dt,t){
+    var main=new Path2D(),acc=new Path2D(),tx=P.x!=null?P.x:fx,ty=P.x!=null?P.y:fy;
+    for(var e=0;e<eyes.length;e++){eyeStep(eyes[e],dt,t,tx,ty);eyeDraw(main,acc,eyes[e],C,t,W,H,0);}
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle=MUTE;
+    for(var k=0;k<64;k++){var u=k/64,px,py;if(u<0.25){px=fx-34+u/0.25*68;py=fy-20;}else if(u<0.5){px=fx+34;py=fy-20+(u-0.25)/0.25*44;}else if(u<0.75){px=fx+34-(u-0.5)/0.25*68;py=fy+24;}else{px=fx-34;py=fy+24-(u-0.75)/0.25*44;}ctx.beginPath();ctx.arc(px,py,1.3,0,6.2832);ctx.fill();}
+    for(var q=0;q<8;q++){ctx.beginPath();ctx.arc(fx-34+q*3.4,fy-24,1.3,0,6.2832);ctx.fill();}
+    ctx.font='500 10px "JetBrains Mono", monospace';ctx.textAlign='center';ctx.fillText('~/Downloads',fx,fy+40);ctx.textAlign='left';
+    ctx.fillStyle=PAPER;ctx.fill(main);ctx.fillStyle=RED;ctx.fill(acc);
+  });
+  el.__inkStop=stop;return stop;
+}
+class Component extends DCLogic {
+  componentDidMount(){var self=this;find('canvas[data-ink="ob1"]',function(el){self.stopInk=start(el,self);});}
+  componentWillUnmount(){if(this.stopInk)this.stopInk();}
+  renderVals(){return{};}
+}
+</script>
+</body>
+</html>

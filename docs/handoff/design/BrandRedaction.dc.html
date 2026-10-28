@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>INKER redaction</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#151515}a:hover{color:#000}
+</style>
+</helmet>
+<div style="width: 1200px; height: 620px; box-sizing: border-box; padding: 56px; display: flex; flex-direction: column; gap: 32px; background: #E6E4DE; color: #151515; font-family: 'Archivo', sans-serif">
+  <div style="display: flex; justify-content: space-between; align-items: baseline; padding-bottom: 20px; border-bottom: 1px solid rgba(21,21,21,0.2)">
+    <h1 style="margin: 0; font-size: 13px; font-weight: 600; font-stretch: 125%; letter-spacing: 0.24em">REDACTION IS THE MARK</h1>
+    <span style="font-size: 12px; color: #5A5853">No black bars. Redactions are ink pooled on the character grid, same cells as the logo.</span>
+  </div>
+  <div style="display: flex; gap: 64px">
+    <div style="display: flex; flex-direction: column; gap: 14px; width: 540px">
+      <div style="font-size: 11px; font-weight: 600; font-stretch: 125%; letter-spacing: 0.2em">YOUR FILE, ON DISK</div>
+      <canvas data-ink="redact" role="img" aria-label="A sample W-2 where ink pools over the name, SSN, street, employer and EIN, then lifts off as dots, on a loop" style="display: block; width: 540px; height: 370px"></canvas>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px; flex: 1">
+      <div style="font-size: 11px; font-weight: 600; font-stretch: 125%; letter-spacing: 0.2em">WHAT THE AGENT GETS FROM <span style="font-family: 'JetBrains Mono', monospace; letter-spacing: 0; font-stretch: 100%">🐙/w2-acme-2025</span></div>
+      <pre style="margin: 0; padding-top: 14px; font-family: 'JetBrains Mono', monospace; font-size: 15px; line-height: 32px; color: #151515; white-space: pre">FORM W-2   WAGE AND TAX STATEMENT   2025
+
+EMPLOYEE   <span style="display: inline-block; line-height: 22px; padding: 0 9px; border-radius: 11px; background: #151515; color: #E6E4DE; font-size: 13px">TAXPAYER</span>
+SSN        <span style="display: inline-block; line-height: 22px; padding: 0 9px; border-radius: 11px; background: #151515; color: #E6E4DE; font-size: 13px">SSN_1</span>
+ADDRESS    Brooklyn, NY
+EMPLOYER   <span style="display: inline-block; line-height: 22px; padding: 0 9px; border-radius: 11px; background: #151515; color: #E6E4DE; font-size: 13px">EMPLOYER_1</span>
+EIN        <span style="display: inline-block; line-height: 22px; padding: 0 9px; border-radius: 11px; background: #151515; color: #E6E4DE; font-size: 13px">EIN_1</span>
+
+BOX 1   WAGES, TIPS       52,000.00
+BOX 2   FEDERAL TAX        6,100.00
+BOX 15  STATE             NY</pre>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":620}}'>
+var INK = '#151515';
+function rng(s){return function(){s|=0;s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function field(b,cell,o){o=o||{};var n=b.w*b.h,r=rng(o.seed||7),p=o.join==null?1:o.join,jr=new Uint8Array(n),jd=new Uint8Array(n),k=new Float32Array(n);for(var i=0;i<n;i++){var x=i%b.w,y=(i/b.w)|0;jr[i]=((b.up&&!(x&1))||r()<p)?1:0;jd[i]=((b.up&&!(y&1))||r()<p)?1:0;k[i]=0.75+0.5*r();}return{w:b.w,h:b.h,base:b.a,v:new Float32Array(b.a),jr:jr,jd:jd,k:k,diag:!!o.diag,cell:cell,gap:o.gap==null?cell*0.08:o.gap,ox:o.ox||0,oy:o.oy||0,dx:new Float32Array(n),dy:new Float32Array(n),vx:new Float32Array(n),vy:new Float32Array(n)};}
+function ss(a,b,x){x=(x-a)/(b-a);x=x<0?0:x>1?1:x;return x*x*(3-2*x);}
+function poly(ctx,p){var s=0,i,n=p.length;for(i=0;i<n;i++){var q=p[(i+1)%n];s+=p[i][0]*q[1]-q[0]*p[i][1];}if(s<0)p.reverse();ctx.moveTo(p[0][0],p[0][1]);for(i=1;i<n;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();}
+function ctr(F,i){var c=F.cell;return[F.ox+(i%F.w)*c+c/2+F.dx[i],F.oy+((i/F.w)|0)*c+c/2+F.dy[i]];}
+function bridge(ctx,F,i,j,R,sh){var rb=R*ss(0.55,0.9,Math.min(F.v[i],F.v[j]))-sh;if(rb<=0)return;var a=ctr(F,i),b=ctr(F,j),ex=b[0]-a[0],ey=b[1]-a[1],L=Math.hypot(ex,ey);if(L<0.001||L>F.cell*1.6)return;var nx=-ey/L*rb,ny=ex/L*rb;poly(ctx,[[a[0]+nx,a[1]+ny],[b[0]+nx,b[1]+ny],[b[0]-nx,b[1]-ny],[a[0]-nx,a[1]-ny]]);}
+function inkPath(ctx,F,sh){var w=F.w,h=F.h,R=F.cell/2-F.gap/2,x,y,i;ctx.beginPath();for(y=0;y<h;y++)for(x=0;x<w;x++){i=y*w+x;var v=F.v[i];if(v<0.02)continue;var c=ctr(F,i),r=R*Math.min(1,v)-sh;if(r>0){ctx.moveTo(c[0]+r,c[1]);ctx.arc(c[0],c[1],r,0,6.2832);}var jr=x<w-1&&F.jr[i]&&F.v[i+1]>0.02,jd=y<h-1&&F.jd[i]&&F.v[i+w]>0.02;if(jr)bridge(ctx,F,i,i+1,R,sh);if(jd)bridge(ctx,F,i,i+w,R,sh);if(jr&&jd&&F.jd[i+1]&&F.jr[i+w]&&R-sh>0&&Math.min(v,F.v[i+1],F.v[i+w],F.v[i+w+1])>0.88){var a=ctr(F,i),b=ctr(F,i+1),d=ctr(F,i+w+1),e=ctr(F,i+w);if(Math.hypot(d[0]-a[0],d[1]-a[1])<F.cell*1.8)poly(ctx,[a,b,d,e]);}}}
+function drawInk(ctx,F,ink,paper,lw){ctx.fillStyle=ink;inkPath(ctx,F,0);ctx.fill();if(lw){ctx.fillStyle=paper;inkPath(ctx,F,lw);ctx.fill();}}
+function setup(el,W,H){var d=window.devicePixelRatio||1;el.width=Math.round(W*d);el.height=Math.round(H*d);var ctx=el.getContext('2d');ctx.setTransform(d,0,0,d,0,0);return ctx;}
+function loop(fn){var last=performance.now(),id,on=true;function f(t){if(!on)return;var dt=Math.min(0.033,Math.max(0,(t-last)/1000));last=t;fn(dt,t/1000);id=requestAnimationFrame(f);}id=requestAnimationFrame(f);return function(){on=false;cancelAnimationFrame(id);};}
+function find(sel,cb){var tries=0;(function look(){var el=document.querySelector(sel);if(el)cb(el);else if(tries++<240)requestAnimationFrame(look);})();}
+
+var DOC=[
+'FORM W-2   WAGE AND TAX STATEMENT   2025',
+'',
+'EMPLOYEE   Jordan Example',
+'SSN        000-12-3456',
+'ADDRESS    41 Sample St, Brooklyn NY',
+'EMPLOYER   Acme Robotics Inc',
+'EIN        12-3456789',
+'',
+'BOX 1   WAGES, TIPS       52,000.00',
+'BOX 2   FEDERAL TAX        6,100.00',
+'BOX 15  STATE             NY'];
+var SPANS=[[2,11,14],[3,11,11],[4,11,12],[5,11,17],[6,11,10]];
+
+function start(el,self){
+  if(el.__inkStop)el.__inkStop();
+  var W=540,H=370,ctx=setup(el,W,H),x0=0,y0=26,lh=32,cw=-1,fields=[];
+  function build(){fields=SPANS.map(function(s){var pw=s[2]*cw+10,nC=Math.max(1,Math.round(pw/20)),cell=pw/nC,base=y0+s[0]*lh;var a=new Float32Array(nC).fill(1);return field({w:nC,h:1,a:a},cell,{ox:x0+s[1]*cw-5,oy:base-5-cell/2,gap:cell*0.1});});}
+  var stop=loop(function(dt,t){
+    ctx.font='15px "JetBrains Mono", monospace';
+    var m=ctx.measureText('0').width;if(Math.abs(m-cw)>0.01){cw=m;build();}
+    ctx.clearRect(0,0,W,H);ctx.fillStyle=INK;ctx.textBaseline='alphabetic';
+    for(var l=0;l<DOC.length;l++)ctx.fillText(DOC[l],x0,y0+l*lh);
+    var u=t%7.5;
+    for(var k=0;k<fields.length;k++){var F=fields[k],dIn=0.8+k*0.35,L=4.8+k*0.15;
+      for(var j=0;j<F.w;j++){var p=ss(0,0.3,u-dIn-j*0.05),q=ss(0,1.1,u-L-j*0.04);
+        F.v[j]=p*(1-q);F.dy[j]=-q*q*34;F.dx[j]=Math.sin(j*2.3+k)*q*12;}
+      drawInk(ctx,F,INK,null,0);}
+  });
+  el.__inkStop=stop;return stop;
+}
+
+class Component extends DCLogic {
+  componentDidMount(){var self=this;find('canvas[data-ink="redact"]',function(el){self.stopInk=start(el,self);});}
+  componentWillUnmount(){if(this.stopInk)this.stopInk();}
+  renderVals(){return{};}
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/inker-core",
+  "crates/inker-extract",
+  "crates/inker-detect",
+  "crates/inker-packs",
+  "crates/inker-ipc",
+  "crates/inker-mcp",
+  "crates/inker-ffi",
+  "crates/inker-agents",
+  "bins/inker",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Inker-App/inker"
+
+[workspace.dependencies]
+inker-core = { path = "crates/inker-core" }
+inker-extract = { path = "crates/inker-extract" }
+inker-detect = { path = "crates/inker-detect" }
+inker-packs = { path = "crates/inker-packs" }
+inker-ipc = { path = "crates/inker-ipc" }
+inker-mcp = { path = "crates/inker-mcp" }
+inker-agents = { path = "crates/inker-agents" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+anyhow = "1"
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tokio = { version = "1", features = ["full"] }
+camino = { version = "1", features = ["serde1"] }
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"

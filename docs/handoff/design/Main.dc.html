@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Onboarding 1: home folder and keep agents out</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+a{color:#444}a:hover{color:#111}
+</style>
+</helmet>
+<div style="width: 520px; height: 420px; box-sizing: border-box; padding: 36px 40px 28px; display: flex; flex-direction: column; gap: 20px; background: #ffffff; color: #111111; font-family: -apple-system, system-ui, 'Helvetica Neue', sans-serif; font-size: 13px; line-height: 1.45; border: 1px solid #d9d9d9; border-radius: 12px">
+  <div style="display: flex; flex-direction: column; gap: 6px">
+    <div style="font-size: 11px; color: #777777; letter-spacing: 0.04em; text-transform: uppercase">Step 1 of 3</div>
+    <h1 style="margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em">Where sensitive files will live</h1>
+    <p style="margin: 0; color: #555555">Agents read whatever is in their workspace. This folder stays outside it.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <label for="home" style="font-size: 12px; font-weight: 600">Folder</label>
+    <div style="display: flex; gap: 8px">
+      <input id="home" type="text" value="~/Private" style="flex: 1; box-sizing: border-box; height: 32px; padding: 0 10px; border: 1px solid #c9c9c9; border-radius: 6px; font: inherit; color: #111111; background: #ffffff">
+      <button type="button" style="height: 32px; padding: 0 12px; border: 1px solid #c9c9c9; border-radius: 6px; background: #ffffff; font: inherit; color: #111111">Choose…</button>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <div style="font-size: 12px; font-weight: 600">Keep these out of it</div>
+    <div style="display: flex; flex-direction: column; border: 1px solid #e3e3e3; border-radius: 6px">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #e3e3e3">
+        <div style="display: flex; flex-direction: column"><span style="font-weight: 500">Claude Code</span><span style="font-size: 11px; color: #777777">~/.claude/settings.json</span></div>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px"><input type="checkbox" checked> Add deny rule</label>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px; border-bottom: 1px solid #e3e3e3">
+        <div style="display: flex; flex-direction: column"><span style="font-weight: 500">Cursor</span><span style="font-size: 11px; color: #777777">~/.cursor/mcp.json</span></div>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px"><input type="checkbox" checked> Add deny rule</label>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 9px 12px">
+        <div style="display: flex; flex-direction: column"><span style="font-weight: 500">Codex</span><span style="font-size: 11px; color: #777777">~/.codex/config.toml</span></div>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px"><input type="checkbox" checked> Add deny rule</label>
+      </div>
+    </div>
+    <p style="margin: 0; font-size: 11px; color: #777777">A rule is a request, not a wall. Keeping the folder out of the workspace does the real work.</p>
+  </div>
+
+  <div style="margin-top: auto; display: flex; justify-content: flex-end; gap: 8px">
+    <a href="Onboard2.dc.html" style="display: inline-flex; align-items: center; height: 32px; padding: 0 16px; border-radius: 6px; background: #111111; color: #ffffff; text-decoration: none; font-weight: 500">Continue</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":520,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
