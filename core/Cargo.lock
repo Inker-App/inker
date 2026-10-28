@@ -1437,6 +1437,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "inker-pipeline"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "inker-core",
+ "inker-detect",
+ "inker-extract",
+ "inker-packs",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
 name = "inout"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
