@@ -224,3 +224,26 @@ Ben answered on 2026-10-28: all dark, AGENTS.md for the teaching line, and best 
 6. **Renderers.** Metal shaders for eyes and octopus, `Canvas` for the ink grid, pause on close, Reduce Motion, Instruments budget.
 7. **Onboarding.** Folder picker with the warnings in section 5.15, per-agent config writers from section 3.8, the AGENTS.md and CLAUDE.md line, and `inker doctor`.
 8. **Later tools.** Ink Lab (Storybook for redact and dissolve), Asset Studio (posters and social on the ink grid).
+
+---
+
+## 8. Build and review log
+
+**2026-10-28, build.** Rust core built on the Linux dev box by six parallel agents plus integration, all test-first: `inker-core`, `inker-extract`, `inker-detect` with 14 IRS templates, `inker-packs`, `inker-pipeline`, `inker-mcp`, `inker-ipc`, `inker-agents`, `inker-host`, `inker-ffi`, and the `inker` CLI. Workspace: 457 tests green, clippy clean, PII check clean. The Swift shell (`app/`) is written with Swift Testing coverage of its pure logic but has never been compiled: this box has no Swift toolchain. First Mac build is Ben's next step; see `app/BUILD.md`.
+
+**Cold-handle spike (brief step 3): passed.** Claude Code called `resolve` on a bare `🐙/` handle in 12 of 12 runs, with and without a CLAUDE.md line. The server `instructions` alone suffice; `alwaysLoad` on `resolve` saves a round trip. `docs/spike-cold-handle.md`.
+
+**Security review (independent agent, probes on synthetic data) found four leak paths; all closed, test-first:**
+1. Form field values with no template mapping went to the agent unchanged. Now every field runs through every detector; unexplained leftovers are held.
+2. Handles carried real names, and in one probe an EIN. Default codename policy is now `TypeYear`; folder handles are `folder-NNNN`; under the org policy digits are stripped and only template-attributed orgs are used; codenames are out of logs.
+3. Only detected spans were replaced; repeats of an inked value in other spellings survived. Every page and field is now swept for every minted value.
+4. A template `keep` box shielded anything on its line from the fail-closed pass. Keep now covers only amount- and code-shaped tokens.
+Plus hardening: partial-overlap union, a lock file against a second writer, `write` rehydrates only tokens in the source's scope, redacting `Debug` impls, path-free ingest errors, 0700/0600 data files, zeroized keys, PDF-library panics and logs kept off stderr, outputs never reprocessed.
+
+**Detection correctness review (independent agent, probes on the IRS's own 2025 text layers) found ten issues; nine closed:** wrapped titles and labels (anchors and labels now whitespace-tolerant and scored on the title area), wrapped payer labels read as the payer, SSNs with dots, dashes and fullwidth digits, revision year read as tax year, 1099-MISC 2025 vs 2026 boxes, bank-statement noise (13 questions on 20 rows, now at most 2), all-zero ABA, Mir cards, an untemplated `tax-form` kind. **Still open at time of writing:** on the IRS layout (labels first, values after), a value no rule recognises (a bare person name, a short alphanumeric account code, a state ID, an org without a suffix) could pass through Ready. A third fix batch is holding such values on template pages with a per-form noise budget. Position-aware extraction (PDF coordinates) is the durable fix and belongs to `inker-extract` later.
+
+**Known limits going into the first Mac build:**
+- Vision OCR, PDFKit and the Keychain are implemented on the Swift side but unexercised; Linux uses fixture OCR and a file key store.
+- The GLiNER model pass compiles behind a feature flag and has never run against weights. Detection today is templates, rules and fail-closed only.
+- The index is plain SQLite (section 3.4).
+- The host serialises all core access behind one lock; processing a document blocks MCP reads for its duration.
