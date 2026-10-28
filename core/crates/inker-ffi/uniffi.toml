@@ -1,0 +1,9 @@
+# Read by uniffi-bindgen when generating the Swift bindings.
+# The Swift package has a Swift target `InkerCore` (the generated .swift file)
+# and a binary target `InkerCoreFFI` (the xcframework with the C header and
+# module map). These names must match app/Package.swift.
+[bindings.swift]
+module_name = "InkerCore"
+ffi_module_name = "InkerCoreFFI"
+ffi_module_filename = "InkerCoreFFI"
+generate_immutable_records = true
