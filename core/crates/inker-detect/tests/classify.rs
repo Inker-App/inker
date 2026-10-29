@@ -40,6 +40,35 @@ fn template_gives_kind_year_and_org() {
     assert_eq!(c.kind, DocKind("w2".into()));
     assert_eq!(c.year, Some(2025));
     assert_eq!(c.org.as_deref(), Some("Contoso Widgets LLC"));
+    assert_eq!(c.tag.as_deref(), Some("Taxes"), "the template's tag");
+}
+
+#[test]
+fn heuristic_kinds_carry_their_own_tags() {
+    let e = doc(&[(BANK, TextOrigin::TextLayer)]);
+    assert_eq!(
+        classify::classify(&e, None, &[]).tag.as_deref(),
+        Some("Banking")
+    );
+    let e = doc(&[(
+        "Closing Disclosure\nfinal loan terms",
+        TextOrigin::TextLayer,
+    )]);
+    assert_eq!(
+        classify::classify(&e, None, &[]).tag.as_deref(),
+        Some("Legal")
+    );
+    let e = doc(&[("Form 1099-SA OMB No. 1545-1517", TextOrigin::TextLayer)]);
+    assert_eq!(
+        classify::classify(&e, None, &[]).tag.as_deref(),
+        Some("Taxes")
+    );
+    for t in ["RECEIPT\nCoffee 4.50\nTotal 4.50", "nothing much"] {
+        let e = doc(&[(t, TextOrigin::TextLayer)]);
+        assert_eq!(classify::classify(&e, None, &[]).tag, None, "{t}");
+    }
+    let e = doc(&[("blurry", TextOrigin::Ocr)]);
+    assert_eq!(classify::classify(&e, None, &[]).tag, None);
 }
 
 const BANK: &str = "Northwind Bank\nStatement period: 01/01/2025 - 01/31/2025\nBeginning balance 1,200.00\nDeposits 400.00\nWithdrawals 150.00\nEnding balance 1,450.00\n";
@@ -205,6 +234,7 @@ fn debug_does_not_print_the_org() {
         kind: DocKind("w2".into()),
         year: Some(2025),
         org: Some("Contoso Widgets LLC".into()),
+        tag: Some("Taxes".into()),
     };
     let s = format!("{c:?}");
     assert!(!s.contains("Contoso"), "{s}");

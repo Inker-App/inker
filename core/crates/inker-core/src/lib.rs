@@ -14,6 +14,7 @@
 pub mod codename;
 pub mod error;
 pub mod facade;
+pub mod find;
 pub mod fsutil;
 pub mod index;
 pub mod ingest;

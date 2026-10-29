@@ -431,3 +431,50 @@ fn tax_pack_ships_its_boilerplate() {
         }
     }
 }
+
+#[test]
+fn manifest_category_is_optional() {
+    let with = MANIFEST.replace(
+        "version = \"0.0.1\"",
+        "version = \"0.0.1\"\ncategory = \"Banking\"",
+    );
+    let p = Pack::from_sources(&with, &[("demo", DEMO)]).unwrap();
+    assert_eq!(p.manifest.category.as_deref(), Some("Banking"));
+    let p = Pack::from_sources(MANIFEST, &[("demo", DEMO)]).unwrap();
+    assert_eq!(p.manifest.category, None);
+}
+
+#[test]
+fn builtin_tax_pack_is_in_the_taxes_category() {
+    // inker.sh reads this field from pack.toml to group the template count.
+    let set = PackSet::builtin().unwrap();
+    assert_eq!(set.packs[0].manifest.category.as_deref(), Some("Taxes"));
+}
+
+#[test]
+fn a_template_tag_defaults_to_the_pack_category() {
+    // No category, no tag on the form: nothing to count under a chip.
+    let p = Pack::from_sources(MANIFEST, &[("demo", DEMO)]).unwrap();
+    assert_eq!(p.forms[0].tag, None);
+    // The pack's category is the default tag.
+    let with = MANIFEST.replace(
+        "version = \"0.0.1\"",
+        "version = \"0.0.1\"\ncategory = \"Banking\"",
+    );
+    let p = Pack::from_sources(&with, &[("demo", DEMO)]).unwrap();
+    assert_eq!(p.forms[0].tag.as_deref(), Some("Banking"));
+    // A form's own tag wins.
+    let tagged = DEMO.replace("kind = \"demo\"", "kind = \"demo\"\ntag = \"Medical\"");
+    let p = Pack::from_sources(&with, &[("demo", &tagged)]).unwrap();
+    assert_eq!(p.forms[0].tag.as_deref(), Some("Medical"));
+    let t = FormTemplate::parse("forms/demo.toml", &tagged).unwrap();
+    assert_eq!(t.tag.as_deref(), Some("Medical"));
+}
+
+#[test]
+fn every_builtin_form_is_tagged_taxes() {
+    let set = PackSet::builtin().unwrap();
+    for t in &set.packs[0].forms {
+        assert_eq!(t.tag.as_deref(), Some("Taxes"), "{}", t.id);
+    }
+}

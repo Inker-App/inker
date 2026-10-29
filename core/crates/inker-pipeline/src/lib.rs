@@ -142,8 +142,14 @@ impl Pipeline {
         let (detections, class) = detector.detect(&extracted)?;
         tracing::info!(document = ?id, kind = %class.kind.as_str(), found = detections.len(), "detected");
 
-        self.core
-            .complete_processing(id, &extracted, &detections, class.kind, class.year)
+        self.core.complete_processing(
+            id,
+            &extracted,
+            &detections,
+            class.kind,
+            class.year,
+            class.tag.as_deref(),
+        )
     }
 }
 

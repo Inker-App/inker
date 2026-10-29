@@ -64,6 +64,16 @@ pub enum HandleStyle {
 pub const HANDLE_PREFIX_OCTOPUS: &str = "🐙/";
 pub const HANDLE_PREFIX_ASCII: &str = "ink/";
 
+impl HandleStyle {
+    /// `🐙/` or `ink/`.
+    pub fn prefix(self) -> &'static str {
+        match self {
+            HandleStyle::Octopus => HANDLE_PREFIX_OCTOPUS,
+            HandleStyle::Ascii => HANDLE_PREFIX_ASCII,
+        }
+    }
+}
+
 /// A reference to a document or folder, as pasted into an agent chat.
 ///
 /// Only the codename is stored. The prefix is presentation.
@@ -472,7 +482,8 @@ impl DocState {
     /// Queued -> Reading -> Inking -> NeedsAttention | Ready | Failed;
     /// NeedsAttention -> Inking (after an answer); Queued | Reading -> Failed;
     /// Failed -> Queued (retry); Reading | Inking -> Queued (recovery after
-    /// the process died mid-processing).
+    /// the process died mid-processing); Ready | NeedsAttention -> Queued
+    /// ("Ink again").
     pub fn can_transition_to(self, to: DocState) -> bool {
         use DocState::*;
         self == to
@@ -489,6 +500,8 @@ impl DocState {
                     | (Failed, Queued)
                     | (Reading, Queued)
                     | (Inking, Queued)
+                    | (Ready, Queued)
+                    | (NeedsAttention, Queued)
             )
     }
 }
@@ -521,6 +534,15 @@ pub struct DocumentRecord {
     pub updated_at: DateTime<Utc>,
     /// Short human status for the queue row ("reading the scan", "page 3 of 11").
     pub status_note: Option<String>,
+    /// The chip the document counts under ("Taxes", "Banking"), from its
+    /// template or kind. `None` shows under `All` only.
+    #[serde(default)]
+    pub tag: Option<String>,
+    /// The token of the employer, payer or lender a template attributed,
+    /// e.g. `[ORG_3]`. The popover reads the name back through the vault;
+    /// the index itself holds only the token.
+    #[serde(default)]
+    pub payer_token: Option<Token>,
 }
 
 /// A dropped folder. Children are documents whose `folder` is this id.
@@ -717,6 +739,9 @@ mod tests {
             // Recovery after a crash mid-processing.
             (Reading, Queued),
             (Inking, Queued),
+            // "Ink again" on the row menu.
+            (Ready, Queued),
+            (NeedsAttention, Queued),
         ];
         for (a, b) in legal {
             assert!(a.can_transition_to(b), "{a:?} -> {b:?}");
@@ -727,7 +752,7 @@ mod tests {
             (Reading, Ready),
             (NeedsAttention, Ready),
             (Ready, Inking),
-            (Ready, Queued),
+            (Ready, Reading),
             (Failed, Ready),
         ];
         for (a, b) in illegal {

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A ready row on hover, and its menu</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#E6E4DE}a:hover{color:#fff}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0 9px 12px;border-bottom:1px solid rgba(230,228,222,0.08)}
+.name{font-size:13px;color:#E6E4DE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sub{display:flex;align-items:center;gap:6px;font-size:11px;color:#8A8C8E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.h{font-family:'JetBrains Mono',monospace;font-size:11px;color:#E6E4DE}
+.copy{flex:none;height:26px;padding:0 10px;border:1px solid rgba(230,228,222,0.3);border-radius:6px;background:transparent;font:inherit;font-size:12px;color:#E6E4DE}
+.grp{display:flex;align-items:center;justify-content:space-between;padding:12px 0 6px;font-size:11px;font-weight:600;font-stretch:125%;letter-spacing:0.2em;color:#8A8C8E}
+.fold{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0 9px 12px;border-bottom:1px solid rgba(230,228,222,0.08)}
+</style>
+</helmet>
+<div style="width: 360px; height: 500px; box-sizing: border-box; display: flex; flex-direction: column; background: #0D0F10; color: #E6E4DE; font-family: 'Archivo', sans-serif; font-size: 13px; line-height: 1.4; border: 1px solid rgba(230,228,222,0.14); border-radius: 12px; overflow: hidden">
+  <div style="display: flex; align-items: center; justify-content: space-between; height: 48px; padding: 0 12px 0 16px; border-bottom: 1px solid rgba(230,228,222,0.14)">
+    <canvas data-ink="lock" role="img" aria-label="Inker" style="display: block; width: 100px; height: 20px"></canvas>
+    <div style="display: flex; align-items: center; gap: 2px">
+      <button type="button" aria-label="Open your private folder in Finder" title="Open ~/Private" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; background: transparent; color: #8A8C8E">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1.5 4.5A1.5 1.5 0 0 1 3 3h3.2l1.6 1.8H13a1.5 1.5 0 0 1 1.5 1.5v6A1.5 1.5 0 0 1 13 13.8H3a1.5 1.5 0 0 1-1.5-1.5v-7.8z"></path></svg>
+      </button>
+      <button type="button" aria-label="Settings" style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: none; background: transparent; color: #8A8C8E">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M2 4.5h12M2 11.5h12"></path><circle cx="6" cy="4.5" r="1.8" fill="#0D0F10"></circle><circle cx="10.5" cy="11.5" r="1.8" fill="#0D0F10"></circle></svg>
+      </button>
+    </div>
+  </div>
+
+  <div style="display: flex; gap: 8px; padding: 10px 16px 0">
+    <div style="flex: 1; display: flex; align-items: center; justify-content: center; height: 36px; border: 1px dashed rgba(230,228,222,0.3); border-radius: 8px; color: #8A8C8E; font-size: 12px">Drop more</div>
+    <label style="position: relative; flex: 1">
+      <span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">Find a document or handle</span>
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#8A8C8E" stroke-width="1.5" aria-hidden="true" style="position: absolute; left: 10px; top: 11px"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5L14 14"></path></svg>
+      <input type="search" placeholder="Find" style="width: 100%; box-sizing: border-box; height: 36px; padding: 0 10px 0 30px; border: 1px solid rgba(230,228,222,0.2); border-radius: 8px; background: #08090A; font: inherit; font-size: 12px; color: #E6E4DE">
+    </label>
+  </div>
+
+  <div style="flex: 1; overflow: hidden; padding: 0 16px; position: relative">
+    <div class="grp"><span>2025 · 14 FILES</span></div>
+    <div class="row" style="">
+      <div style="min-width: 0; display: flex; flex-direction: column; gap: 2px">
+        <div class="name">W2_AcmeRobotics_2025.pdf</div>
+        <div class="sub"><span class="h">🐙/w2-2025</span><span>·</span><span>W-2 · Acme Robotics · 6 inked</span></div>
+      </div>
+      <button type="button" class="copy">Copy</button>
+    </div>
+    <div class="row" style="margin: 0 -8px; padding: 9px 8px 9px 20px; background: rgba(230,228,222,0.04); border-radius: 8px; border-bottom-color: transparent">
+      <div style="min-width: 0; display: flex; flex-direction: column; gap: 2px">
+        <div class="name">w2-bluefin.pdf</div>
+        <div class="sub"><span class="h">🐙/w2-2025-2</span><span>·</span><span>W-2 · Bluefin Analytics · 6 inked</span></div>
+      </div>
+      <div style="display: flex; gap: 6px; flex: none">
+        <button type="button" class="copy">Copy</button>
+        <button type="button" aria-label="More" style="width: 26px; height: 26px; border: 1px solid rgba(230,228,222,0.3); border-radius: 6px; background: transparent; color: #E6E4DE; font-size: 14px; line-height: 1">···</button>
+      </div>
+    </div>
+    <div role="menu" style="margin: 4px 0 0 auto; width: 200px; padding: 6px; background: #08090A; border: 1px solid rgba(230,228,222,0.2); border-radius: 8px; font-size: 12px">
+      <div role="menuitem" style="padding: 7px 10px; border-radius: 5px; background: rgba(230,228,222,0.08)">Copy 🐙/w2-2025-2</div>
+      <div role="menuitem" style="padding: 7px 10px; border-radius: 5px; color: #C9C7C1">Copy ink/w2-2025-2</div>
+      <div role="menuitem" style="padding: 7px 10px; border-radius: 5px; color: #C9C7C1">Show in Finder</div>
+      <div role="menuitem" style="padding: 7px 10px; border-radius: 5px; color: #C9C7C1">Ink again</div>
+      <div style="height: 1px; margin: 4px 4px; background: rgba(230,228,222,0.14)"></div>
+      <div role="menuitem" style="padding: 7px 10px; border-radius: 5px; color: #C9C7C1">Forget this file</div>
+    </div>
+    <div class="row" style="">
+      <div style="min-width: 0; display: flex; flex-direction: column; gap: 2px">
+        <div class="name">IMG_4471.heic</div>
+        <div class="sub"><span class="h">🐙/1099-int-2025</span><span>·</span><span>1099-INT · Harbor Street CU · 4 inked</span></div>
+      </div>
+      <button type="button" class="copy">Copy</button>
+    </div>
+    <div style="padding: 14px 12px 0; font-size: 12px; color: #8A8C8E; line-height: 1.5">Copy stays the one visible action. Everything else lives behind ··· on hover, or a right-click anywhere on the row. "Forget this file" removes it from INKER and leaves the original in place.</div>
+  </div>
+  <div style="display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-top: 1px solid rgba(230,228,222,0.14); font-size: 11px; color: #8A8C8E">
+    <span>Claude read</span><button type="button" style="height: 22px; padding: 0 6px; border: none; border-radius: 4px; background: rgba(230,228,222,0.08); font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #E6E4DE">🐙/w2-2025-2</button><span>· 2m</span>
+    <span style="margin-left: auto">30 files · MCP running</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":360,"height":500}}'>
+var PAPER='#E6E4DE';
+function ss(a,b,x){x=(x-a)/(b-a);x=x<0?0:x>1?1:x;return x*x*(3-2*x);}
+function setup(el,W,H){var d=window.devicePixelRatio||1;el.width=Math.round(W*d);el.height=Math.round(H*d);var ctx=el.getContext('2d');ctx.setTransform(d,0,0,d,0,0);return ctx;}
+function loop(fn){var last=performance.now(),id,on=true;function f(t){if(!on)return;var dt=Math.min(0.033,Math.max(0,(t-last)/1000));last=t;fn(dt,t/1000);id=requestAnimationFrame(f);}id=requestAnimationFrame(f);return function(){on=false;cancelAnimationFrame(id);};}
+function find(sel,cb){var tries=0;(function look(){var el=document.querySelector(sel);if(el)cb(el);else if(tries++<240)requestAnimationFrame(look);})();}
+function bits(rows){var h=rows.length,w=0,x,y;for(y=0;y<h;y++)w=Math.max(w,rows[y].length);var a=new Float32Array(w*h);for(y=0;y<h;y++)for(x=0;x<w;x++)a[y*w+x]=rows[y].charAt(x)==='#'?1:0;return{w:w,h:h,a:a};}
+function field(b,cell,o){o=o||{};var n=b.w*b.h;return{w:b.w,h:b.h,base:b.a,v:new Float32Array(b.a),cell:cell,gap:cell*0.1,ox:o.ox||0,oy:o.oy||0,dx:new Float32Array(n),dy:new Float32Array(n)};}
+function poly(ctx,p){var s=0,i,n=p.length;for(i=0;i<n;i++){var q=p[(i+1)%n];s+=p[i][0]*q[1]-q[0]*p[i][1];}if(s<0)p.reverse();ctx.moveTo(p[0][0],p[0][1]);for(i=1;i<n;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.closePath();}
+function ctr(F,i){var c=F.cell;return[F.ox+(i%F.w)*c+c/2+F.dx[i],F.oy+((i/F.w)|0)*c+c/2+F.dy[i]];}
+function bridge(ctx,F,i,j,R){var rb=R*ss(0.55,0.9,Math.min(F.v[i],F.v[j]));if(rb<=0)return;var a=ctr(F,i),b=ctr(F,j),ex=b[0]-a[0],ey=b[1]-a[1],L=Math.hypot(ex,ey);if(L<0.001||L>F.cell*1.6)return;var nx=-ey/L*rb,ny=ex/L*rb;poly(ctx,[[a[0]+nx,a[1]+ny],[b[0]+nx,b[1]+ny],[b[0]-nx,b[1]-ny],[a[0]-nx,a[1]-ny]]);}
+function drawInk(ctx,F,col,diag){var w=F.w,h=F.h,R=F.cell/2-F.gap/2,x,y,i;ctx.beginPath();for(y=0;y<h;y++)for(x=0;x<w;x++){i=y*w+x;var v=F.v[i];if(v<0.02)continue;var c=ctr(F,i),r=R*Math.min(1,v);ctx.moveTo(c[0]+r,c[1]);ctx.arc(c[0],c[1],r,0,6.2832);var jr=x<w-1&&F.v[i+1]>0.02,jd=y<h-1&&F.v[i+w]>0.02;if(jr)bridge(ctx,F,i,i+1,R);if(jd)bridge(ctx,F,i,i+w,R);if(diag&&y<h-1){if(x<w-1&&F.base[i+w+1]>0&&!F.base[i+1]&&!F.base[i+w])bridge(ctx,F,i,i+w+1,R);if(x>0&&F.base[i+w-1]>0&&!F.base[i-1]&&!F.base[i+w])bridge(ctx,F,i,i+w-1,R);}if(jr&&jd&&Math.min(v,F.v[i+1],F.v[i+w],F.v[i+w+1])>0.88)poly(ctx,[ctr(F,i),ctr(F,i+1),ctr(F,i+w+1),ctr(F,i+w)]);}ctx.fillStyle=col;ctx.fill();}
+var LET={I:['###','.#.','.#.','.#.','.#.','.#.','###'],N:['#...#','##..#','#.#.#','#.#.#','#..##','#...#','#...#'],K:['#...#','#..#.','#.#..','##...','#.#..','#..#.','#...#'],E:['#####','#....','#....','####.','#....','#....','#####'],R:['####.','#...#','#...#','####.','#.#..','#..#.','#...#']};
+function word(s){var rows=[];for(var y=0;y<7;y++){var r='';for(var j=0;j<s.length;j++){if(j)r+='.';r+=LET[s.charAt(j)][y];}rows.push(r);}return bits(rows);}
+var MARK=['.#####.','#######','##.#.##','#######','#.#.#.#','#.#.#.#','.#.#.#.'];
+function startLock(el){if(el.__inkStop)el.__inkStop();var W=100,H=20,ctx=setup(el,W,H),c=2.6,m=field(bits(MARK),c,{ox:0,oy:1}),wd=field(word('INKER'),c,{ox:28,oy:1});
+  var stop=loop(function(dt,t){for(var i=0;i<m.v.length;i++){var y=(i/m.w)|0;m.v[i]=m.base[i]*(0.9+0.1*Math.sin(t*1.6-y*0.6));}ctx.clearRect(0,0,W,H);drawInk(ctx,m,PAPER,false);drawInk(ctx,wd,PAPER,true);});el.__inkStop=stop;return stop;}
+class Component extends DCLogic {
+  componentDidMount(){var self=this;find('canvas[data-ink="lock"]',function(el){self.s1=startLock(el);});}
+  componentWillUnmount(){if(this.s1)this.s1();}
+  renderVals(){return{};}
+}
+</script>
+</body>
+</html>

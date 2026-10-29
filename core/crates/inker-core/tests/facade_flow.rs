@@ -91,6 +91,7 @@ fn whole_facade_flow_and_stable_tokens_across_reopen() {
                 &detections(),
                 DocKind("w2".into()),
                 Some(2025),
+                None,
             )
             .unwrap();
         assert_eq!(state, DocState::Ready);
@@ -192,6 +193,7 @@ fn whole_facade_flow_and_stable_tokens_across_reopen() {
         &ex,
         &[mk("000123456"), mk("666-00-0001")],
         DocKind("1099-int".into()),
+        None,
         None,
     )
     .unwrap();

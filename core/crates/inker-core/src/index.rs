@@ -23,11 +23,11 @@ use uuid::Uuid;
 use crate::{
     AgentRead, Codename, Detection, DocKind, DocState, DocumentId, DocumentRecord, Error, FolderId,
     FolderRecord, FolderSummary, FormField, Handle, KindTreatment, QuestionId, ResolvedPage,
-    Result, ReviewAnswer, ReviewQuestion, TokenKind, TokenRole,
+    Result, ReviewAnswer, ReviewQuestion, Token, TokenKind, TokenRole,
 };
 
 /// Current schema version.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 const MIGRATIONS: &[&str] = &[
     // 1
@@ -106,10 +106,16 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE review_questions ADD COLUMN page_count INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE review_questions ADD COLUMN context BLOB;
     "#,
+    // 3: finding documents. The tag chip and the payer's token (never the
+    // payer's name: that stays in the vault).
+    r#"
+    ALTER TABLE documents ADD COLUMN tag TEXT;
+    ALTER TABLE documents ADD COLUMN payer_token TEXT;
+    "#,
 ];
 
 const DOC_COLS: &str = "id, codename, path, original_name, kind, year, state, inked, folder_id, ingest, \
-                        created_at, updated_at, status_note";
+                        created_at, updated_at, status_note, tag, payer_token";
 const FOLDER_COLS: &str = "id, codename, path, created_at";
 const Q_COLS: &str =
     "id, doc_id, page, kind, prompt, answer, created_at, answered_at, value_length, page_count";
@@ -199,7 +205,43 @@ fn doc_from_row(row: &Row<'_>) -> rusqlite::Result<DocumentRecord> {
         created_at: parse_ts(&s(10)?).map_err(|e| conv(10, e))?,
         updated_at: parse_ts(&s(11)?).map_err(|e| conv(11, e))?,
         status_note: row.get(12)?,
+        tag: row.get(13)?,
+        payer_token: row
+            .get::<_, Option<String>>(14)?
+            .and_then(|t| parse_token(&t)),
     })
+}
+
+/// `[ORG_3]` back to a token; `None` for anything else.
+fn parse_token(s: &str) -> Option<Token> {
+    let (range, label, index) = crate::vault::find_tokens(s).into_iter().next()?;
+    if range != (0..s.len()) {
+        return None;
+    }
+    Some(Token {
+        kind: token_kind_from_label(&label),
+        index,
+    })
+}
+
+/// Inverse of [`TokenKind::label`] for the built-in kinds; anything else is
+/// a custom kind with that label.
+fn token_kind_from_label(label: &str) -> TokenKind {
+    match label {
+        "SSN" => TokenKind::Ssn,
+        "ITIN" => TokenKind::Itin,
+        "EIN" => TokenKind::Ein,
+        "ACCOUNT" => TokenKind::Account,
+        "ROUTING" => TokenKind::Routing,
+        "CARD" => TokenKind::Card,
+        "PERSON" => TokenKind::Person,
+        "ORG" => TokenKind::Org,
+        "ADDRESS" => TokenKind::Address,
+        "EMAIL" => TokenKind::Email,
+        "PHONE" => TokenKind::Phone,
+        "GOVID" => TokenKind::GovId,
+        other => TokenKind::Custom(other.to_string()),
+    }
 }
 
 fn folder_from_row(row: &Row<'_>) -> rusqlite::Result<FolderRecord> {
@@ -330,7 +372,7 @@ impl Index {
     /// [`Index::set_codename`] will replace once the document is classified.
     pub fn insert_document(&self, r: &DocumentRecord, provisional: bool) -> Result<()> {
         self.conn().execute(
-            &format!("INSERT INTO documents ({DOC_COLS}, provisional) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14)"),
+            &format!("INSERT INTO documents ({DOC_COLS}, provisional) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)"),
             params![
                 r.id.0.to_string(),
                 r.codename.as_str(),
@@ -345,6 +387,8 @@ impl Index {
                 ts(r.created_at),
                 ts(r.updated_at),
                 r.status_note,
+                r.tag,
+                r.payer_token.as_ref().map(ToString::to_string),
                 provisional,
             ],
         )?;
@@ -360,7 +404,7 @@ impl Index {
         check_transition(current.state, r.state)?;
         self.conn().execute(
             "UPDATE documents SET codename=?2, path=?3, original_name=?4, kind=?5, year=?6, state=?7, inked=?8, \
-             folder_id=?9, ingest=?10, updated_at=?11, status_note=?12 WHERE id=?1",
+             folder_id=?9, ingest=?10, updated_at=?11, status_note=?12, tag=?13, payer_token=?14 WHERE id=?1",
             params![
                 r.id.0.to_string(),
                 r.codename.as_str(),
@@ -374,6 +418,8 @@ impl Index {
                 enum_str(&r.ingest)?,
                 ts(Utc::now()),
                 r.status_note,
+                r.tag,
+                r.payer_token.as_ref().map(ToString::to_string),
             ],
         )?;
         Ok(())
@@ -811,6 +857,82 @@ impl Index {
         Ok(rows)
     }
 
+    /// The most recent read of one codename, if any.
+    pub fn last_read(&self, c: &Codename) -> Result<Option<AgentRead>> {
+        let conn = self.conn();
+        let mut st = conn.prepare(
+            "SELECT agent, codename, at FROM agent_reads WHERE codename=?1 ORDER BY id DESC LIMIT 1",
+        )?;
+        let row = st
+            .query_row([c.as_str()], |r| {
+                let code: String = r.get(1)?;
+                let at: String = r.get(2)?;
+                Ok(AgentRead {
+                    agent: r.get(0)?,
+                    handle: Handle::new(codename(&code).map_err(|e| conv(1, e))?),
+                    at: parse_ts(&at).map_err(|e| conv(2, e))?,
+                })
+            })
+            .optional()?;
+        Ok(row)
+    }
+
+    /// Documents whose tokenized text contains `needle` (case-insensitive
+    /// for ASCII; the caller confirms the hit on the returned text), with the
+    /// first matching page's text. Never a real value: pages hold tokens.
+    pub fn search_pages(&self, needle: &str) -> Result<Vec<(DocumentId, String)>> {
+        let pattern = format!(
+            "%{}%",
+            needle
+                .replace('\\', "\\\\")
+                .replace('%', "\\%")
+                .replace('_', "\\_")
+        );
+        let conn = self.conn();
+        let mut st = conn.prepare(
+            "SELECT doc_id, MIN(page), text FROM pages WHERE text LIKE ?1 ESCAPE '\\' GROUP BY doc_id",
+        )?;
+        let rows = st
+            .query_map([pattern], |r| {
+                let id: String = r.get(0)?;
+                let text: String = r.get(2)?;
+                Ok((DocumentId(uuid(&id).map_err(|e| conv(0, e))?), text))
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
+    /// Remove a document and everything derived from it (pages, detections,
+    /// questions, sealed source, output link). The file is not touched; the
+    /// vault keeps its tokens, which other documents may share.
+    pub fn delete_document(&self, id: DocumentId) -> Result<()> {
+        let n = self
+            .conn()
+            .execute("DELETE FROM documents WHERE id=?1", [id.0.to_string()])?;
+        if n == 0 {
+            return Err(Error::UnknownHandle(id.0.to_string()));
+        }
+        Ok(())
+    }
+
+    /// Remove a folder record. Its children must be deleted first.
+    pub fn delete_folder(&self, id: FolderId) -> Result<()> {
+        let conn = self.conn();
+        let children: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM documents WHERE folder_id=?1",
+            [id.0.to_string()],
+            |r| r.get(0),
+        )?;
+        if children > 0 {
+            return Err(Error::Index("folder still has documents".into()));
+        }
+        let n = conn.execute("DELETE FROM folders WHERE id=?1", [id.0.to_string()])?;
+        if n == 0 {
+            return Err(Error::UnknownHandle(id.0.to_string()));
+        }
+        Ok(())
+    }
+
     /// Mark `output` as written by an agent from the document or folder `source`.
     pub fn record_output(&self, output: DocumentId, source: &Codename) -> Result<()> {
         self.conn().execute(
@@ -865,6 +987,8 @@ mod tests {
             created_at: Utc::now(),
             updated_at: Utc::now(),
             status_note: None,
+            tag: None,
+            payer_token: None,
         }
     }
 
@@ -913,7 +1037,7 @@ mod tests {
             conn.execute_batch(MIGRATIONS[0]).unwrap();
         }
         let ix = Index::open(&p).unwrap();
-        assert_eq!(ix.schema_version().unwrap(), 2);
+        assert_eq!(ix.schema_version().unwrap(), SCHEMA_VERSION);
         let r = doc("a", None);
         ix.insert_document(&r, false).unwrap();
         let q = ix
@@ -1179,5 +1303,122 @@ mod tests {
     fn debug_is_safe() {
         let ix = Index::open_in_memory().unwrap();
         assert!(format!("{ix:?}").starts_with("Index"));
+    }
+
+    #[test]
+    fn tag_and_payer_token_round_trip_and_default_to_none() {
+        let ix = Index::open_in_memory().unwrap();
+        let mut r = doc("w2-2025", None);
+        r.tag = Some("Taxes".into());
+        r.payer_token = Some(Token {
+            kind: TokenKind::Org,
+            index: 3,
+        });
+        ix.insert_document(&r, false).unwrap();
+        let back = ix.document(r.id).unwrap().unwrap();
+        assert_eq!(back.tag.as_deref(), Some("Taxes"));
+        assert_eq!(
+            back.payer_token
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("[ORG_3]")
+        );
+        let mut r2 = back.clone();
+        r2.tag = None;
+        r2.payer_token = None;
+        ix.update_document(&r2).unwrap();
+        let back = ix.document(r.id).unwrap().unwrap();
+        assert_eq!(back.tag, None);
+        assert_eq!(back.payer_token, None);
+        assert_eq!(parse_token("[ORG_3]").map(|t| t.index), Some(3));
+        assert_eq!(parse_token("x [ORG_3]"), None);
+        assert_eq!(parse_token("ORG_3"), None);
+        assert_eq!(
+            parse_token("[CONTROL_NUMBER_2]"),
+            Some(Token {
+                kind: TokenKind::Custom("CONTROL_NUMBER".into()),
+                index: 2
+            })
+        );
+    }
+
+    #[test]
+    fn last_read_is_per_codename_and_newest() {
+        let ix = Index::open_in_memory().unwrap();
+        let a = Codename::parse("w2-2025").unwrap();
+        let b = Codename::parse("w2-2025-2").unwrap();
+        assert!(ix.last_read(&a).unwrap().is_none());
+        ix.record_agent_read("Claude", &a).unwrap();
+        ix.record_agent_read("Claude Code", &b).unwrap();
+        ix.record_agent_read("ChatGPT", &a).unwrap();
+        assert_eq!(ix.last_read(&a).unwrap().unwrap().agent, "ChatGPT");
+        assert_eq!(ix.last_read(&b).unwrap().unwrap().agent, "Claude Code");
+    }
+
+    #[test]
+    fn search_pages_finds_tokenized_text_and_escapes_like_wildcards() {
+        let ix = Index::open_in_memory().unwrap();
+        let a = doc("1098-2025", None);
+        let b = doc("w2-2025", None);
+        ix.insert_document(&a, false).unwrap();
+        ix.insert_document(&b, false).unwrap();
+        let page = |n, t: &str| ResolvedPage {
+            page: n,
+            text: t.into(),
+        };
+        ix.store_pages(
+            a.id,
+            &[
+                page(1, "Form 1098"),
+                page(2, "Mortgage Interest Statement [PERSON_1]"),
+            ],
+        )
+        .unwrap();
+        ix.store_pages(b.id, &[page(1, "Wage and Tax Statement 100% [SSN_1]")])
+            .unwrap();
+        let hits = ix.search_pages("mortgage interest").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].0, a.id);
+        assert!(hits[0].1.contains("Mortgage Interest"));
+        assert_eq!(ix.search_pages("100%").unwrap().len(), 1);
+        assert_eq!(
+            ix.search_pages("10_").unwrap().len(),
+            0,
+            "underscore is literal"
+        );
+        assert_eq!(ix.search_pages("zzz").unwrap().len(), 0);
+    }
+
+    #[test]
+    fn delete_document_cascades_and_delete_folder_needs_an_empty_folder() {
+        let ix = Index::open_in_memory().unwrap();
+        let f = FolderRecord {
+            id: FolderId::new(),
+            codename: Codename::parse("folder-0412").unwrap(),
+            path: Utf8PathBuf::from("/p/Taxes 2025"),
+            created_at: Utc::now(),
+        };
+        ix.insert_folder(&f).unwrap();
+        let r = doc("w2-2025", Some(f.id));
+        ix.insert_document(&r, false).unwrap();
+        ix.store_pages(
+            r.id,
+            &[ResolvedPage {
+                page: 1,
+                text: "[SSN_1]".into(),
+            }],
+        )
+        .unwrap();
+        ix.add_question(r.id, 0, 1, &TokenKind::Account, None)
+            .unwrap();
+        assert!(ix.delete_folder(f.id).is_err(), "still has a child");
+        ix.delete_document(r.id).unwrap();
+        assert!(ix.document(r.id).unwrap().is_none());
+        assert!(ix.pages(r.id).unwrap().is_empty());
+        assert!(ix.questions(Some(r.id), true).unwrap().is_empty());
+        assert!(ix.delete_document(r.id).is_err(), "gone");
+        ix.delete_folder(f.id).unwrap();
+        assert!(ix.folder(f.id).unwrap().is_none());
     }
 }

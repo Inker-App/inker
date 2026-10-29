@@ -13,6 +13,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use chrono::Utc;
 
 use crate::codename::{self, CodenamePolicy};
+use crate::find::{self, Board, DocDetails, DocView, Match, MatchField};
 use crate::index::{DerivedData, Index};
 use crate::peek;
 use crate::ports::{HostPaths, KeyStore};
@@ -408,6 +409,8 @@ impl Core {
                     created_at: now,
                     updated_at: now,
                     status_note: None,
+                    tag: None,
+                    payer_token: None,
                 };
                 self.index.insert_document(&rec, false)?;
                 self.index.record_output(rec.id, &source_code)?;
@@ -640,6 +643,8 @@ impl Core {
             created_at: now,
             updated_at: now,
             status_note: None,
+            tag: None,
+            payer_token: None,
         };
         self.index.insert_document(&rec, true)?;
         Ok(Some(id))
@@ -674,6 +679,7 @@ impl Core {
         detections: &[Detection],
         kind: DocKind,
         year: Option<u16>,
+        tag: Option<&str>,
     ) -> Result<DocState> {
         let mut rec = self.document(id)?;
         if rec.state == DocState::Queued {
@@ -695,12 +701,22 @@ impl Core {
         }
         rec.kind = kind;
         rec.year = year;
+        rec.tag = tag.map(str::to_string);
         self.index.update_document(&rec)?;
 
         if let Err(e) = self.ink(&rec, extracted, detections) {
             self.index
                 .set_state(id, DocState::Failed, Some("could not ink this file"))?;
             return Err(e);
+        }
+        // The payer's token, now that tokenizing has minted it. The name
+        // itself stays in the vault.
+        let payer_token = naming_org(extracted, detections)
+            .and_then(|org| self.vault.lookup(&TokenKind::Org, &org));
+        let mut current = self.document(id)?;
+        if current.payer_token != payer_token {
+            current.payer_token = payer_token;
+            self.index.update_document(&current)?;
         }
 
         self.index.clear_questions(id)?;
@@ -734,6 +750,182 @@ impl Core {
         self.index.set_state(id, DocState::NeedsAttention, None)?;
         tracing::info!(doc = %id.0, questions = review.len(), "needs attention");
         Ok(DocState::NeedsAttention)
+    }
+
+    // --- finding documents (the popover's board, Find and the row menu) ---
+
+    /// A document as the board shows it. The payer is read back through the
+    /// vault: the one real value that reaches the popover, and only there.
+    fn doc_view(&self, rec: DocumentRecord, folders: &[FolderRecord]) -> DocView {
+        let payer = rec.payer_token.as_ref().and_then(|t| {
+            let token = t.to_string();
+            let name = self.vault.rehydrate(&token);
+            (name != token).then_some(name)
+        });
+        let folder_name = rec
+            .folder
+            .and_then(|id| folders.iter().find(|f| f.id == id))
+            .map(find::folder_name);
+        DocView {
+            record: rec,
+            payer,
+            folder_name,
+        }
+    }
+
+    fn doc_views(&self) -> Result<(Vec<DocView>, Vec<FolderRecord>)> {
+        let folders = self.index.list_folders()?;
+        let docs = self
+            .index
+            .list_documents()?
+            .into_iter()
+            .map(|r| self.doc_view(r, &folders))
+            .collect();
+        Ok((docs, folders))
+    }
+
+    /// The ready board: every document grouped by year, newest first,
+    /// dropped folders as sub-groups, `UNDATED` last. `tag` keeps only the
+    /// documents under that chip; the chip counts always cover everything.
+    pub fn board(&self, tag: Option<&str>) -> Result<Board> {
+        let (docs, folders) = self.doc_views()?;
+        let all = find::group(docs.clone(), &folders);
+        if tag.is_none() {
+            return Ok(all);
+        }
+        let mut filtered = find::group(find::with_tag(docs, tag), &folders);
+        filtered.tags = all.tags;
+        filtered.total = all.total;
+        Ok(filtered)
+    }
+
+    /// Find: one match per document, best field first, then newest drop.
+    /// A handle query matches with or without its prefix; the document's
+    /// tokenized text is searched last and yields a snippet.
+    pub fn find(&self, query: &str) -> Result<Vec<Match>> {
+        let q = find::normalize_query(query);
+        if q.is_empty() {
+            return Ok(Vec::new());
+        }
+        let (docs, _) = self.doc_views()?;
+        let mut matches = Vec::new();
+        let mut rest = Vec::new();
+        for d in docs {
+            let label = find::kind_label(&d.record.kind);
+            match find::match_fields(&d, &label, &q) {
+                Some(m) => matches.push(m),
+                None => rest.push(d),
+            }
+        }
+        if !rest.is_empty() {
+            let hits = self.index.search_pages(&q)?;
+            for d in rest {
+                let Some((_, text)) = hits.iter().find(|(id, _)| *id == d.record.id) else {
+                    continue;
+                };
+                if let Some((snippet, matched)) = find::text_snippet(text, &q) {
+                    matches.push(Match {
+                        doc: d,
+                        field: MatchField::Text,
+                        matched,
+                        snippet: Some(snippet),
+                        exact_handle: false,
+                    });
+                }
+            }
+        }
+        Ok(find::rank(matches))
+    }
+
+    /// The expanded row for one document.
+    pub fn details(&self, id: DocumentId) -> Result<DocDetails> {
+        let rec = self.document(id)?;
+        let location = rec
+            .path
+            .parent()
+            .and_then(|p| p.strip_prefix(&self.paths.private_folder).ok())
+            .map(|rel| {
+                if rel.as_str().is_empty() {
+                    String::new()
+                } else {
+                    format!("{rel}/")
+                }
+            })
+            .unwrap_or_default();
+        let dropped_with = match rec.folder {
+            Some(f) => u32::try_from(self.index.folder_children(f)?.len().saturating_sub(1))
+                .unwrap_or(u32::MAX),
+            None => 0,
+        };
+        Ok(DocDetails {
+            location,
+            dropped_at: rec.created_at,
+            dropped_with,
+            last_read: self.index.last_read(&rec.codename)?,
+        })
+    }
+
+    /// Forget a document: it leaves the index and with it the scope of any
+    /// `write`; the file stays where it is. A folder left empty goes too.
+    pub fn forget(&self, id: DocumentId) -> Result<()> {
+        let rec = self.document(id)?;
+        self.index.delete_document(id)?;
+        if let Some(f) = rec.folder
+            && self.index.folder_children(f)?.is_empty()
+        {
+            self.index.delete_folder(f)?;
+        }
+        tracing::info!(doc = %id.0, "forgotten");
+        Ok(())
+    }
+
+    /// Forget a dropped folder and every document in it.
+    pub fn forget_folder(&self, id: FolderId) -> Result<()> {
+        for child in self.index.folder_children(id)? {
+            self.index.delete_document(child.id)?;
+        }
+        self.index.delete_folder(id)?;
+        tracing::info!(folder = %id.0, "forgotten");
+        Ok(())
+    }
+
+    /// Queue a finished document to be read and inked again, keeping its
+    /// handle. Open questions are dropped; the caller runs the pipeline.
+    pub fn ink_again(&self, id: DocumentId) -> Result<()> {
+        let rec = self.document(id)?;
+        if rec.kind.as_str() == OUTPUT_KIND {
+            return Err(Error::Refused("agent outputs are not processed".into()));
+        }
+        if !matches!(
+            rec.state,
+            DocState::Ready | DocState::Failed | DocState::NeedsAttention
+        ) {
+            return Err(Error::Refused("this file is still being inked".into()));
+        }
+        self.index.clear_questions(id)?;
+        self.index.delete_sealed_source(id)?;
+        self.index.set_state(id, DocState::Queued, None)?;
+        tracing::info!(doc = %id.0, "queued again");
+        Ok(())
+    }
+
+    /// `ink_again` for every finished document in a folder. Returns the ids
+    /// queued, oldest drop first, for the caller to process.
+    pub fn ink_again_folder(&self, id: FolderId) -> Result<Vec<DocumentId>> {
+        let mut ids = Vec::new();
+        for child in self.index.folder_children(id)? {
+            if child.kind.as_str() == OUTPUT_KIND
+                || !matches!(
+                    child.state,
+                    DocState::Ready | DocState::Failed | DocState::NeedsAttention
+                )
+            {
+                continue;
+            }
+            self.ink_again(child.id)?;
+            ids.push(child.id);
+        }
+        Ok(ids)
     }
 
     /// Tokenize and store pages, derived data, detections and the inked count.
@@ -844,6 +1036,7 @@ mod tests {
             &[d(text, "Placeholder Bank", TokenKind::Org, false)],
             DocKind("1099-int".into()),
             Some(2025),
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -897,6 +1090,7 @@ mod tests {
                 &dets,
                 DocKind("statement".into()),
                 Some(2025),
+                None,
             )
             .unwrap();
         assert_eq!(st, DocState::NeedsAttention);
@@ -968,6 +1162,7 @@ mod tests {
                 &[det],
                 DocKind("statement".into()),
                 None,
+                None,
             )
             .unwrap();
         let qs = f.core.pending_reviews().unwrap();
@@ -1021,7 +1216,14 @@ mod tests {
             d(text, "shipped", TokenKind::Custom("x".into()), true),
         ];
         f.core
-            .complete_processing(ids[0], &ex(text), &dets, DocKind("receipt".into()), None)
+            .complete_processing(
+                ids[0],
+                &ex(text),
+                &dets,
+                DocKind("receipt".into()),
+                None,
+                None,
+            )
             .unwrap();
         let qs = f.core.pending_reviews().unwrap();
         assert_eq!(qs.len(), 2);
@@ -1056,7 +1258,7 @@ mod tests {
         bad.span = Span { start: 0, end: 50 };
         assert!(
             f.core
-                .complete_processing(ids[0], &ex("abc"), &[bad], DocKind::unknown(), None)
+                .complete_processing(ids[0], &ex("abc"), &[bad], DocKind::unknown(), None, None)
                 .is_err()
         );
         let rec = f.core.document(ids[0]).unwrap();
@@ -1080,12 +1282,12 @@ mod tests {
             .unwrap();
         assert_eq!(r.status_note.as_deref(), Some("reading the scan"));
         f.core
-            .complete_processing(ids[0], &ex("abc"), &[], DocKind::unknown(), None)
+            .complete_processing(ids[0], &ex("abc"), &[], DocKind::unknown(), None, None)
             .unwrap();
         // Ready documents cannot be completed again.
         assert!(
             f.core
-                .complete_processing(ids[0], &ex("abc"), &[], DocKind::unknown(), None)
+                .complete_processing(ids[0], &ex("abc"), &[], DocKind::unknown(), None, None)
                 .is_err()
         );
         assert!(matches!(
@@ -1107,7 +1309,14 @@ mod tests {
             .unwrap();
         assert_eq!(ids.len(), 2);
         f.core
-            .complete_processing(ids[0], &ex("a"), &[], DocKind("w2".into()), Some(2025))
+            .complete_processing(
+                ids[0],
+                &ex("a"),
+                &[],
+                DocKind("w2".into()),
+                Some(2025),
+                None,
+            )
             .unwrap();
 
         let list = f.core.list().unwrap();
@@ -1172,7 +1381,14 @@ mod tests {
             .begin_ingest(&[drop_file(&f, "w2.txt", "abc")], IngestMode::Move)
             .unwrap();
         f.core
-            .complete_processing(ids[0], &ex("abc"), &[], DocKind("w2".into()), Some(2024))
+            .complete_processing(
+                ids[0],
+                &ex("abc"),
+                &[],
+                DocKind("w2".into()),
+                Some(2024),
+                None,
+            )
             .unwrap();
         let handle = h("w2-2024");
         let a = f.core.write(&handle, "sum.md", "one").unwrap();
@@ -1217,8 +1433,15 @@ mod tests {
         let ids = core
             .begin_ingest(&[drop_file_root(&f.root, name, text)], IngestMode::Move)
             .unwrap();
-        core.complete_processing(ids[0], &ex(text), dets, DocKind(kind.into()), Some(2025))
-            .unwrap();
+        core.complete_processing(
+            ids[0],
+            &ex(text),
+            dets,
+            DocKind(kind.into()),
+            Some(2025),
+            None,
+        )
+        .unwrap();
         core.document(ids[0]).unwrap().codename.to_string()
     }
 
@@ -1365,7 +1588,14 @@ mod tests {
                 d(text, "000-12-3456", TokenKind::Ssn, false),
             ];
             f.core
-                .complete_processing(ids[0], &ex(text), &dets, DocKind("w2".into()), Some(2025))
+                .complete_processing(
+                    ids[0],
+                    &ex(text),
+                    &dets,
+                    DocKind("w2".into()),
+                    Some(2025),
+                    None,
+                )
                 .unwrap();
             let q = f.core.pending_reviews().unwrap();
             f.core.answer_review(q[0].id, ReviewAnswer::InkIt).unwrap();
@@ -1486,6 +1716,7 @@ mod tests {
                 &[d(a, "000-12-3456", TokenKind::Ssn, false)],
                 DocKind("w2".into()),
                 Some(2025),
+                None,
             )
             .unwrap();
         let b = "SSN 666-12-3456";
@@ -1536,5 +1767,384 @@ mod tests {
             Err(Error::UnknownHandle(_))
         ));
         assert!(f.core.recent_reads(3).unwrap().is_empty());
+    }
+
+    // --- finding documents ---------------------------------------------
+
+    /// A W-2 whose employer box names Acme, dropped loose.
+    fn w2(f: &Fx, name: &str, year: u16, tag: Option<&str>) -> DocumentId {
+        let text =
+            format!("Wage and Tax Statement {year}\nEmployer Acme Robotics\nSSN 000-12-3456");
+        let ids = f
+            .core
+            .begin_ingest(&[drop_file_root(&f.root, name, &text)], IngestMode::Move)
+            .unwrap();
+        let dets = [
+            org_det(&text, "Acme Robotics", template("employer"), "employer"),
+            d(&text, "000-12-3456", TokenKind::Ssn, false),
+        ];
+        f.core
+            .complete_processing(
+                ids[0],
+                &ex(&text),
+                &dets,
+                DocKind("w2".into()),
+                Some(year),
+                tag,
+            )
+            .unwrap();
+        ids[0]
+    }
+
+    #[test]
+    fn classification_stores_the_tag_and_the_payers_token_and_the_board_reads_the_name_back() {
+        let f = fx();
+        let id = w2(&f, "W2_Acme.txt", 2025, Some("Taxes"));
+        let rec = f.core.document(id).unwrap();
+        assert_eq!(rec.tag.as_deref(), Some("Taxes"));
+        assert_eq!(
+            rec.payer_token.as_ref().map(ToString::to_string).as_deref(),
+            Some("[ORG_1]"),
+            "the index holds the token, never the name"
+        );
+        let board = f.core.board(None).unwrap();
+        assert_eq!(board.total, 1);
+        let find::BoardEntry::Doc(view) = &board.groups[0].entries[0] else {
+            panic!("a loose file")
+        };
+        assert_eq!(view.payer.as_deref(), Some("Acme Robotics"));
+        assert_eq!(board.groups[0].year, Some(2025));
+        assert_eq!(board.tags[0].tag, "Taxes");
+
+        // A model guess at an org is not a payer.
+        let text = "Paid by Northwind Bank 2025";
+        let ids = f
+            .core
+            .begin_ingest(
+                &[drop_file_root(&f.root, "note.txt", text)],
+                IngestMode::Move,
+            )
+            .unwrap();
+        let guess = d(text, "Northwind Bank", TokenKind::Org, false);
+        f.core
+            .complete_processing(
+                ids[0],
+                &ex(text),
+                &[guess],
+                DocKind("receipt".into()),
+                None,
+                None,
+            )
+            .unwrap();
+        let rec = f.core.document(ids[0]).unwrap();
+        assert_eq!(rec.payer_token, None);
+        assert_eq!(rec.tag, None);
+        let board = f.core.board(None).unwrap();
+        assert_eq!(board.groups.last().unwrap().year, None, "undated last");
+        assert_eq!(board.total, 2);
+    }
+
+    #[test]
+    fn board_groups_a_dropped_folder_inside_its_year_and_a_chip_filters_it() {
+        let f = fx();
+        let dir = f.root.join("Downloads/Taxes 2024");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("a.txt"), "a").unwrap();
+        fs::write(dir.join("b.txt"), "b").unwrap();
+        let ids = f
+            .core
+            .begin_ingest(std::slice::from_ref(&dir), IngestMode::Move)
+            .unwrap();
+        for id in &ids {
+            f.core
+                .complete_processing(
+                    *id,
+                    &ex("a"),
+                    &[],
+                    DocKind("1099-int".into()),
+                    Some(2024),
+                    Some("Taxes"),
+                )
+                .unwrap();
+        }
+        let loose = w2(&f, "statement.txt", 2025, Some("Banking"));
+
+        let board = f.core.board(None).unwrap();
+        assert_eq!(board.total, 3);
+        assert_eq!(board.groups.len(), 2);
+        assert_eq!(board.groups[0].year, Some(2025));
+        assert!(
+            matches!(&board.groups[0].entries[0], find::BoardEntry::Doc(v) if v.record.id == loose)
+        );
+        assert_eq!(board.groups[1].year, Some(2024));
+        assert_eq!(board.groups[1].files, 2);
+        let find::BoardEntry::Folder(folder) = &board.groups[1].entries[0] else {
+            panic!("a folder")
+        };
+        assert_eq!(folder.name, "Taxes 2024");
+        assert_eq!(folder.children.len(), 2);
+        assert_eq!(
+            folder.children[0].folder_name.as_deref(),
+            Some("Taxes 2024")
+        );
+        assert_eq!(folder.summary.ready, 2);
+        assert_eq!(
+            board.tags,
+            vec![
+                find::TagCount {
+                    tag: "Taxes".into(),
+                    count: 2
+                },
+                find::TagCount {
+                    tag: "Banking".into(),
+                    count: 1
+                }
+            ]
+        );
+
+        let taxes = f.core.board(Some("Taxes")).unwrap();
+        assert_eq!(taxes.groups.len(), 1);
+        assert_eq!(taxes.groups[0].year, Some(2024));
+        assert_eq!(taxes.total, 3, "the chip counts cover everything");
+        assert_eq!(taxes.tags.len(), 2);
+    }
+
+    #[test]
+    fn find_matches_fields_first_then_the_inked_text_with_a_snippet() {
+        let f = fx();
+        let w2_id = w2(&f, "W2_Acme.txt", 2025, Some("Taxes"));
+        let text = "Form 1098\nMortgage Interest Statement for [PERSON_1]\nLender Harbor Street CU";
+        let ids = f
+            .core
+            .begin_ingest(
+                &[drop_file_root(&f.root, "1098_harbor.txt", text)],
+                IngestMode::Move,
+            )
+            .unwrap();
+        let lender = org_det(text, "Harbor Street CU", template("lender"), "lender");
+        f.core
+            .complete_processing(
+                ids[0],
+                &ex(text),
+                &[lender],
+                DocKind("1098".into()),
+                Some(2025),
+                Some("Taxes"),
+            )
+            .unwrap();
+
+        let hits = f.core.find("mortgage interest").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].doc.record.id, ids[0]);
+        assert_eq!(hits[0].field, MatchField::Text);
+        assert_eq!(hits[0].matched, "Mortgage Interest");
+        assert_eq!(
+            hits[0].snippet.as_deref(),
+            Some("Mortgage Interest Statement for [PERSON_1]")
+        );
+
+        let hits = f.core.find("harbor").unwrap();
+        assert_eq!(
+            hits[0].field,
+            MatchField::FileName,
+            "file name beats payer and text"
+        );
+        assert_eq!(hits[0].matched, "harbor");
+
+        let hits = f.core.find("acme").unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].field, MatchField::FileName);
+        assert_eq!(hits[0].doc.record.id, w2_id);
+
+        let hits = f.core.find("2025").unwrap();
+        assert_eq!(hits.len(), 2);
+        assert!(hits.iter().all(|h| h.field == MatchField::Handle));
+
+        let code = f.core.document(w2_id).unwrap().codename;
+        let hits = f.core.find(&format!("🐙/{code}")).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert!(hits[0].exact_handle);
+        let hits = f.core.find(&format!("ink/{code}")).unwrap();
+        assert!(hits[0].exact_handle);
+
+        assert!(f.core.find("   ").unwrap().is_empty());
+        assert!(f.core.find("🐙/").unwrap().is_empty());
+        let hits = f.core.find("[SSN_1]").unwrap();
+        assert_eq!(hits.len(), 1, "the tokenized text is searchable");
+        assert_eq!(hits[0].field, MatchField::Text);
+        assert!(
+            f.core.find("000-12").unwrap().is_empty(),
+            "a real value never matches"
+        );
+    }
+
+    #[test]
+    fn details_report_location_drop_and_last_read() {
+        let f = fx();
+        let dir = f.root.join("Downloads/Taxes 2025");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("a.txt"), "a").unwrap();
+        fs::write(dir.join("b.txt"), "b").unwrap();
+        fs::write(dir.join("c.txt"), "c").unwrap();
+        let ids = f
+            .core
+            .begin_ingest(std::slice::from_ref(&dir), IngestMode::Move)
+            .unwrap();
+        f.core
+            .complete_processing(
+                ids[0],
+                &ex("a"),
+                &[],
+                DocKind("w2".into()),
+                Some(2025),
+                None,
+            )
+            .unwrap();
+        let rec = f.core.document(ids[0]).unwrap();
+        let before = f.core.details(ids[0]).unwrap();
+        assert_eq!(before.location, "Taxes 2025/");
+        assert_eq!(before.dropped_with, 2);
+        assert_eq!(before.dropped_at, rec.created_at);
+        assert_eq!(before.last_read, None);
+        f.core
+            .record_agent_read("Claude", &Handle::new(rec.codename.clone()))
+            .unwrap();
+        let after = f.core.details(ids[0]).unwrap();
+        assert_eq!(after.last_read.unwrap().agent, "Claude");
+
+        let loose = w2(&f, "W2.txt", 2025, None);
+        let d = f.core.details(loose).unwrap();
+        assert_eq!(d.location, "");
+        assert_eq!(d.dropped_with, 0);
+    }
+
+    #[test]
+    fn forget_drops_the_record_and_an_emptied_folder_and_leaves_the_file() {
+        let f = fx();
+        let dir = f.root.join("Downloads/Taxes 2025");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("a.txt"), "a").unwrap();
+        fs::write(dir.join("b.txt"), "b").unwrap();
+        let ids = f
+            .core
+            .begin_ingest(std::slice::from_ref(&dir), IngestMode::Move)
+            .unwrap();
+        let folder = f.core.document(ids[0]).unwrap().folder.unwrap();
+        let path = f.core.document(ids[0]).unwrap().path;
+
+        f.core.forget(ids[0]).unwrap();
+        assert!(path.exists(), "the original stays");
+        assert!(f.core.document(ids[0]).is_err());
+        assert_eq!(
+            f.core.list().unwrap().len(),
+            1,
+            "one child left, folder stays"
+        );
+        assert_eq!(f.core.folder_summary(folder).unwrap().total, 1);
+        f.core.forget(ids[1]).unwrap();
+        assert!(f.core.list().unwrap().is_empty(), "emptied folder goes too");
+        assert!(f.core.forget(ids[0]).is_err());
+
+        // A whole folder at once.
+        let dir = f.root.join("Downloads/Taxes 2024");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("a.txt"), "a").unwrap();
+        let ids = f
+            .core
+            .begin_ingest(std::slice::from_ref(&dir), IngestMode::Move)
+            .unwrap();
+        let folder = f.core.document(ids[0]).unwrap().folder.unwrap();
+        f.core.forget_folder(folder).unwrap();
+        assert!(f.core.list().unwrap().is_empty());
+        assert!(
+            f.core
+                .paths()
+                .private_folder
+                .join("Taxes 2024/a.txt")
+                .exists()
+        );
+    }
+
+    #[test]
+    fn ink_again_requeues_keeping_the_handle_and_refuses_while_inking() {
+        let f = fx();
+        let id = w2(&f, "W2_Acme.txt", 2025, Some("Taxes"));
+        let before = f.core.document(id).unwrap();
+        assert_eq!(before.state, DocState::Ready);
+        f.core.ink_again(id).unwrap();
+        let queued = f.core.document(id).unwrap();
+        assert_eq!(queued.state, DocState::Queued);
+        assert_eq!(queued.codename, before.codename);
+        assert!(f.core.ink_again(id).is_err(), "already queued");
+        // Processing again keeps the handle: the record is no longer provisional.
+        let text = "Wage and Tax Statement 2025\nEmployer Acme Robotics";
+        f.core
+            .complete_processing(
+                id,
+                &ex(text),
+                &[],
+                DocKind("w2".into()),
+                Some(2025),
+                Some("Taxes"),
+            )
+            .unwrap();
+        let again = f.core.document(id).unwrap();
+        assert_eq!(again.codename, before.codename);
+        assert_eq!(again.state, DocState::Ready);
+        assert_eq!(again.payer_token, None, "no template employer this time");
+
+        // A held document drops its questions.
+        let text = "Wire confirmation 00000000000";
+        let ids = f
+            .core
+            .begin_ingest(
+                &[drop_file_root(&f.root, "wire.txt", text)],
+                IngestMode::Move,
+            )
+            .unwrap();
+        f.core
+            .complete_processing(
+                ids[0],
+                &ex(text),
+                &[d(text, "00000000000", TokenKind::Account, true)],
+                DocKind::unknown(),
+                None,
+                None,
+            )
+            .unwrap();
+        assert_eq!(f.core.pending_reviews().unwrap().len(), 1);
+        f.core.ink_again(ids[0]).unwrap();
+        assert!(f.core.pending_reviews().unwrap().is_empty());
+
+        // An agent output is never processed.
+        let out = f
+            .core
+            .write(&Handle::new(before.codename.clone()), "summary.md", "x")
+            .unwrap();
+        let out_id = f.core.find_document(&out.handle).unwrap().id;
+        assert!(matches!(f.core.ink_again(out_id), Err(Error::Refused(_))));
+
+        // A folder: every finished child, outputs skipped.
+        let dir = f.root.join("Downloads/Taxes 2024");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("a.txt"), "a").unwrap();
+        fs::write(dir.join("b.txt"), "b").unwrap();
+        let ids = f
+            .core
+            .begin_ingest(std::slice::from_ref(&dir), IngestMode::Move)
+            .unwrap();
+        f.core
+            .complete_processing(
+                ids[0],
+                &ex("a"),
+                &[],
+                DocKind("w2".into()),
+                Some(2024),
+                None,
+            )
+            .unwrap();
+        let folder = f.core.document(ids[0]).unwrap().folder.unwrap();
+        let requeued = f.core.ink_again_folder(folder).unwrap();
+        assert_eq!(requeued, vec![ids[0]], "the queued sibling is left alone");
     }
 }

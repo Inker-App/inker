@@ -85,6 +85,10 @@ pub struct Manifest {
     pub version: String,
     #[serde(default)]
     pub description: Option<String>,
+    /// The group the pack's templates are counted under on inker.sh, e.g.
+    /// `Taxes`. The site reads this straight from `pack.toml` on GitHub.
+    #[serde(default)]
+    pub category: Option<String>,
     /// File stems under `forms/`, e.g. `w2` for `forms/w2.toml`.
     pub forms: Vec<String>,
     #[serde(default)]
@@ -175,6 +179,9 @@ pub struct FormTemplate {
     pub fields: Vec<FieldSpec>,
     /// File the template came from, for error messages.
     pub file: String,
+    /// The chip its documents count under in the popover ("Taxes"). From
+    /// the template, else the pack's `category`.
+    pub tag: Option<String>,
 }
 
 impl PackSet {
@@ -306,7 +313,10 @@ impl Pack {
                 .iter()
                 .find(|(s, _)| s == stem)
                 .ok_or_else(|| invalid("pack.toml", &format!("lists {file}, which is missing")))?;
-            let t = FormTemplate::parse(&file, text)?;
+            let mut t = FormTemplate::parse(&file, text)?;
+            if t.tag.is_none() {
+                t.tag = manifest.category.clone();
+            }
             if out.iter().any(|o| o.id == t.id) {
                 return Err(invalid(&file, &format!("duplicate template id {}", t.id)));
             }
@@ -336,6 +346,8 @@ struct RawTemplate {
     anchors: Vec<String>,
     #[serde(default)]
     year: Option<String>,
+    #[serde(default)]
+    tag: Option<String>,
     #[serde(default)]
     fields: Vec<RawField>,
 }
@@ -523,6 +535,7 @@ impl FormTemplate {
             year,
             fields,
             file: file.into(),
+            tag: raw.tag,
         })
     }
 }

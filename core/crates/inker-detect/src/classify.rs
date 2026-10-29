@@ -17,6 +17,10 @@ pub struct Classification {
     pub kind: DocKind,
     pub year: Option<u16>,
     pub org: Option<String>,
+    /// The popover chip ("Taxes", "Banking", "Legal"): the template's tag,
+    /// or the one a heuristic kind implies. `None` shows under `All` only.
+    #[serde(default)]
+    pub tag: Option<String>,
 }
 
 impl std::fmt::Debug for Classification {
@@ -25,6 +29,7 @@ impl std::fmt::Debug for Classification {
             .field("kind", &self.kind)
             .field("year", &self.year)
             .field("org", &self.org.as_ref().map(|_| Redacted))
+            .field("tag", &self.tag)
             .finish()
     }
 }
@@ -63,12 +68,26 @@ pub fn classify(
             kind: DocKind(m.template.kind.clone()),
             year: m.year.or_else(|| common_year(extracted)),
             org,
+            tag: m.template.tag.clone(),
         };
     }
+    let kind = heuristic_kind(extracted);
     Classification {
-        kind: DocKind(heuristic_kind(extracted).into()),
+        kind: DocKind(kind.into()),
         year: common_year(extracted),
         org,
+        tag: heuristic_tag(kind).map(str::to_string),
+    }
+}
+
+/// The chip a kind without a template counts under. Receipts, scans and
+/// unknowns have no chip: they show under `All` only.
+fn heuristic_tag(kind: &str) -> Option<&'static str> {
+    match kind {
+        BANK_STATEMENT => Some("Banking"),
+        CLOSING_STATEMENT => Some("Legal"),
+        TAX_FORM => Some("Taxes"),
+        _ => None,
     }
 }
 
