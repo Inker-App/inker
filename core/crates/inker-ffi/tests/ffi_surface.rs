@@ -176,7 +176,7 @@ fn preview_ready_is_all_ready_with_23_inked_and_one_read() {
     assert!(f.children.iter().all(|c| c.loader == Loader::Idle));
     let reads = h.recent_reads(5);
     assert_eq!(reads.len(), 1);
-    assert_eq!(reads[0].agent, "Claude Code");
+    assert_eq!(reads[0].agent, "Claude");
     assert_eq!(reads[0].codename, "w2-acme-2025");
 }
 
