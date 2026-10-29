@@ -23,6 +23,10 @@ enum Snapshots {
         let scenario: PreviewScenario
         let screen: PopoverScreen
         var dropCard = false
+        /// Typed into Find before the shot.
+        var query: String?
+        /// Located (expanded, pulsing) before the shot.
+        var locate: String?
     }
 
     static let shots: [Shot] = [
@@ -30,6 +34,9 @@ enum Snapshots {
         Shot(name: "popover-processing", scenario: .processing, screen: .board),
         Shot(name: "popover-attention", scenario: .attention, screen: .board),
         Shot(name: "popover-ready", scenario: .ready, screen: .board),
+        Shot(name: "popover-scale", scenario: .scale, screen: .board),
+        Shot(name: "popover-scale-search", scenario: .scale, screen: .board, query: "acme"),
+        Shot(name: "popover-scale-handle", scenario: .scale, screen: .board, locate: "🐙/w2-2025-2"),
         Shot(name: "onboarding-1", scenario: .empty, screen: .onboarding(step: 1)),
         Shot(name: "onboarding-2", scenario: .empty, screen: .onboarding(step: 2)),
         Shot(name: "onboarding-3", scenario: .empty, screen: .onboarding(step: 3)),
@@ -61,6 +68,8 @@ enum Snapshots {
         for shot in shots {
             let store = CoreStore.preview(shot.scenario, screen: shot.screen)
             if shot.dropCard { store.presentDropCard(sampleBatch()) }
+            if let query = shot.query { store.setQuery(query) }
+            if let handle = shot.locate { store.locate(handle: handle) }
             let view = PopoverRootView()
                 .environmentObject(store)
                 .environmentObject(clock)

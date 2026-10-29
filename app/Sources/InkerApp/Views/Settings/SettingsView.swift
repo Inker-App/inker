@@ -12,6 +12,8 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var store: CoreStore
     @State private var asciiHandles = false
+    @State private var showsPayer = true
+    @State private var clipboardChip = true
     @State private var results: [String: String] = [:]
     private let log = Logger(subsystem: "sh.inker.app", category: "settings")
 
@@ -48,8 +50,14 @@ struct SettingsView: View {
             .padding(.bottom, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .onAppear { asciiHandles = store.settings.handleStyle == .ascii }
+        .onAppear {
+            asciiHandles = store.settings.handleStyle == .ascii
+            showsPayer = store.settings.showsPayer
+            clipboardChip = store.settings.offersClipboardHandle
+        }
         .onChange(of: asciiHandles) { _, on in store.setHandleStyle(on ? .ascii : .octopus) }
+        .onChange(of: showsPayer) { _, on in store.setShowsPayer(on) }
+        .onChange(of: clipboardChip) { _, on in store.setOffersClipboardHandle(on) }
     }
 
     private var handles: some View {
@@ -59,6 +67,14 @@ struct SettingsView: View {
                         label: Text("Copy handles as ") + Text("ink/").font(Typography.mono(12)).foregroundColor(Palette.paper)
                             + Text(" instead of ") + Text("🐙/").font(Typography.mono(12)).foregroundColor(Palette.paper),
                         accessibilityLabel: "Copy handles as ink slash instead of the octopus emoji")
+                .font(Typography.small)
+                .foregroundColor(Palette.checkLabel)
+            InkCheckbox(isOn: $showsPayer, label: Text(AppSettings.showPayerLabel),
+                        accessibilityLabel: AppSettings.showPayerLabel)
+                .font(Typography.small)
+                .foregroundColor(Palette.checkLabel)
+            InkCheckbox(isOn: $clipboardChip, label: Text(AppSettings.clipboardChipLabel),
+                        accessibilityLabel: AppSettings.clipboardChipLabel)
                 .font(Typography.small)
                 .foregroundColor(Palette.checkLabel)
         }

@@ -2,6 +2,7 @@
 # (documented in core/crates/inker-detect/src/template.rs).
 name = "tax"
 version = "0.1.0"
+category = "Taxes"
 description = "US federal tax forms: W-2, 1099 family, 1098, 1095, Schedule K-1, Form 1040"
 
 # File stems under forms/. A template only loads if it is listed here.

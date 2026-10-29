@@ -62,6 +62,8 @@ public struct AttentionModel: Equatable, Sendable {
     public var docID: String
     public var questionID: String
     public var fileName: String
+    /// The handle the file will get once answered, in muted mono under the name.
+    public var handle: String
     /// For "Open file", which reveals the original in Finder (decision 5.9).
     public var filePath: String
     public var location: String
@@ -79,7 +81,7 @@ public enum FooterLeft: Equatable, Sendable {
 
 public struct FooterModel: Equatable, Sendable {
     public var left: FooterLeft
-    /// "MCP running"
+    /// "30 files · MCP running"; just "MCP running" with nothing filed.
     public var right: String
     /// The 24x24 peeker eye on the Ready board.
     public var showsPeeker: Bool

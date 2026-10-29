@@ -11,7 +11,8 @@ struct QueueViewModelTests {
     private func doc(_ id: String, _ codename: String, _ name: String, _ kind: String, _ state: DocState,
                      inked: UInt32 = 0, note: String? = nil, loader: Loader = .idle, question: ReviewQuestion? = nil) -> DocItem {
         DocItem(id: id, codename: codename, originalName: name, path: "/Users/test/Private/taxes-2025/\(name)", kindLabel: kind, state: state, inked: inked,
-                statusNote: note, loader: loader, question: question)
+                statusNote: note, loader: loader, question: question, year: 2025, payer: nil, tag: "Taxes", droppedAt: now,
+                folderName: "taxes-2025")
     }
 
     private func folder(_ children: [DocItem]) -> QueueItem {
@@ -67,9 +68,11 @@ struct QueueViewModelTests {
         #expect(g.rows[0].detail == "W-2 · 6 inked")
         #expect(g.rows[0].copyEnabled)
         #expect(g.rows[1].title == "1099-INT_northwind.pdf")
-        #expect(g.rows[1].detail == "reading")
+        #expect(g.rows[1].detail == "1099-INT · reading", "the type shows once classified")
         #expect(!g.rows[1].copyEnabled)
+        #expect(g.rows[3].detail == "closing statement · queued")
         #expect(m.footer.left == .text("Moved 4 files from ~/Downloads"))
+        #expect(m.footer.right == "4 files · MCP running")
     }
 
     @Test func attentionBoard() {
@@ -85,6 +88,7 @@ struct QueueViewModelTests {
         #expect(g.summaryLine == "4 files · 3 ready · 1 needs you")
         let card = g.attention!
         #expect(card.fileName == "closing-statement.pdf")
+        #expect(card.handle == "🐙/closing-statement-2025", "the pending handle sits under the name")
         #expect(card.filePath == "/Users/test/Private/taxes-2025/closing-statement.pdf", "Open file reveals it")
         #expect(card.location == "page 3 of 11")
         #expect(card.prompt == "Looks like an account number, but the scan is rough. Ink it?")
@@ -150,10 +154,12 @@ struct QueueViewModelTests {
         let reading = QueueItem(id: "g-3", codename: "notes", isFolder: false,
                                 summary: FolderSummary(total: 1, ready: 0, inking: 1, needsAttention: 0, failed: 0, inked: 0),
                                 children: [doc("2", "notes", "notes.pdf", "x", .reading, loader: .read)])
-        let p = build([reading]).groups[0]
+        let pm = build([reading])
+        let p = pm.groups[0]
         #expect(!p.showsHeader, "a file still being read shows its name and loader, once")
         #expect(p.rows.count == 1)
         #expect(p.rows[0].title == "notes.pdf")
+        #expect(pm.footer.right == "1 file · MCP running")
 
         let folder = build([folder([doc("3", "a", "a.pdf", "W-2", .ready, inked: 2)])]).groups[0]
         #expect(folder.showsHeader)
@@ -167,6 +173,13 @@ struct QueueViewModelTests {
         #expect(s(1, 1, 0, 0, 0, 6) == "1 file · all ready · 6 inked")
         #expect(s(3, 0, 3, 0, 0, 0) == "3 files · 0 ready · 3 inking")
         #expect(s(4, 2, 1, 0, 1, 9) == "4 files · 2 ready · 1 inking · 1 failed")
+    }
+
+    @Test func anUnclassifiedRowShowsOnlyItsNote() {
+        let g = build([folder([doc("1", "doc-1001", "a.pdf", "document", .reading, note: "reading", loader: .read)])]).groups[0]
+        #expect(g.rows[0].detail == "reading", "no type until a template matches")
+        let q = build([folder([doc("1", "doc-1001", "a.pdf", "document", .queued, loader: .queued)])]).groups[0]
+        #expect(q.rows[0].detail == "queued")
     }
 
     @Test func failedRowsAreShownWithoutCopy() {

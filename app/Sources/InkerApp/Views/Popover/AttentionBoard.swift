@@ -43,8 +43,11 @@ struct AttentionCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text(card.fileName).font(Typography.archivo(12, weight: 600)).lineLimit(1).truncationMode(.middle)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(card.fileName).font(Typography.archivo(12, weight: 600)).lineLimit(1).truncationMode(.middle)
+                    Text(card.handle).font(Typography.mono(11)).foregroundColor(Palette.muted)
+                }
                 Spacer(minLength: 8)
                 Text(card.location).font(Typography.small).foregroundColor(Palette.muted)
             }

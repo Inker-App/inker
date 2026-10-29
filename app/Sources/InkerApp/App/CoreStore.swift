@@ -28,10 +28,33 @@ final class CoreStore: ObservableObject {
     /// Which screen the popover shows: a board, an onboarding step, settings.
     @Published private(set) var flow: ScreenFlow
 
+    // The ready board at scale (find handoff). `board` is rebuilt with the
+    // queue; `results` replaces the groups while a query is typed.
+    @Published private(set) var board: BoardModel = .empty
+    @Published private(set) var results: FindResultsModel?
+    @Published private(set) var query = ""
+    @Published private(set) var activeTag: String?
+    /// The row whose details are open, and the one the ink pulse plays behind.
+    @Published private(set) var expandedID: String?
+    @Published private(set) var expandedDetails: [DetailLine] = []
+    @Published private(set) var pulse: (id: String, startedAt: Date)?
+    /// Set when the popover opened with a held handle on the pasteboard.
+    @Published private(set) var clipboardHandle: String?
+    /// "Forget this file" clicked once; the next click on the same row forgets.
+    @Published private(set) var confirmingForgetID: String?
+    /// The list scrolls to this row when it changes.
+    @Published private(set) var scrollTarget: String?
+
     let handle: CoreHandle
     weak var presenter: CorePresenter?
     private(set) var settings: AppSettings
     private var dropPreferences: DropPreferences
+    private var yearMemory: YearGroupMemory
+    private var openFolders: Set<String> = []
+    private var findGeneration = 0
+    /// Previews and snapshots run Find and details on the calling thread:
+    /// the preview backend has no lock to wait on, and a snapshot renders at once.
+    var worksSynchronously = false
     private var lastDrop: String?
     private var listener: QueueListenerBridge?
     private let home: URL
@@ -45,6 +68,7 @@ final class CoreStore: ObservableObject {
         self.home = home
         settings = initialSettings
         dropPreferences = DropPreferences(store: defaults)
+        yearMemory = YearGroupMemory(store: defaults)
         flow = ScreenFlow(onboarding: OnboardingState(store: defaults), forceOnboarding: forceOnboarding)
         model = QueueViewModel.build(queue: [], status: handle.status(), reads: [], lastDrop: nil,
                                      style: initialSettings.handleStyle, now: Date())
@@ -63,6 +87,7 @@ final class CoreStore: ObservableObject {
     /// A store frozen in one of the four boards, for previews and snapshots.
     static func preview(_ scenario: PreviewScenario, screen: PopoverScreen = .board) -> CoreStore {
         let store = CoreStore(handle: CoreHandle.preview(scenario: scenario))
+        store.worksSynchronously = true
         store.show(screen)
         return store
     }
@@ -103,6 +128,213 @@ final class CoreStore: ObservableObject {
     func refresh() {
         model = QueueViewModel.build(queue: handle.queue(), status: handle.status(), reads: handle.recentReads(n: 1),
                                      lastDrop: lastDrop, style: settings.handleStyle, now: Date())
+        rebuildBoard()
+    }
+
+    // MARK: The ready board
+
+    private func rebuildBoard() {
+        let raw = handle.board(tag: activeTag)
+        let newest = raw.groups.first.map { BoardViewModel.yearID($0.year) }
+        let memory = yearMemory
+        let folders = openFolders
+        board = BoardViewModel.build(board: raw, style: settings.handleStyle, showPayer: settings.showsPayer,
+                                     activeTag: activeTag, isYearOpen: { memory.isOpen($0, newest: newest) },
+                                     isFolderOpen: { folders.contains($0) })
+        if results != nil { runFind() }
+        if let id = expandedID { loadDetails(id) }
+    }
+
+    func setTag(_ tag: String?) {
+        activeTag = tag
+        rebuildBoard()
+    }
+
+    func toggleYear(_ id: String) {
+        let open = board.groups.first { $0.id == id }?.isOpen ?? false
+        yearMemory.set(id, open: !open)
+        rebuildBoard()
+    }
+
+    func toggleFolder(_ id: String) {
+        if openFolders.contains(id) { openFolders.remove(id) } else { openFolders.insert(id) }
+        rebuildBoard()
+    }
+
+    /// The Find field. Matching runs off the main thread: on the real core it
+    /// takes the core's lock, which a document being inked can hold for seconds.
+    func setQuery(_ text: String) {
+        query = text
+        if text.trimmingCharacters(in: .whitespaces).isEmpty {
+            results = nil
+            return
+        }
+        runFind()
+    }
+
+    func clearFind() {
+        setQuery("")
+    }
+
+    private func runFind() {
+        findGeneration += 1
+        let generation = findGeneration
+        let text = query
+        let total = board.total
+        let style = settings.handleStyle
+        let showPayer = settings.showsPayer
+        let handle = handle
+        let apply: ([FindMatch]) -> Void = { [weak self] matches in
+            guard let self, self.findGeneration == generation else { return }
+            let model = FindViewModel.build(matches: matches, total: total, style: style, showPayer: showPayer)
+            self.results = model
+            // Typing a handle that is exactly one document locates it.
+            if let id = model.exactMatchID, self.expandedID != id {
+                self.expand(id, pulse: true)
+            }
+        }
+        if worksSynchronously {
+            apply(handle.find(query: text))
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let matches = handle.find(query: text)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { apply(matches) }
+            }
+        }
+    }
+
+    /// The footer's last-read button, the clipboard chip and a pasted handle
+    /// all land here: clear the search, open the group, expand and pulse.
+    func locate(handle text: String) {
+        guard let entry = handle.locate(handle: text) else { return }
+        clipboardHandle = nil
+        query = ""
+        results = nil
+        activeTag = nil
+        switch entry {
+        case .doc(let item):
+            yearMemory.set(BoardViewModel.yearID(item.year), open: true)
+            if let folder = folderID(containing: item.id) { openFolders.insert(folder) }
+            rebuildBoard()
+            expand(item.id, pulse: true)
+        case .folder(let item):
+            let year = handle.board(tag: nil).groups.first { g in g.entries.contains { $0.entryID == item.id } }?.year
+            yearMemory.set(BoardViewModel.yearID(year), open: true)
+            openFolders.insert(item.id)
+            rebuildBoard()
+            expandedID = nil
+            pulse = (item.id, Date())
+            scrollTarget = item.id
+        }
+    }
+
+    private func folderID(containing docID: String) -> String? {
+        for g in handle.board(tag: nil).groups {
+            for case .folder(let f) in g.entries where f.children.contains(where: { $0.id == docID }) {
+                return f.id
+            }
+        }
+        return nil
+    }
+
+    /// Open or close a row's details. Only one row is open at a time.
+    func toggleExpanded(_ id: String) {
+        if expandedID == id {
+            expandedID = nil
+            expandedDetails = []
+        } else {
+            expand(id, pulse: false)
+        }
+    }
+
+    private func expand(_ id: String, pulse: Bool) {
+        expandedID = id
+        expandedDetails = []
+        if pulse { self.pulse = (id, Date()) }
+        scrollTarget = id
+        loadDetails(id)
+    }
+
+    private func loadDetails(_ id: String) {
+        let handle = handle
+        let display = privateFolderDisplay
+        let apply: (DocDetails?) -> Void = { [weak self] details in
+            guard let self, self.expandedID == id, let details else { return }
+            self.expandedDetails = DocDetailsModel.lines(details, privateFolderDisplay: display, now: Date())
+        }
+        if worksSynchronously {
+            apply(try? handle.details(id: id))
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let details = try? handle.details(id: id)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { apply(details) }
+            }
+        }
+    }
+
+    func dismissClipboardHandle() {
+        clipboardHandle = nil
+    }
+
+    // MARK: The row menu
+
+    /// "Ink again": the row goes back to queued with the same handle.
+    func inkAgain(id: String) {
+        do {
+            try handle.inkAgain(id: id)
+        } catch {
+            log.error("ink again failed: \(String(describing: error), privacy: .public)")
+        }
+        refresh()
+    }
+
+    /// "Forget this file" asks once: the item flips to "Forget <name>" and
+    /// the next click does it. Anything else, or closing the popover, resets.
+    func forget(id: String) {
+        guard confirmingForgetID == id else {
+            confirmingForgetID = id
+            return
+        }
+        confirmingForgetID = nil
+        if expandedID == id {
+            expandedID = nil
+            expandedDetails = []
+        }
+        do {
+            try handle.forget(id: id)
+        } catch {
+            log.error("forget failed: \(String(describing: error), privacy: .public)")
+        }
+        refresh()
+    }
+
+    func cancelForget() {
+        confirmingForgetID = nil
+    }
+
+    // MARK: Popover lifetime
+
+    /// The one moment the pasteboard is read: when the popover opens, and
+    /// only if the setting allows. Anything but a held handle is ignored.
+    func popoverOpened() {
+        confirmingForgetID = nil
+        guard settings.offersClipboardHandle else { return }
+        let text = NSPasteboard.general.string(forType: .string)
+        guard let candidate = ClipboardHandle.parse(text), handle.locate(handle: candidate) != nil else {
+            clipboardHandle = nil
+            return
+        }
+        clipboardHandle = candidate
+    }
+
+    func popoverClosed() {
+        clipboardHandle = nil
+        confirmingForgetID = nil
+        pulse = nil
     }
 
     // MARK: Copy
@@ -153,6 +385,16 @@ final class CoreStore: ObservableObject {
     func setHandleStyle(_ style: HandleStyle) {
         settings.handleStyle = style
         refresh()
+    }
+
+    func setShowsPayer(_ on: Bool) {
+        settings.showsPayer = on
+        rebuildBoard()
+    }
+
+    func setOffersClipboardHandle(_ on: Bool) {
+        settings.offersClipboardHandle = on
+        if !on { clipboardHandle = nil }
     }
 
     func setPrivateFolder(_ url: URL) {

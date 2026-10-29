@@ -36,7 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
         store?.handle.close()
     }
 
-    /// `INKER_PREVIEW=empty|processing|attention|ready` freezes the popover in
+    /// `INKER_PREVIEW=empty|processing|attention|ready|scale` freezes the popover in
     /// one board. Otherwise `open`: the real core, with the Keychain, PDFKit
     /// and Vision as its providers, serving MCP on `<data dir>/inker.sock`.
     private func makeHandle() -> CoreHandle {
@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
         case "processing": return CoreHandle.preview(scenario: .processing)
         case "attention": return CoreHandle.preview(scenario: .attention)
         case "ready": return CoreHandle.preview(scenario: .ready)
+        case "scale": return CoreHandle.preview(scenario: .scale)
         default: break
         }
         let home = FileManager.default.homeDirectoryForCurrentUser

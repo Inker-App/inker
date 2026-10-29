@@ -116,6 +116,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
         MainActor.assumeIsolated {
             clock.surfaceAppeared()
             store.refresh()
+            store.popoverOpened()
         }
     }
 
@@ -125,6 +126,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
             lastClosed = Date()
             popover.behavior = .transient
             store.isDropTargeted = false
+            store.popoverClosed()
         }
     }
 

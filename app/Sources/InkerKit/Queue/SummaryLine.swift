@@ -22,4 +22,17 @@ public enum SummaryLine {
     public static func docDetail(kind: String, inked: UInt32) -> String {
         "\(kind) · \(inked) inked"
     }
+
+    /// A folder row's line 2 after its handle: "all ready · 41 inked",
+    /// "3 ready · 1 inking".
+    public static func folderDetail(_ s: FolderSummary) -> String {
+        if s.total > 0 && s.ready == s.total {
+            return "all ready · \(s.inked) inked"
+        }
+        var parts = ["\(s.ready) ready"]
+        if s.inking > 0 { parts.append("\(s.inking) inking") }
+        if s.needsAttention > 0 { parts.append("\(s.needsAttention) needs you") }
+        if s.failed > 0 { parts.append("\(s.failed) failed") }
+        return parts.joined(separator: " · ")
+    }
 }

@@ -41,7 +41,9 @@ public enum QueueViewModel {
                 left = .text(lastDrop ?? "All ready")
             }
         }
-        let footer = FooterModel(left: left, right: status.mcpListening ? "MCP running" : "MCP not running", showsPeeker: peeker)
+        let mcp = status.mcpListening ? "MCP running" : "MCP not running"
+        let files = docs.count == 1 ? "1 file" : "\(docs.count) files"
+        let footer = FooterModel(left: left, right: docs.isEmpty ? mcp : "\(files) · \(mcp)", showsPeeker: peeker)
         return PopoverModel(mode: mode, badgeCount: held, groups: groups, footer: footer,
                             emptySubtitlePrefix: "They move into \(status.privateFolderDisplay). You get a ",
                             handlePrefix: HandleFormatter.prefix(style))
@@ -53,7 +55,9 @@ public enum QueueViewModel {
         var attention: AttentionModel?
         for d in item.children {
             if d.state == .needsAttention, attention == nil, let q = d.question {
-                attention = AttentionModel(docID: d.id, questionID: q.id, fileName: d.originalName, filePath: d.path, location: q.location,
+                let pending = HandleFormatter.render(codename: d.codename, style: style) ?? d.codename
+                attention = AttentionModel(docID: d.id, questionID: q.id, fileName: d.originalName, handle: pending,
+                                           filePath: d.path, location: q.location,
                                            prompt: q.prompt, contextBefore: q.contextBefore, valueLength: Int(q.valueLength),
                                            footnote: attentionFootnote)
                 continue
@@ -96,8 +100,10 @@ public enum QueueViewModel {
                             handle: handle, copyEnabled: false)
         case .queued, .reading, .inking, .needsAttention:
             let loader = InkLoaderMode(d.loader) ?? (d.state == .queued ? .queued : .read)
-            return RowModel(id: d.id, kind: .processing(loader), title: d.originalName, detail: d.statusNote ?? "",
-                            handle: handle, copyEnabled: false)
+            // The type shows as soon as a template matched, so the row does
+            // not reflow when it finishes (the find handoff, section 2).
+            return RowModel(id: d.id, kind: .processing(loader), title: d.originalName,
+                            detail: BoardViewModel.processingDetail(d), handle: handle, copyEnabled: false)
         }
     }
 }

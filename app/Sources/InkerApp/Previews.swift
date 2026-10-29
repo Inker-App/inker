@@ -36,6 +36,28 @@ private func popover(_ scenario: PreviewScenario, _ screen: PopoverScreen = .boa
     popover(.ready)
 }
 
+#Preview("Popover · 30 files") {
+    popover(.scale)
+}
+
+#Preview("Popover · Find") {
+    FontRegistry.registerBundledFonts()
+    let store = CoreStore.preview(.scale)
+    store.setQuery("acme")
+    return PopoverRootView()
+        .environmentObject(store)
+        .environmentObject(RenderClock(alwaysRunning: true))
+}
+
+#Preview("Popover · Located handle") {
+    FontRegistry.registerBundledFonts()
+    let store = CoreStore.preview(.scale)
+    store.locate(handle: "🐙/w2-2025-2")
+    return PopoverRootView()
+        .environmentObject(store)
+        .environmentObject(RenderClock(alwaysRunning: true))
+}
+
 #Preview("Popover · Drop card") {
     FontRegistry.registerBundledFonts()
     let store = CoreStore.preview(.ready)

@@ -11,13 +11,17 @@ struct PopoverRootView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            PopoverHeader(badgeCount: badgeCount, onSettings: { store.toggleSettings() })
+            PopoverHeader(badgeCount: badgeCount, folderTooltip: "Open \(store.privateFolderDisplay)",
+                          onOpenFolder: { store.openPrivateFolder() }, onSettings: { store.toggleSettings() })
             Hairline()
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 .clipped()
             Hairline()
-            PopoverFooter(model: store.model.footer)
+            PopoverFooter(model: store.model.footer, onLocate: { handle in
+                store.show(.board)
+                store.locate(handle: handle)
+            })
         }
         .frame(width: PopoverLayout.width, height: PopoverLayout.height)
         .background(Palette.background)
@@ -67,8 +71,10 @@ struct PopoverRootView: View {
         switch store.model.mode {
         case .empty:
             EmptyBoard()
-        case .processing, .ready:
+        case .processing:
             QueueBoard()
+        case .ready:
+            FindBoard()
         case .attention:
             AttentionBoard()
         }

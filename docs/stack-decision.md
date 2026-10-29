@@ -282,6 +282,52 @@ Plus hardening: partial-overlap union, a lock file against a second writer, `wri
   - App icon: the MARK bitmap as halftone dots on the dark tile, Apple's 1024 template
     (`app/scripts/make-icon.py`, rendered PNG committed, `make icon` builds the `.icns`).
 
+### 2026-10-29: finding documents (the find handoff)
+
+Ben's designer delivered `docs/handoff/find-handoff/` (brief plus four artboards) for the
+problem that `TypeYear` handles all look alike at 30 files. Built test-first, core to shell:
+
+- **inker-core `find`**: the board grouped by tax year (newest first, `UNDATED` last), dropped
+  folders as sub-groups placed by their newest child in the year most of their files have, tag
+  counts for the chips, and matching over file name, handle (prefix optional), form type, payer,
+  year, folder, tag and the tokenized page text, ranked in that order then by drop time. Text
+  hits return the matching line trimmed to a window. `Core` gained `board`, `find`, `details`,
+  `forget`, `forget_folder`, `ink_again`, `ink_again_folder` and `note_classification`.
+- **Payer without a new real value in the index.** Templates attribute an employer, payer or
+  lender; its token (`[ORG_3]`) is stored on the document (schema 3) and the name is read back
+  through the vault only when the board is built. The index stays plain SQLite holding tokens.
+- **Tags**: a form template may carry `tag`; it defaults to the pack's `category`, so every tax
+  form is Taxes. Heuristic kinds: bank statement is Banking, closing statement is Legal, an
+  untemplated IRS form is Taxes; receipts, scans and unknowns have no chip (under All only).
+- **Forget** deletes the index row (cascades pages, questions, detections) and an emptied folder;
+  the file stays. Write scope is computed from stored pages, so a forgotten document drops out of
+  it with nothing else to do; vault entries are shared across documents and are kept.
+  **Ink again** moves Ready or NeedsAttention back to Queued (new legal transitions), clears
+  questions and keeps the codename because the record is no longer provisional.
+- The pipeline notes a template match right after extraction, so a processing row shows its
+  type before detection finishes.
+- **FFI**: `DocItem` carries year, payer, tag, drop time and folder name; new `Board`,
+  `BoardEntry`, `FolderItem`, `YearGroup`, `TagCount`, `FindMatch`, `DocDetails`;
+  `CoreHandle.board(tag)`, `find`, `locate`, `details`, `forget`, `inkAgain`. The board lives in
+  the host backend's snapshot (no core lock to read it); find and details take the lock, so the
+  shell calls them off the main thread. `PreviewScenario::Scale` is the 30-file board.
+- **Shell**: `FindBoard` replaces `QueueBoard` on the ready board only; processing and attention
+  keep their layouts. Header: folder button plus the sliders icon in place of the gear. Footer:
+  the last-read handle is a button, the right side reads "30 files · MCP running". Settings:
+  "Show payer names in the list" and "Offer to find a handle from the clipboard", both on.
+  The pasteboard is read in `popoverDidShow` only. Year open state is remembered in
+  `UserDefaults`; folder open state is per session.
+- Ben's decisions: payer on with a toggle; clipboard chip on with a toggle; **Forget confirms by
+  flipping the menu item** to "Forget <name>" (the menu closes after the first click, the next
+  open shows the confirm wording; anything else or closing the popover resets it).
+- Calls made without an artboard, for Ben to check: a folder or tag match shows its folder name
+  or tag as the row's third line (muted, not mono) so the underline has somewhere to land; a
+  folder's Forget and Ink again apply to every child; the Settings "Private folder" block from the
+  morning stays beside the header button; the Scale fixture keeps `w2-bluefin.pdf` loose, where
+  the Scale board shows it, though the Handle board drew it inside the folder.
+- Not run on this Linux box: `swift test`, `swift build`, the snapshots. The Rust workspace
+  (tests, clippy, fmt) is green. Bindings were regenerated with `build-rust.sh --bindings-only`.
+
 ## 9. Target clients (reframed 2026-10-28)
 
 INKER is for the chat window. Research on 2026-10-28 (search summaries only; vendor pages were unreachable from the dev box that day, so re-read primary sources before relying on a detail):
