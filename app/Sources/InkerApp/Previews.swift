@@ -35,14 +35,15 @@ private func popover(_ scenario: PreviewScenario) -> some View {
     popover(.ready)
 }
 
-#Preview("Drop dialog") {
+#Preview("Drop card") {
     FontRegistry.registerBundledFonts()
     let batch = DropCollector.collect(
         (1...4).map { URL(fileURLWithPath: "/Users/preview/Downloads/file-\($0).pdf") },
         home: URL(fileURLWithPath: "/Users/preview"),
         privateFolder: URL(fileURLWithPath: "/Users/preview/Private"),
         exists: { _ in true })
-    return DropDialogView(batch: batch) { _, _ in }
+    return DropDecisionCard(batch: batch) { _, _ in }
+        .background(Palette.background)
         .environmentObject(RenderClock(alwaysRunning: true))
 }
 
