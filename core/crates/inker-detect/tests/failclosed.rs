@@ -229,3 +229,45 @@ fn statement_references_are_inked_without_a_question() {
     );
     assert!(got.iter().all(|d| d.treatment == Treatment::Tokenize));
 }
+
+// ---------------------------------------------------------------------------
+// A real 1040 without a template: masked values and field labels are not
+// names (Ben's first run asked about "Spouse's", "Preparer's" and X runs).
+// ---------------------------------------------------------------------------
+
+#[test]
+fn masked_placeholders_are_not_names() {
+    // Preparer and client copies print SSNs as X's.
+    assert!(found("Your social security number X X X - X X - X X X X\n").is_empty());
+    assert!(found("Spouse's social security number XXX-XX-XXXX\n").is_empty());
+    assert!(found("Account number XXXXXXXX\n").is_empty());
+}
+
+#[test]
+fn form_labels_after_a_label_are_not_names() {
+    let text = "Your first name and middle initial Last name Your social security number\n\
+                If joint return, spouse's first name and middle initial Last name Spouse's social security number\n\
+                Home address (number and street). If you have a P.O. box, see instructions. Apt no.\n\
+                Paid Preparer Use Only Preparer's name Preparer's signature Date PTIN\n\
+                Firm's name Phone no. Firm's address Firm's EIN\n\
+                Third Party Designee Designee's name Phone no. Personal identification number (PIN)\n";
+    let f = found(text);
+    assert!(f.is_empty(), "{f:?}");
+}
+
+#[test]
+fn a_typed_name_after_a_label_is_still_held() {
+    let f = found("Designee's name Riley Sample\n");
+    assert!(
+        f.iter()
+            .any(|(k, v, _)| *k == TokenKind::Person && v == "Riley Sample"),
+        "{f:?}"
+    );
+    // An organisation with a label word in it is still an organisation.
+    let f = found("Account holder name Northwind Federal Credit Union\n");
+    assert!(
+        f.iter()
+            .any(|(k, v, _)| *k == TokenKind::Org && v == "Northwind Federal Credit Union"),
+        "{f:?}"
+    );
+}

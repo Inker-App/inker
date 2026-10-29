@@ -35,6 +35,212 @@ pub const NAME_LABELS: &[&str] = &[
     "name",
 ];
 
+/// Words that are form wording, not a typed value. A capitalised run made
+/// only of these ("Spouse's", "Paid Preparer Use Only", "Last") is a label
+/// that happens to follow another label, and is not held. A run with any
+/// other word in it ("Northwind Federal Credit Union") is still a candidate.
+const LABEL_WORDS: &[&str] = &[
+    "a",
+    "account",
+    "additional",
+    "address",
+    "adjusted",
+    "age",
+    "amount",
+    "and",
+    "annuities",
+    "apt",
+    "as",
+    "assets",
+    "at",
+    "attach",
+    "benefits",
+    "blindness",
+    "box",
+    "but",
+    "by",
+    "campaign",
+    "can",
+    "capital",
+    "cat",
+    "check",
+    "checking",
+    "child",
+    "city",
+    "claim",
+    "code",
+    "country",
+    "county",
+    "credit",
+    "credits",
+    "date",
+    "daytime",
+    "declare",
+    "deduction",
+    "department",
+    "dependent",
+    "dependents",
+    "deposit",
+    "designee",
+    "designees",
+    "digital",
+    "direct",
+    "dividends",
+    "do",
+    "does",
+    "earned",
+    "ein",
+    "election",
+    "email",
+    "employed",
+    "enclose",
+    "enter",
+    "estimated",
+    "federal",
+    "filing",
+    "firm",
+    "firms",
+    "first",
+    "for",
+    "foreign",
+    "form",
+    "forms",
+    "from",
+    "gain",
+    "gov",
+    "gross",
+    "head",
+    "here",
+    "home",
+    "household",
+    "i",
+    "identification",
+    "identity",
+    "if",
+    "in",
+    "income",
+    "individual",
+    "initial",
+    "instructions",
+    "interest",
+    "internal",
+    "ira",
+    "irs",
+    "is",
+    "joint",
+    "jointly",
+    "last",
+    "line",
+    "lines",
+    "loss",
+    "mail",
+    "married",
+    "middle",
+    "name",
+    "net",
+    "no",
+    "not",
+    "number",
+    "occupation",
+    "of",
+    "office",
+    "omb",
+    "on",
+    "one",
+    "only",
+    "or",
+    "other",
+    "owe",
+    "page",
+    "paid",
+    "party",
+    "payment",
+    "payments",
+    "penalties",
+    "pensions",
+    "perjury",
+    "personal",
+    "phone",
+    "pin",
+    "post",
+    "postal",
+    "preparer",
+    "preparers",
+    "presidential",
+    "print",
+    "protection",
+    "province",
+    "ptin",
+    "qualifying",
+    "refund",
+    "relationship",
+    "return",
+    "revenue",
+    "routing",
+    "salaries",
+    "savings",
+    "schedule",
+    "see",
+    "self",
+    "selfemployed",
+    "separately",
+    "service",
+    "sign",
+    "single",
+    "social",
+    "someone",
+    "spouse",
+    "spouses",
+    "standard",
+    "state",
+    "status",
+    "street",
+    "surviving",
+    "tax",
+    "taxable",
+    "taxpayer",
+    "that",
+    "the",
+    "third",
+    "this",
+    "tips",
+    "to",
+    "total",
+    "town",
+    "treasury",
+    "type",
+    "under",
+    "us",
+    "use",
+    "wages",
+    "with",
+    "withheld",
+    "yes",
+    "you",
+    "your",
+    "zip",
+];
+
+/// A run of masking characters ("X X X", "XXXXXXXX"): a value the form
+/// already hid, not a name.
+fn is_masked(run: &str) -> bool {
+    let mut letters = run.chars().filter(|c| c.is_ascii_alphabetic()).peekable();
+    letters.peek().is_some() && letters.all(|c| c == 'X' || c == 'x')
+}
+
+/// Every word of the run is fixed form wording.
+fn is_label_wording(run: &str) -> bool {
+    run.split_whitespace().all(|w| {
+        let w: String = w
+            .to_ascii_lowercase()
+            .replace(['\u{2019}', '\''], "")
+            .chars()
+            .filter(|c| c.is_ascii_alphabetic())
+            .collect();
+        w.is_empty() || LABEL_WORDS.contains(&w.as_str())
+    })
+}
+
 /// Digit groups joined by a space, a dash or a dot, or by a dash or dot at a
 /// line end ("000-12-\n3456"). Dash variants are folded to `-` first.
 static RUN_TEXT: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:(?:[-. ]|[-.]\n)?\d)*"));
@@ -321,6 +527,10 @@ fn find_folded(page: &PageText, covered: &[(usize, usize)]) -> Vec<Detection> {
                 .find_map(|j| names::run_at(text, j));
             let Some(r) = found else { continue };
             if overlaps(&taken, r.start, r.end) {
+                continue;
+            }
+            let run = &text[r.start..r.end];
+            if is_masked(run) || is_label_wording(run) {
                 continue;
             }
             let kind = if r.org {
