@@ -1,0 +1,123 @@
+Form 1040   Department of the Treasury - Internal Revenue Service
+U.S. Individual Income Tax Return   2023   OMB No. 1545-0074   IRS Use Only - Do not write or staple in this space.
+For the year Jan. 1-Dec. 31, 2023, or other tax year beginning , 2023, ending , 20
+See separate instructions.
+Filing Status   Check only one box.
+  [ ] Single    [X] Married filing jointly   [ ] Married filing separately (MFS)
+  [ ] Head of household (HOH)   [ ] Qualifying surviving spouse (QSS)
+If you checked the MFS box, enter the name of your spouse. If you checked the HOH or QSS box, enter the child's name if the qualifying person is a child but not your dependent:
+
+Your first name and middle initial      Last name                     Your social security number
+  Jordan A                              Example                       900-12-3456
+If joint return, spouse's first name and middle initial     Last name           Spouse's social security number
+  Riley                                                     Sample              666-48-2210
+Home address (number and street). If you have a P.O. box, see instructions.     Apt. no.
+  48 Lantern Way Apt 3
+City, town, or post office. If you have a foreign address, also complete spaces below.    State     ZIP code
+  Springfield                                                                             OR        97477
+Foreign country name          Foreign province/state/county      Foreign postal code
+
+Presidential Election Campaign
+Check here if you, or your spouse if filing jointly, want $3 to go to this fund. Checking a box below will not change your tax or refund.   [ ] You   [ ] Spouse
+Digital Assets
+At any time during 2023, did you: (a) receive (as a reward, award, or payment for property or services); or (b) sell, exchange, or otherwise dispose of a digital asset (or a financial interest in a digital asset)? (See instructions.)   [ ] Yes   [X] No
+Standard Deduction
+Someone can claim:   [ ] You as a dependent   [ ] Your spouse as a dependent
+[ ] Spouse itemizes on a separate return or you were a dual-status alien
+Age/Blindness
+You:   [ ] Were born before January 2, 1959   [ ] Are blind
+Spouse:   [ ] Was born before January 2, 1959   [ ] Is blind
+Dependents (see instructions):      (2) Social security number    (3) Relationship to you   (4) Check the box if qualifies for (see instructions):
+(1) First name    Last name                                                                 Child tax credit    Credit for other dependents
+  Casey           Example           900-12-7788                   Son                       [X]                 [ ]
+If more than four dependents, see instructions and check here   [ ]
+
+Income
+Attach Form(s) W-2 here. Also attach Forms W-2G and 1099-R if tax was withheld. If you did not get a Form W-2, see instructions.
+1a Total amount from Form(s) W-2, box 1 (see instructions)                                                    84,250.00
+b Household employee wages not reported on Form(s) W-2                                                        0.00
+c Tip income not reported on line 1a (see instructions)                                                       0.00
+d Medicaid waiver payments not reported on Form(s) W-2 (see instructions)                                     0.00
+e Taxable dependent care benefits from Form 2441, line 26                                                     0.00
+f Employer-provided adoption benefits from Form 8839, line 29                                                 0.00
+g Wages from Form 8919, line 6                                                                                0.00
+h Other earned income (see instructions)                                                                      0.00
+i Nontaxable combat pay election (see instructions)         0.00
+z Add lines 1a through 1h                                                                                     84,250.00
+Attach Sch. B if required.
+2a Tax-exempt interest                  0.00            b Taxable interest                          412.88
+3a Qualified dividends                  1,004.10        b Ordinary dividends                        1,284.16
+4a IRA distributions                    0.00            b Taxable amount                            0.00
+5a Pensions and annuities               0.00            b Taxable amount                            0.00
+6a Social security benefits             0.00            b Taxable amount                            0.00
+c If you elect to use the lump-sum election method, check here (see instructions)   [ ]
+7 Capital gain or (loss). Attach Schedule D if required. If not required, check here   [ ]                    0.00
+8 Additional income from Schedule 1, line 10                                                                  18,500.00
+9 Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7, and 8. This is your total income                                       104,447.04
+10 Adjustments to income from Schedule 1, line 26                                                             1,307.00
+11 Subtract line 10 from line 9. This is your adjusted gross income                                           103,140.04
+12 Standard deduction or itemized deductions (from Schedule A)                                                27,700.00
+13 Qualified business income deduction from Form 8995 or Form 8995-A                                          0.00
+14 Add lines 12 and 13                                                                                        27,700.00
+15 Subtract line 14 from line 11. If zero or less, enter -0-. This is your taxable income                     75,440.04
+For Disclosure, Privacy Act, and Paperwork Reduction Act Notice, see separate instructions.
+Cat. No. 11320B                                                                           Form 1040 (2023)
+
+Form 1040 (2023)                                                                                    Page 2
+Tax and Credits
+16 Tax (see instructions). Check if any from Form(s): 1 [ ] 8814  2 [ ] 4972  3 [ ]                           8,628.00
+17 Amount from Schedule 2, line 3                                                                             0.00
+18 Add lines 16 and 17                                                                                        8,628.00
+19 Child tax credit or credit for other dependents from Schedule 8812                                         2,000.00
+20 Amount from Schedule 3, line 8                                                                             0.00
+21 Add lines 19 and 20                                                                                        2,000.00
+22 Subtract line 21 from line 18. If zero or less, enter -0-                                                  6,628.00
+23 Other taxes, including self-employment tax, from Schedule 2, line 21                                       2,614.00
+24 Add lines 22 and 23. This is your total tax                                                                9,242.00
+Payments
+25 Federal income tax withheld from:
+a Form(s) W-2                                               11,912.40
+b Form(s) 1099                                              0.00
+c Other forms (see instructions)                            0.00
+d Add lines 25a through 25c                                                                                   11,912.40
+26 2023 estimated tax payments and amount applied from 2022 return                                            0.00
+If you have a qualifying child, attach Sch. EIC.
+27 Earned income credit (EIC)                               0.00
+28 Additional child tax credit from Schedule 8812           0.00
+29 American opportunity credit from Form 8863, line 8       0.00
+30 Reserved for future use
+31 Amount from Schedule 3, line 15                          0.00
+32 Add lines 27, 28, 29, and 31. These are your total other payments and refundable credits                   0.00
+33 Add lines 25d, 26, and 32. These are your total payments                                                   11,912.40
+Refund
+34 If line 33 is more than line 24, subtract line 24 from line 33. This is the amount you overpaid            2,670.40
+35a Amount of line 34 you want refunded to you. If Form 8888 is attached, check here   [ ]                    2,670.40
+Direct deposit? See instructions.
+b Routing number    123456789           c Type:   [X] Checking   [ ] Savings
+d Account number    00012345678
+36 Amount of line 34 you want applied to your 2024 estimated tax                                              0.00
+Amount You Owe
+37 Subtract line 33 from line 24. This is the amount you owe.
+For details on how to pay, go to www.irs.gov/Payments or see instructions
+38 Estimated tax penalty (see instructions)                 0.00
+Third Party Designee
+Do you want to allow another person to discuss this return with the IRS? See instructions   [X] Yes. Complete below.   [ ] No
+Designee's name               Phone no.                Personal identification number (PIN)
+  Morgan Placeholder          (503) 555-0175           40917
+Sign Here
+Under penalties of perjury, I declare that I have examined this return and accompanying schedules and statements, and to the best of my knowledge and belief, they are true, correct, and complete. Declaration of preparer (other than taxpayer) is based on all information of which preparer has any knowledge.
+Your signature                Date           Your occupation          If the IRS sent you an Identity Protection PIN, enter it here (see inst.)
+                                             Field Engineer           000417
+Joint return? See instructions. Keep a copy for your records.
+Spouse's signature. If a joint return, both must sign.    Date        Spouse's occupation      If the IRS sent your spouse an Identity Protection PIN, enter it here (see inst.)
+                                                                      Data Analyst
+Phone no.                     Email address
+  (503) 555-0118              jordan.example@example.com
+Paid Preparer Use Only
+Preparer's name               Preparer's signature     Date           PTIN           Check if:
+  Avery Placeholder                                                   P00000000      [ ] Self-employed
+Firm's name                                                           Phone no.
+  Ledgerline Tax Services LLC                                         (541) 555-0190
+Firm's address                                                        Firm's EIN
+  12 Ledger Lane, Eugene, OR 97401                                    79-2020304
+Go to www.irs.gov/Form1040 for instructions and the latest information.                   Form 1040 (2023)

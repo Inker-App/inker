@@ -617,6 +617,120 @@ fn k1_1120s() {
 }
 
 #[test]
+fn f1040() {
+    // A joint return laid out as the IRS form: rows of column heads with the
+    // typed values under them, two dependents, direct deposit, a designee
+    // and a paid preparer.
+    let want = vec![
+        t(
+            "name",
+            Person,
+            Some("taxpayer"),
+            "Pat R                                 Example",
+        ),
+        t("ssn", Ssn, Some("taxpayer"), "900-33-1100"),
+        t(
+            "spouse_name",
+            Person,
+            Some("spouse"),
+            "Sam T                                                     Sample",
+        ),
+        t("spouse_ssn", Ssn, Some("spouse"), "900-41-9900"),
+        t(
+            "street",
+            Address,
+            Some("taxpayer"),
+            "1428 Elm Street Apt 4B",
+        ),
+        // A city alone cannot be generalized to "City, ST", so it is inked.
+        t("city", Address, Some("taxpayer"), "Brooklyn"),
+        t("zip", Address, Some("taxpayer"), "11201"),
+        t(
+            "dependent_1",
+            Person,
+            Some("dependent"),
+            "Alex            Example",
+        ),
+        t("dependent_1_ssn", Ssn, Some("dependent"), "900-33-1200"),
+        t(
+            "dependent_2",
+            Person,
+            Some("dependent"),
+            "Jo              Example",
+        ),
+        t("dependent_2_ssn", Ssn, Some("dependent"), "900-33-1300"),
+        t("routing", TokenKind::Routing, Some("taxpayer"), "987654321"),
+        t("account", Account, Some("taxpayer"), "4471009912"),
+        t("designee_name", Person, Some("designee"), "Robin K Sample"),
+        t("phone", Phone, None, "(212) 555-0101"),
+        t("designee_pin", custom("pin"), Some("designee"), "12345"),
+        t(
+            "occupation",
+            custom("occupation"),
+            Some("taxpayer"),
+            "Teacher",
+        ),
+        t("ip_pin", custom("ip_pin"), Some("taxpayer"), "000111"),
+        t(
+            "spouse_occupation",
+            custom("occupation"),
+            Some("spouse"),
+            "Nurse",
+        ),
+        t("spouse_ip_pin", custom("ip_pin"), Some("spouse"), "000222"),
+        t("phone", Phone, None, "(212) 555-0199"),
+        t(
+            "email",
+            TokenKind::Email,
+            Some("taxpayer"),
+            "pat.example@example.com",
+        ),
+        t(
+            "preparer_name",
+            Person,
+            Some("preparer"),
+            "Chris Placeholder",
+        ),
+        t("ptin", custom("ptin"), Some("preparer"), "P00001234"),
+        t("firm_name", Org, Some("preparer"), "Contoso Tax Prep LLC"),
+        t("phone", Phone, None, "(217) 555-0142"),
+        g(
+            "firm_address",
+            Some("preparer"),
+            "500 Harbor Blvd, Springfield, IL 62701",
+            "Springfield, IL",
+        ),
+        t("firm_ein", Ein, Some("preparer"), "07-4400555"),
+    ];
+    check(
+        "1040.txt",
+        "1040",
+        "1040",
+        2023,
+        want,
+        &[
+            "84,250.00",
+            "412.88",
+            "1,004.10",
+            "1,284.16",
+            "18,500.00",
+            "104,447.04",
+            "1,307.00",
+            "103,140.04",
+            "27,700.00",
+            "75,440.04",
+            "8,628.00",
+            "2,000.00",
+            "6,628.00",
+            "2,614.00",
+            "9,242.00",
+            "11,912.40",
+            "2,670.40",
+        ],
+    );
+}
+
+#[test]
 fn templates_do_not_cross_match() {
     // Each fixture matches its own template and no other.
     let set = packs();
@@ -634,6 +748,7 @@ fn templates_do_not_cross_match() {
         ("1095-c.txt", "1095-c"),
         ("k1-1065.txt", "k1-1065"),
         ("k1-1120s.txt", "k1-1120s"),
+        ("1040.txt", "1040"),
     ] {
         let page = PageText {
             page: 1,

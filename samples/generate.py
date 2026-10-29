@@ -81,6 +81,34 @@ TITLE_CO = {
     "account": "0000-7713-9902",
 }
 
+# Form 1040 only: the joint return's dependent, designee and paid preparer.
+DEPENDENT = {
+    "first": "Casey",
+    "last": "Example",
+    "ssn": "900-12-7788",  # area 9xx: never issued as an SSN
+    "relationship": "Son",
+}
+DESIGNEE = {
+    "name": "Morgan Placeholder",
+    "phone": "(503) 555-0175",  # 555-01xx: reserved for fiction
+    "pin": "40917",
+}
+PREPARER = {
+    "name": "Avery Placeholder",
+    "ptin": "P00000000",
+    "firm": "Ledgerline Tax Services LLC",
+    "ein": "79-2020304",  # prefix 79: not issued
+    "address": "12 Ledger Lane, Eugene, OR 97401",
+    "phone": "(541) 555-0190",
+}
+JORDAN_1040 = {
+    "occupation": "Field Engineer",
+    "phone": "(503) 555-0118",
+    "email": "jordan.example@example.com",
+    "ip_pin": "000417",
+}
+RILEY_1040 = {"occupation": "Data Analyst"}
+
 JORDAN_CHECKING = "00012345678"
 JORDAN_SAVINGS_INT_ACCT = "00098765432"
 RILEY_BROKERAGE = "NW-0000-5521"
@@ -466,6 +494,191 @@ Thank you for shopping local!
 """
 
 
+def row(*cols: tuple[int, str]) -> str:
+    """One line of a form laid out in columns: each text starts at its
+    column, at least three spaces after the previous one."""
+    line = ""
+    for col, text in cols:
+        if line:
+            assert col >= len(line) + 3, (col, line)
+        line = line.ljust(col) + text
+    return line.rstrip()
+
+
+def f1040_text() -> str:
+    """Form 1040 (2023), pages 1 and 2, as a married-filing-jointly return
+    for Jordan and Riley with one dependent, a direct-deposit refund, a
+    third-party designee and a paid preparer. Label text and order follow
+    the IRS form; typed values sit under their column heads."""
+    j, r, d, h = JORDAN, RILEY, DEPENDENT, HARBOR
+    des, prep, jx, rx = DESIGNEE, PREPARER, JORDAN_1040, RILEY_1040
+    street, city = j["street"], j["city"].split(",")[0]
+    state, zipc = j["city"].split(", ")[1].split(" ")
+
+    def money(label: str, amount: str) -> str:
+        return row((0, label), (110, amount)) if amount else label
+
+    def pair(a: str, x: str, b: str, y: str) -> str:
+        return row((0, a), (40, x), (56, b), (100, y))
+
+    page1 = "\n".join(
+        [
+            row((0, "Form 1040"), (12, "Department of the Treasury - Internal Revenue Service")),
+            row((0, "U.S. Individual Income Tax Return"), (36, "2023"), (43, "OMB No. 1545-0074"),
+                (63, "IRS Use Only - Do not write or staple in this space.")),
+            "For the year Jan. 1-Dec. 31, 2023, or other tax year beginning , 2023, ending , 20",
+            "See separate instructions.",
+            "Filing Status   Check only one box.",
+            row((2, "[ ] Single"), (16, "[X] Married filing jointly"), (45, "[ ] Married filing separately (MFS)")),
+            row((2, "[ ] Head of household (HOH)"), (32, "[ ] Qualifying surviving spouse (QSS)")),
+            "If you checked the MFS box, enter the name of your spouse. If you checked the HOH or QSS box, "
+            "enter the child's name if the qualifying person is a child but not your dependent:",
+            "",
+            row((0, "Your first name and middle initial"), (40, "Last name"), (70, "Your social security number")),
+            row((2, j["first"]), (40, j["last"]), (70, j["ssn"])),
+            row((0, "If joint return, spouse's first name and middle initial"), (60, "Last name"),
+                (80, "Spouse's social security number")),
+            row((2, r["first"]), (60, r["last"]), (80, r["ssn"])),
+            row((0, "Home address (number and street). If you have a P.O. box, see instructions."), (80, "Apt. no.")),
+            row((2, street)),
+            row((0, "City, town, or post office. If you have a foreign address, also complete spaces below."),
+                (90, "State"), (100, "ZIP code")),
+            row((2, city), (90, state), (100, zipc)),
+            row((0, "Foreign country name"), (30, "Foreign province/state/county"), (65, "Foreign postal code")),
+            "",
+            "Presidential Election Campaign",
+            "Check here if you, or your spouse if filing jointly, want $3 to go to this fund. "
+            "Checking a box below will not change your tax or refund.   [ ] You   [ ] Spouse",
+            "Digital Assets",
+            "At any time during 2023, did you: (a) receive (as a reward, award, or payment for property or "
+            "services); or (b) sell, exchange, or otherwise dispose of a digital asset (or a financial "
+            "interest in a digital asset)? (See instructions.)   [ ] Yes   [X] No",
+            "Standard Deduction",
+            "Someone can claim:   [ ] You as a dependent   [ ] Your spouse as a dependent",
+            "[ ] Spouse itemizes on a separate return or you were a dual-status alien",
+            "Age/Blindness",
+            "You:   [ ] Were born before January 2, 1959   [ ] Are blind",
+            "Spouse:   [ ] Was born before January 2, 1959   [ ] Is blind",
+            row((0, "Dependents (see instructions):"), (36, "(2) Social security number"),
+                (66, "(3) Relationship to you"), (92, "(4) Check the box if qualifies for (see instructions):")),
+            row((0, "(1) First name"), (18, "Last name"), (92, "Child tax credit"),
+                (112, "Credit for other dependents")),
+            row((2, d["first"]), (18, d["last"]), (36, d["ssn"]), (66, d["relationship"]), (92, "[X]"), (112, "[ ]")),
+            "If more than four dependents, see instructions and check here   [ ]",
+            "",
+            "Income",
+            "Attach Form(s) W-2 here. Also attach Forms W-2G and 1099-R if tax was withheld. "
+            "If you did not get a Form W-2, see instructions.",
+            money("1a Total amount from Form(s) W-2, box 1 (see instructions)", "84,250.00"),
+            money("b Household employee wages not reported on Form(s) W-2", "0.00"),
+            money("c Tip income not reported on line 1a (see instructions)", "0.00"),
+            money("d Medicaid waiver payments not reported on Form(s) W-2 (see instructions)", "0.00"),
+            money("e Taxable dependent care benefits from Form 2441, line 26", "0.00"),
+            money("f Employer-provided adoption benefits from Form 8839, line 29", "0.00"),
+            money("g Wages from Form 8919, line 6", "0.00"),
+            money("h Other earned income (see instructions)", "0.00"),
+            row((0, "i Nontaxable combat pay election (see instructions)"), (60, "0.00")),
+            money("z Add lines 1a through 1h", "84,250.00"),
+            "Attach Sch. B if required.",
+            pair("2a Tax-exempt interest", "0.00", "b Taxable interest", "412.88"),
+            pair("3a Qualified dividends", "1,004.10", "b Ordinary dividends", "1,284.16"),
+            pair("4a IRA distributions", "0.00", "b Taxable amount", "0.00"),
+            pair("5a Pensions and annuities", "0.00", "b Taxable amount", "0.00"),
+            pair("6a Social security benefits", "0.00", "b Taxable amount", "0.00"),
+            "c If you elect to use the lump-sum election method, check here (see instructions)   [ ]",
+            money("7 Capital gain or (loss). Attach Schedule D if required. If not required, check here   [ ]",
+                  "0.00"),
+            money("8 Additional income from Schedule 1, line 10", "18,500.00"),
+            money("9 Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7, and 8. This is your total income", "104,447.04"),
+            money("10 Adjustments to income from Schedule 1, line 26", "1,307.00"),
+            money("11 Subtract line 10 from line 9. This is your adjusted gross income", "103,140.04"),
+            money("12 Standard deduction or itemized deductions (from Schedule A)", "27,700.00"),
+            money("13 Qualified business income deduction from Form 8995 or Form 8995-A", "0.00"),
+            money("14 Add lines 12 and 13", "27,700.00"),
+            money("15 Subtract line 14 from line 11. If zero or less, enter -0-. This is your taxable income",
+                  "75,440.04"),
+            "For Disclosure, Privacy Act, and Paperwork Reduction Act Notice, see separate instructions.",
+            row((0, "Cat. No. 11320B"), (90, "Form 1040 (2023)")),
+        ]
+    )
+    page2 = "\n".join(
+        [
+            row((0, "Form 1040 (2023)"), (100, "Page 2")),
+            "Tax and Credits",
+            money("16 Tax (see instructions). Check if any from Form(s): 1 [ ] 8814  2 [ ] 4972  3 [ ]",
+                  "8,628.00"),
+            money("17 Amount from Schedule 2, line 3", "0.00"),
+            money("18 Add lines 16 and 17", "8,628.00"),
+            money("19 Child tax credit or credit for other dependents from Schedule 8812", "2,000.00"),
+            money("20 Amount from Schedule 3, line 8", "0.00"),
+            money("21 Add lines 19 and 20", "2,000.00"),
+            money("22 Subtract line 21 from line 18. If zero or less, enter -0-", "6,628.00"),
+            money("23 Other taxes, including self-employment tax, from Schedule 2, line 21", "2,614.00"),
+            money("24 Add lines 22 and 23. This is your total tax", "9,242.00"),
+            "Payments",
+            "25 Federal income tax withheld from:",
+            row((0, "a Form(s) W-2"), (60, "11,912.40")),
+            row((0, "b Form(s) 1099"), (60, "0.00")),
+            row((0, "c Other forms (see instructions)"), (60, "0.00")),
+            money("d Add lines 25a through 25c", "11,912.40"),
+            money("26 2023 estimated tax payments and amount applied from 2022 return", "0.00"),
+            "If you have a qualifying child, attach Sch. EIC.",
+            row((0, "27 Earned income credit (EIC)"), (60, "0.00")),
+            row((0, "28 Additional child tax credit from Schedule 8812"), (60, "0.00")),
+            row((0, "29 American opportunity credit from Form 8863, line 8"), (60, "0.00")),
+            "30 Reserved for future use",
+            row((0, "31 Amount from Schedule 3, line 15"), (60, "0.00")),
+            money("32 Add lines 27, 28, 29, and 31. These are your total other payments and refundable credits",
+                  "0.00"),
+            money("33 Add lines 25d, 26, and 32. These are your total payments", "11,912.40"),
+            "Refund",
+            money("34 If line 33 is more than line 24, subtract line 24 from line 33. This is the amount you "
+                  "overpaid", "2,670.40"),
+            money("35a Amount of line 34 you want refunded to you. If Form 8888 is attached, check here   [ ]",
+                  "2,670.40"),
+            "Direct deposit? See instructions.",
+            row((0, "b Routing number"), (20, h["routing"]), (40, "c Type:   [X] Checking   [ ] Savings")),
+            row((0, "d Account number"), (20, JORDAN_CHECKING)),
+            money("36 Amount of line 34 you want applied to your 2024 estimated tax", "0.00"),
+            "Amount You Owe",
+            "37 Subtract line 33 from line 24. This is the amount you owe.",
+            "For details on how to pay, go to www.irs.gov/Payments or see instructions",
+            row((0, "38 Estimated tax penalty (see instructions)"), (60, "0.00")),
+            "Third Party Designee",
+            "Do you want to allow another person to discuss this return with the IRS? See instructions   "
+            "[X] Yes. Complete below.   [ ] No",
+            row((0, "Designee's name"), (30, "Phone no."), (55, "Personal identification number (PIN)")),
+            row((2, des["name"]), (30, des["phone"]), (55, des["pin"])),
+            "Sign Here",
+            "Under penalties of perjury, I declare that I have examined this return and accompanying schedules "
+            "and statements, and to the best of my knowledge and belief, they are true, correct, and complete. "
+            "Declaration of preparer (other than taxpayer) is based on all information of which preparer has "
+            "any knowledge.",
+            row((0, "Your signature"), (30, "Date"), (45, "Your occupation"),
+                (70, "If the IRS sent you an Identity Protection PIN, enter it here (see inst.)")),
+            row((45, jx["occupation"]), (70, jx["ip_pin"])),
+            "Joint return? See instructions. Keep a copy for your records.",
+            row((0, "Spouse's signature. If a joint return, both must sign."), (58, "Date"),
+                (70, "Spouse's occupation"),
+                (95, "If the IRS sent your spouse an Identity Protection PIN, enter it here (see inst.)")),
+            row((70, rx["occupation"])),
+            row((0, "Phone no."), (30, "Email address")),
+            row((2, jx["phone"]), (30, jx["email"])),
+            "Paid Preparer Use Only",
+            row((0, "Preparer's name"), (30, "Preparer's signature"), (55, "Date"), (70, "PTIN"),
+                (85, "Check if:")),
+            row((2, prep["name"]), (70, prep["ptin"]), (85, "[ ] Self-employed")),
+            row((0, "Firm's name"), (70, "Phone no.")),
+            row((2, prep["firm"]), (70, prep["phone"])),
+            row((0, "Firm's address"), (70, "Firm's EIN")),
+            row((2, prep["address"]), (70, prep["ein"])),
+            row((0, "Go to www.irs.gov/Form1040 for instructions and the latest information."),
+                (90, "Form 1040 (2023)")),
+        ]
+    )
+    return page1 + "\n\n" + page2 + "\n"
+
+
 # ---------------------------------------------------------------------------
 # OCR noise. Each function takes the clean text and returns what a mediocre
 # scan through OCR would plausibly yield. The changes are fixed, not random,
@@ -781,6 +994,17 @@ def main(out: Path = OUT) -> None:
                     ),
                     (RILEY["ssn"], RILEY["ssn"].replace("-", "")),
                     ("425,000.00", "425,0OO.00"),
+                ],
+            ),
+        ),
+        "1040-example-2023": (
+            f1040_text(),
+            noisy(
+                f1040_text(),
+                [
+                    (RILEY["ssn"], RILEY["ssn"].replace("-", " ")),
+                    ("103,140.04", "1O3,140.04"),
+                    (JORDAN_CHECKING, "O0012345678"),
                 ],
             ),
         ),

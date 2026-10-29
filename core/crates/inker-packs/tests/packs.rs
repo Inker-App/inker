@@ -100,6 +100,15 @@ fn value_shapes_parse() {
     )
     .unwrap();
     assert_eq!(t.fields[1].value, ValueShape::Date);
+    let t = FormTemplate::parse(
+        "d.toml",
+        &DEMO.replace(
+            "role = \"recipient\"\nacroform",
+            "role = \"recipient\"\nvalue = \"below\"\nacroform",
+        ),
+    )
+    .unwrap();
+    assert_eq!(t.fields[1].value, ValueShape::Below);
     assert!(matches!(
         FormTemplate::parse(
             "d.toml",
@@ -107,6 +116,20 @@ fn value_shapes_parse() {
         ),
         Err(PackError::Parse { .. })
     ));
+}
+
+#[test]
+fn individual_return_roles_parse() {
+    // Form 1040 names a taxpayer, a spouse, dependents, a third-party
+    // designee and a paid preparer.
+    for role in ["taxpayer", "spouse", "dependent", "designee", "preparer"] {
+        let t = FormTemplate::parse(
+            "d.toml",
+            &DEMO.replacen("role = \"recipient\"", &format!("role = \"{role}\""), 1),
+        )
+        .unwrap_or_else(|e| panic!("{role}: {e}"));
+        assert_eq!(t.fields[0].role.as_deref(), Some(role));
+    }
 }
 
 #[test]
@@ -240,6 +263,7 @@ const TAX_FORMS: &[(&str, &str)] = &[
     ("1095-c", "1095-c"),
     ("k1-1065", "k1-1065"),
     ("k1-1120s", "k1-1120s"),
+    ("1040", "1040"),
 ];
 
 #[test]

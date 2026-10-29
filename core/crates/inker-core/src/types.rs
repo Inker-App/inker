@@ -293,7 +293,8 @@ pub struct Detection {
     /// number, but the scan is rough." Never contains the value itself.
     pub review_prompt: Option<String>,
     /// Role of this value in the document, for `describe`: "employee",
-    /// "employer", "payer", "recipient", "lender", "borrower".
+    /// "employer", "payer", "recipient", "lender", "borrower", "taxpayer",
+    /// "spouse", "dependent", "designee", "preparer".
     pub role: Option<String>,
     /// Replacement text for [`Treatment::Generalize`], e.g. "Brooklyn, NY".
     /// `None` for every other treatment.

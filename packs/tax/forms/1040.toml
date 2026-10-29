@@ -1,0 +1,617 @@
+# Form 1040, U.S. Individual Income Tax Return: pages 1 and 2 of the 2023
+# revision. Lines 26 and 36 name tax years, and their patterns take any
+# year, so the 2024 revision's wording matches too. Schema: see w2.toml.
+#
+# The identity, signature and preparer blocks are rows of column heads with
+# the typed values on the row below, so most identifying fields read the cell
+# under their label (value = "below"). Money lines keep the amount after the
+# label on the same line.
+#
+# The first anchor is the title as printed on page 1 and in the page 2
+# header ("Form 1040 (2023) Page 2"); "(Form 1040)" on a schedule and "Form
+# 1040-SR" or "Form 1040-X" are not it.
+id = "1040"
+display = "1040"
+kind = "1040"
+anchors = ['(?:^|[^(\w])Form 1040(?:\s|$)', 'U\.S\. Individual Income Tax Return|\bPage 2\b']
+year = '(?s)Form 1040.{0,120}?\b(20\d{2})\b'
+
+# The tax year line: fixed wording around the dates of a fiscal year.
+[[fields]]
+id = "tax_year"
+label = '''For the year Jan\. 1\s*[-–—]\s*Dec\. 31, 20\d{2}, or other tax year beginning'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "mfs_name"
+label = '''If you checked the MFS box, enter the name of your spouse\. If you checked the HOH or QSS box, enter the child['’]s name if the qualifying person is a child but not your dependent:?'''
+kind = "person"
+treatment = "tokenize"
+
+[[fields]]
+id = "name"
+label = '''Your first name and middle initial'''
+kind = "person"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "ssn"
+label = '''Your social security number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "spouse_name"
+label = '''If joint return, spouse['’]s first name and middle initial'''
+kind = "person"
+treatment = "tokenize"
+role = "spouse"
+value = "below"
+
+[[fields]]
+id = "spouse_ssn"
+label = '''Spouse['’]s social security number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "spouse"
+value = "below"
+
+[[fields]]
+id = "street"
+label = '''Home address \(number and street\)\.?(?: If you have a P\.O\. box, see instructions\.)?'''
+kind = "address"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "apt"
+label = '''Apt\. no\.'''
+kind = "address"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "city"
+label = '''City, town,? or post office\.?(?: If you have a foreign address, also complete spaces below\.)?'''
+kind = "address"
+treatment = "generalize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "zip"
+label = '''\bZIP code'''
+kind = "address"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "foreign_country"
+label = '''Foreign country name'''
+kind = "address"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "foreign_province"
+label = '''Foreign province/state/county'''
+kind = "address"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "foreign_postal"
+label = '''Foreign postal code'''
+kind = "address"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "dependent_1"
+label = '''\(1\) First name'''
+kind = "person"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+
+[[fields]]
+id = "dependent_1_ssn"
+label = '''\(2\) Social security number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+
+[[fields]]
+id = "dependent_2"
+label = '''\(1\) First name'''
+kind = "person"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+skip_lines = 1
+
+[[fields]]
+id = "dependent_2_ssn"
+label = '''\(2\) Social security number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+skip_lines = 1
+
+[[fields]]
+id = "dependent_3"
+label = '''\(1\) First name'''
+kind = "person"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+skip_lines = 2
+
+[[fields]]
+id = "dependent_3_ssn"
+label = '''\(2\) Social security number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+skip_lines = 2
+
+[[fields]]
+id = "dependent_4"
+label = '''\(1\) First name'''
+kind = "person"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+skip_lines = 3
+
+[[fields]]
+id = "dependent_4_ssn"
+label = '''\(2\) Social security number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+skip_lines = 3
+
+[[fields]]
+id = "1a"
+label = '''\b1a Total amount from Form\(s\) W-2, box 1(?: \(see instructions\))?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1b"
+label = '''\bb Household employee wages not reported on Form\(s\) W-2'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1c"
+label = '''\bc Tip income not reported on line 1a(?: \(see instructions\))?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1d"
+label = '''\bd Medicaid waiver payments not reported on Form\(s\) W-2(?: \(see instructions\))?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1e"
+label = '''\be Taxable dependent care benefits from Form 2441, line 26'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1f"
+label = '''\bf Employer-provided adoption benefits from Form 8839, line 29'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1g"
+label = '''\bg Wages from Form 8919, line 6'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1h"
+label = '''\bh Other earned income(?: \(see instructions\))?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1i"
+label = '''\bi Nontaxable combat pay election(?: \(see instructions\))?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "1z"
+label = '''\bz Add lines 1a through 1h'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2a"
+label = '''\b2a Tax-exempt interest'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2b"
+label = '''\bb Taxable interest'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3a"
+label = '''\b3a Qualified dividends'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3b"
+label = '''\bb Ordinary dividends'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4a"
+label = '''\b4a IRA distributions'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "b_taxable"
+label = '''\bb Taxable amount'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5a"
+label = '''\b5a Pensions and annuities'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "6a"
+label = '''\b6a Social security benefits'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "7"
+label = '''\b7 Capital gain or \(loss\)\.(?: Attach Schedule D if required\.)?(?: If not required, check here)?(?: \[[^\]]*\])?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "8"
+label = '''\b8 Additional income from Schedule 1, line 10'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "9"
+label = '''\b9 Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7, and 8\. This is your total income'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "10"
+label = '''\b10 Adjustments to income from Schedule 1, line 26'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "11"
+label = '''\b11 Subtract line 10 from line 9\. This is your adjusted gross income'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "12"
+label = '''\b12 Standard deduction or itemized deductions \(from Schedule A\)'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "13"
+label = '''\b13 Qualified business income deduction from Form 8995 or Form 8995-A'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "14"
+label = '''\b14 Add lines 12 and 13'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "15"
+label = '''\b15 Subtract line 14 from line 11\. If zero or less, enter -0-\. This is your taxable income'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "16"
+label = '''\b16 Tax \(see instructions\)\.(?: Check if any from Form\(s\):)?(?: 1 \[[^\]]*\] 8814 2 \[[^\]]*\] 4972 3 \[[^\]]*\])?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "17"
+label = '''\b17 Amount from Schedule 2, line 3'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "18"
+label = '''\b18 Add lines 16 and 17'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "19"
+label = '''\b19 Child tax credit or credit for other dependents from Schedule 8812'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "20"
+label = '''\b20 Amount from Schedule 3, line 8'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "21"
+label = '''\b21 Add lines 19 and 20'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "22"
+label = '''\b22 Subtract line 21 from line 18\. If zero or less, enter -0-'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "23"
+label = '''\b23 Other taxes, including self-employment tax, from Schedule 2, line 21'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "24"
+label = '''\b24 Add lines 22 and 23\. This is your total tax'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "25a"
+label = '''\ba Form\(s\) W-2\b'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "25b"
+label = '''\bb Form\(s\) 1099\b'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "25c"
+label = '''\bc Other forms \(see instructions\)'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "25d"
+label = '''\bd Add lines 25a through 25c'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "26"
+label = '''\b26 (?:20\d{2} )?estimated tax payments and amount applied from (?:20\d{2} )?return'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "27"
+label = '''\b27 Earned income credit \(EIC\)'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "28"
+label = '''\b28 Additional child tax credit from Schedule 8812'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "29"
+label = '''\b29 American opportunity credit from Form 8863, line 8'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "31"
+label = '''\b31 Amount from Schedule 3, line 15'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "32"
+label = '''\b32 Add lines 27, 28, 29, and 31\. These are your total other payments and refundable credits'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "33"
+label = '''\b33 Add lines 25d, 26, and 32\. These are your total payments'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "34"
+label = '''\b34 If line 33 is more than line 24, subtract line 24 from line 33\. This is the amount you overpaid'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "35a"
+label = '''\b35a Amount of line 34 you want refunded to you\.(?: If Form 8888 is attached, check here)?(?: \[[^\]]*\])?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "routing"
+label = '''\bb Routing number'''
+kind = "routing"
+treatment = "tokenize"
+role = "taxpayer"
+
+[[fields]]
+id = "account"
+label = '''\bd Account number'''
+kind = "account"
+treatment = "tokenize"
+role = "taxpayer"
+
+[[fields]]
+id = "36"
+label = '''\b36 Amount of line 34 you want applied to your (?:20\d{2} )?estimated tax'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "37"
+label = '''\b37 Subtract line 33 from line 24\. This is the amount you owe\.?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "38"
+label = '''\b38 Estimated tax penalty(?: \(see instructions\))?'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "designee_name"
+label = '''Designee['’]s name'''
+kind = "person"
+treatment = "tokenize"
+role = "designee"
+value = "below"
+
+[[fields]]
+id = "designee_pin"
+label = '''Personal identification number \(PIN\)'''
+kind = "pin"
+treatment = "tokenize"
+role = "designee"
+value = "below"
+
+[[fields]]
+id = "phone"
+label = '''\bPhone no\.'''
+kind = "phone"
+treatment = "tokenize"
+value = "below"
+
+[[fields]]
+id = "occupation"
+label = '''\bYour occupation'''
+kind = "occupation"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "ip_pin"
+label = '''If the IRS sent you an Identity Protection PIN,? enter it here(?: \(see inst\.\))?'''
+kind = "ip_pin"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "spouse_occupation"
+label = '''Spouse['’]s occupation'''
+kind = "occupation"
+treatment = "tokenize"
+role = "spouse"
+value = "below"
+
+[[fields]]
+id = "spouse_ip_pin"
+label = '''If the IRS sent your spouse an Identity Protection PIN,? enter it here(?: \(see inst\.\))?'''
+kind = "ip_pin"
+treatment = "tokenize"
+role = "spouse"
+value = "below"
+
+[[fields]]
+id = "email"
+label = '''\bEmail address'''
+kind = "email"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "preparer_name"
+label = '''Preparer['’]s name'''
+kind = "person"
+treatment = "tokenize"
+role = "preparer"
+value = "below"
+
+[[fields]]
+id = "ptin"
+label = '''\bPTIN\b'''
+kind = "ptin"
+treatment = "tokenize"
+role = "preparer"
+value = "below"
+
+[[fields]]
+id = "firm_name"
+label = '''Firm['’]s name'''
+kind = "org"
+treatment = "tokenize"
+role = "preparer"
+value = "below"
+
+[[fields]]
+id = "firm_address"
+label = '''Firm['’]s address'''
+kind = "address"
+treatment = "generalize"
+role = "preparer"
+value = "below"
+
+[[fields]]
+id = "firm_ein"
+label = '''Firm['’]s EIN'''
+kind = "ein"
+treatment = "tokenize"
+role = "preparer"
+value = "below"

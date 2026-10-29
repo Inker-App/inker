@@ -17,6 +17,11 @@ pub const ROLES: &[&str] = &[
     "recipient",
     "lender",
     "borrower",
+    "taxpayer",
+    "spouse",
+    "dependent",
+    "designee",
+    "preparer",
 ];
 
 /// The tax pack, embedded at build time from `packs/tax` at the repo root.
@@ -128,6 +133,12 @@ pub enum ValueShape {
     /// The first date (`MM/DD/YYYY`, `MM-DD-YYYY` or `YYYY-MM-DD`), e.g. a
     /// date of birth in a table row.
     Date,
+    /// The column segment typed under the label, on the first following
+    /// line that is not all labels (a row of sub-heads is skipped), or the
+    /// `skip_lines`-th such line after it. An empty cell yields nothing. For
+    /// rows of column heads with the values on the row below (Form 1040).
+    /// A `person` value takes the name-part columns after it, as `line`.
+    Below,
 }
 
 /// One box on a form.

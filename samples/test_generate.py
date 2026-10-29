@@ -37,6 +37,7 @@ STEMS = [
     "bank-statement-harbor-2025-03",
     "closing-statement-granite-2025",
     "receipt-cornerstone-2025-03-09",
+    "1040-example-2023",
 ]
 BINARIES = [
     "w2-acme-2025.pdf",
@@ -142,6 +143,46 @@ class Corpus(unittest.TestCase):
         self.assertIn("1 Mortgage interest received from payer(s)/borrower(s)", self.read("1098-harbor-2025.txt"))
         self.assertIn("A Partnership's employer identification number", self.read("k1-tidewater-2025.txt"))
         self.assertIn("E Partner's SSN or TIN", self.read("k1-tidewater-2025.txt"))
+
+    def test_1040_is_a_joint_return_with_dependent_deposit_and_preparer(self):
+        f = self.read("1040-example-2023.txt")
+        for label in [
+            "U.S. Individual Income Tax Return",
+            "Your first name and middle initial",
+            "Your social security number",
+            "If joint return, spouse's first name and middle initial",
+            "Spouse's social security number",
+            "Home address (number and street). If you have a P.O. box, see instructions.",
+            "(2) Social security number",
+            "9 Add lines 1z, 2b, 3b, 4b, 5b, 6b, 7, and 8. This is your total income",
+            "11 Subtract line 10 from line 9. This is your adjusted gross income",
+            "b Routing number",
+            "d Account number",
+            "Designee's name",
+            "Paid Preparer Use Only",
+            "Firm's EIN",
+            "Form 1040 (2023)",
+        ]:
+            self.assertIn(label, f)
+        for v in (gen.JORDAN["ssn"], gen.RILEY["ssn"], gen.DEPENDENT["ssn"], gen.PREPARER["ein"],
+                  gen.PREPARER["ptin"], gen.HARBOR["routing"], gen.JORDAN_CHECKING):
+            self.assertIn(v, f)
+
+    def test_1040_columns_sit_under_their_labels(self):
+        # Values are typed under their column heads, as on the printed form
+        # (a row of sub-heads may come between).
+        lines = self.read("1040-example-2023.txt").splitlines()
+        for label, value in [
+            ("Your social security number", gen.JORDAN["ssn"]),
+            ("Spouse's social security number", gen.RILEY["ssn"]),
+            ("(2) Social security number", gen.DEPENDENT["ssn"]),
+            ("Your occupation", gen.JORDAN_1040["occupation"]),
+            ("PTIN", gen.PREPARER["ptin"]),
+        ]:
+            i = next(i for i, l in enumerate(lines) if label in l)
+            col = lines[i].index(label)
+            below = next(l for l in lines[i + 1 :] if l[col : col + 1].strip())
+            self.assertEqual(below[col : col + len(value)], value, label)
 
     def test_same_ssn_on_w2_and_k1(self):
         ssn = gen.JORDAN["ssn"]

@@ -216,7 +216,7 @@ pub fn apply(extracted: &Extracted, m: &TemplateMatch<'_>) -> TemplateOutput {
                 if inner(lm.start(), lm.end()) {
                     continue;
                 }
-                let Some((start, end)) = page_ctx.value(f, lm.end()) else {
+                let Some((start, end)) = page_ctx.value(f, lm.start(), lm.end()) else {
                     continue;
                 };
                 let FieldKind::Token(kind) = &f.kind else {
@@ -361,14 +361,21 @@ impl Page<'_> {
     /// of its line is a boilerplate line of the pack.
     fn is_label(&self, s: usize, e: usize) -> bool {
         let le = self.text[e..].find('\n').map_or(self.text.len(), |i| e + i);
-        self.packs.is_boilerplate(&self.text[s..e])
+        self.is_label_cell(s, e)
             || self.packs.is_boilerplate(&self.text[s..le])
-            || self.labels.iter().any(|&(a, b)| a < e && s < b)
             || self
                 .template
                 .fields
                 .iter()
                 .any(|f| f.label.is_match(&self.text[s..le]))
+    }
+
+    /// True when the cell `[s, e)` itself is label text: a label match
+    /// overlaps it or it is a boilerplate line. The rest of its line is not
+    /// considered.
+    fn is_label_cell(&self, s: usize, e: usize) -> bool {
+        self.packs.is_boilerplate(&self.text[s..e])
+            || self.labels.iter().any(|&(a, b)| a < e && s < b)
     }
 
     /// End of the search window after a label: the next label, or `WINDOW`.
@@ -381,8 +388,8 @@ impl Page<'_> {
             .map_or(cap, |s| s.min(cap))
     }
 
-    /// The value of field `f` whose label ends at `from`.
-    fn value(&self, f: &FieldSpec, from: usize) -> Option<(usize, usize)> {
+    /// The value of field `f` whose label spans `[at, from)`.
+    fn value(&self, f: &FieldSpec, at: usize, from: usize) -> Option<(usize, usize)> {
         match f.value {
             ValueShape::Tin => self.first_in_window(&TIN, from, |_| true),
             ValueShape::Routing => self.first_in_window(&ROUTING, from, |_| true),
@@ -390,14 +397,24 @@ impl Page<'_> {
             ValueShape::Account => self.first_in_window(&ACCOUNT, from, |s| {
                 s.bytes().filter(u8::is_ascii_digit).count() >= 4
             }),
-            ValueShape::Line => {
-                let (s, e) = self.lines(from).nth(f.skip_lines)?;
+            ValueShape::Line | ValueShape::Below => {
+                let (s, e) = if f.value == ValueShape::Below {
+                    self.below(at, from, f.skip_lines)?
+                } else {
+                    self.lines(from).nth(f.skip_lines)?
+                };
                 let v = &self.text[s..e];
                 let wants_letters =
                     matches!(f.kind, FieldKind::Token(TokenKind::Person | TokenKind::Org));
-                if self.is_label(s, e)
-                    || (wants_letters && !v.bytes().any(|b| b.is_ascii_alphabetic()))
-                {
+                // A kept amount may share its row with the next box's label
+                // (Form 1040's "2a ... b Taxable interest"); only the cell
+                // itself must not be label text.
+                let label = if f.kind == FieldKind::Keep {
+                    self.is_label_cell(s, e)
+                } else {
+                    self.is_label(s, e)
+                };
+                if label || (wants_letters && !v.bytes().any(|b| b.is_ascii_alphabetic())) {
                     return None;
                 }
                 if matches!(f.kind, FieldKind::Token(TokenKind::Person)) {
@@ -453,6 +470,41 @@ impl Page<'_> {
         end
     }
 
+    /// The cell under the label `[at, from)`: on the `skip`-th following
+    /// line that is not all labels, the column segment that starts within
+    /// the label's columns (two to its left allowed for indented values).
+    /// `None` when that cell is empty.
+    fn below(&self, at: usize, from: usize, skip: usize) -> Option<(usize, usize)> {
+        let text = self.text;
+        let line_start = text[..at].rfind('\n').map_or(0, |i| i + 1);
+        let label_line_end = text[at..].find('\n').map_or(text.len(), |i| at + i);
+        let c0 = text[line_start..at].chars().count();
+        let c1 = c0 + text[at..from.min(label_line_end)].chars().count();
+        let mut pos = text[from..].find('\n').map(|i| from + i + 1)?;
+        let mut rows = 0;
+        while pos < text.len() {
+            let end = text[pos..].find('\n').map_or(text.len(), |i| pos + i);
+            let cells: Vec<(usize, usize)> = columns(&text[pos..end])
+                .into_iter()
+                .map(|(s, e)| (pos + s, pos + e))
+                .collect();
+            let next = end + 1;
+            if cells.is_empty() || cells.iter().all(|&(s, e)| self.is_label(s, e)) {
+                pos = next;
+                continue;
+            }
+            if rows == skip {
+                return cells.into_iter().find(|&(s, _)| {
+                    let col = text[pos..s].chars().count();
+                    col + 2 >= c0 && col < c1
+                });
+            }
+            rows += 1;
+            pos = next;
+        }
+        None
+    }
+
     fn first_in_window(
         &self,
         re: &Regex,
@@ -503,4 +555,26 @@ impl Page<'_> {
             }
         })
     }
+}
+
+/// Column segments of a line, trimmed: three spaces or a tab end a column.
+fn columns(line: &str) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut pos = 0;
+    while pos < line.len() {
+        let rest = &line[pos..];
+        let s = pos + (rest.len() - rest.trim_start().len());
+        if s >= line.len() {
+            break;
+        }
+        let seg_rest = &line[s..];
+        let seg_len = ["   ", "\t"]
+            .iter()
+            .filter_map(|b| seg_rest.find(b))
+            .min()
+            .unwrap_or(seg_rest.len());
+        out.push((s, s + seg_rest[..seg_len].trim_end().len()));
+        pos = s + seg_len;
+    }
+    out
 }

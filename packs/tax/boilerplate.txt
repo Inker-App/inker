@@ -78,3 +78,75 @@ Beginning  Ending
 560220
 600120
 600220
+
+# Form 1040: section heads, column heads and fixed sentences between the
+# fields (core/crates/inker-detect/tests/fixtures/1040.txt).
+U.S. Individual Income Tax Return
+IRS Use Only - Do not write or staple in this space.
+See separate instructions.
+Filing Status
+Check only one box.
+Filing Status   Check only one box.
+Your first name and middle initial
+If joint return, spouse’s first name and middle initial
+Last name
+Your social security number
+Spouse’s social security number
+Apt. no.
+State
+ZIP code
+Foreign country name
+Foreign province/state/county
+Foreign postal code
+Presidential Election Campaign
+Check here if you, or your spouse if filing jointly, want $3 to go to this fund. Checking a box below will not change your tax or refund.
+Digital Assets
+Standard Deduction
+Someone can claim:
+Age/Blindness
+Dependents (see instructions):
+(1) First name
+(2) Social security number
+(3) Relationship to you
+(4) Check the box if qualifies for (see instructions):
+Child tax credit
+Credit for other dependents
+If more than four dependents, see instructions and check here
+Income
+Attach Form(s) W-2 here. Also attach Forms W-2G and 1099-R if tax was withheld. If you did not get a Form W-2, see instructions.
+Attach Sch. B if required.
+For Disclosure, Privacy Act, and Paperwork Reduction Act Notice, see separate instructions.
+Tax and Credits
+Payments
+25 Federal income tax withheld from:
+If you have a qualifying child, attach Sch. EIC.
+30 Reserved for future use
+Refund
+Direct deposit? See instructions.
+Amount You Owe
+For details on how to pay, go to www.irs.gov/Payments or see instructions
+Third Party Designee
+Do you want to allow another person to discuss this return with the IRS? See instructions
+Designee’s name
+Phone no.
+Personal identification number (PIN)
+Sign Here
+Your signature
+Date
+Your occupation
+If the IRS sent you an Identity Protection PIN, enter it here (see inst.)
+Joint return? See instructions. Keep a copy for your records.
+Spouse’s signature. If a joint return, both must sign.
+Spouse’s occupation
+If the IRS sent your spouse an Identity Protection PIN, enter it here (see inst.)
+Email address
+Paid Preparer Use Only
+Preparer’s name
+Preparer’s signature
+PTIN
+Check if:
+Self-employed
+Firm’s name
+Firm’s address
+Firm’s EIN
+Go to www.irs.gov/Form1040 for instructions and the latest information.

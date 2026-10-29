@@ -2,10 +2,10 @@
 # (documented in core/crates/inker-detect/src/template.rs).
 name = "tax"
 version = "0.1.0"
-description = "US federal tax forms: W-2, 1099 family, 1098, 1095, Schedule K-1"
+description = "US federal tax forms: W-2, 1099 family, 1098, 1095, Schedule K-1, Form 1040"
 
 # File stems under forms/. A template only loads if it is listed here.
-forms = ["w2", "1099-int", "1099-nec", "1099-div", "1099-b", "1099-k", "1099-misc", "1099-misc-2026", "1098", "1095-a", "1095-b", "1095-c", "k1-1065", "k1-1120s"]
+forms = ["w2", "1099-int", "1099-nec", "1099-div", "1099-b", "1099-k", "1099-misc", "1099-misc-2026", "1098", "1095-a", "1095-b", "1095-c", "k1-1065", "k1-1120s", "1040"]
 
 [codename]
 # First codename segment for a document kind with no entry below.
@@ -28,6 +28,7 @@ default = "doc"
 "1095-c" = "1095-c"
 "k1-1065" = "k1-1065"
 "k1-1120s" = "k1-1120s"
+"1040" = "1040"
 "bank-statement" = "bank-statement"
 "closing-statement" = "closing-statement"
 "receipt" = "receipt"

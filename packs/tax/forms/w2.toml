@@ -11,12 +11,16 @@
 #                         routing, card, person, org, address, email, phone,
 #                         gov_id, or any other snake_case name (custom kind)
 #     treatment           tokenize | generalize | keep
-#     role                employee | employer | payer | recipient | lender | borrower
-#     value               line | lines | tin | account | routing | date
+#     role                employee | employer | payer | recipient | lender |
+#                         borrower | taxpayer | spouse | dependent | designee |
+#                         preparer
+#     value               line | lines | tin | account | routing | date | below
 #                         (default from kind: tin for ssn/itin/ein, account,
 #                         routing, lines for address, else line). A person's
 #                         line also takes the columns after the first that
-#                         read as name parts (last name, suffix).
+#                         read as name parts (last name, suffix). `below`
+#                         reads the cell under the label on the next row of
+#                         values (rows of column heads, as on Form 1040).
 #     skip_lines, lines   for addresses under a name line
 #     acroform            AcroForm field names in fillable IRS PDFs
 id = "w2"

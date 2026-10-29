@@ -406,3 +406,163 @@ fn boilerplate_lines_are_never_values() {
     let out = template::apply(&e, &m);
     assert!(out.detections.is_empty(), "{:?}", values(text, &out));
 }
+
+/// A form laid out as rows of column heads with the typed values in the
+/// columns under them (Form 1040's identity, signature and preparer rows).
+const ROWS: &str = r#"
+id = "rows"
+display = "Rows"
+kind = "rows"
+anchors = ["Rows Return"]
+
+[[fields]]
+id = "name"
+label = "First name and middle initial"
+kind = "person"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "ssn"
+label = "Social security number"
+kind = "ssn"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "phone"
+label = 'Phone no\.'
+kind = "phone"
+treatment = "tokenize"
+value = "below"
+
+[[fields]]
+id = "occupation"
+label = "Occupation"
+kind = "occupation"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "sub"
+label = "Sub-head"
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "row_2"
+label = 'Dependent \(1\) Name'
+kind = "person"
+treatment = "tokenize"
+role = "dependent"
+value = "below"
+skip_lines = 1
+"#;
+
+fn rows_packs() -> PackSet {
+    let manifest = "name = \"rows\"\nversion = \"0.0.1\"\nforms = [\"rows\"]\n";
+    PackSet {
+        packs: vec![Pack::from_sources(manifest, &[("rows", ROWS)]).unwrap()],
+    }
+}
+
+/// `(field, value)` of every detection, sorted by field.
+fn rows_values(text: &str) -> Vec<(String, String)> {
+    let p = rows_packs();
+    let e = doc(text, TextOrigin::TextLayer);
+    let m = template::match_template(&e, &p).unwrap();
+    let mut got: Vec<(String, String)> = template::apply(&e, &m)
+        .detections
+        .iter()
+        .map(|d| match &d.source {
+            DetectionSource::Template { field, .. } => {
+                (field.clone(), text[d.span.start..d.span.end].to_string())
+            }
+            s => panic!("not a template source: {s:?}"),
+        })
+        .collect();
+    got.sort();
+    got
+}
+
+#[test]
+fn below_reads_the_column_under_the_label() {
+    // Each value sits under its own column head, whatever is typed (or not)
+    // in the columns before it.
+    let text = "\
+Rows Return 2023
+First name and middle initial   Last name   Social security number
+  Jordan A                      Example     900-12-3456
+Signature           Date          Occupation        Phone no.
+                    04/12/2024    Field Engineer    (503) 555-0118
+Dependent (1) Name   Age
+  Casey Example      7
+  Robin Example      4
+";
+    let s = |a: &str, b: &str| (a.to_string(), b.to_string());
+    assert_eq!(
+        rows_values(text),
+        vec![
+            s("name", "Jordan A                      Example"),
+            s("occupation", "Field Engineer"),
+            s("phone", "(503) 555-0118"),
+            s("row_2", "Robin Example"),
+            s("ssn", "900-12-3456"),
+        ]
+    );
+}
+
+#[test]
+fn below_finds_nothing_in_an_empty_column() {
+    // An empty cell is not filled from the next column, and a row of labels
+    // under the label is never read as values.
+    let text = "\
+Rows Return 2023
+Signature           Date          Occupation        Phone no.
+                    04/12/2024                      (503) 555-0118
+First name and middle initial   Social security number
+Dependent (1) Name   Relationship
+";
+    assert_eq!(
+        rows_values(text),
+        vec![("phone".to_string(), "(503) 555-0118".to_string())]
+    );
+}
+
+#[test]
+fn below_looks_past_a_row_of_sub_heads() {
+    // Form 1040's dependents table has a second row of column heads between
+    // the first heads and the typed rows.
+    let text = "\
+Rows Return 2023
+First name and middle initial   Social security number
+                                Sub-head
+  Jordan A                      900-12-3456
+";
+    let s = |a: &str, b: &str| (a.to_string(), b.to_string());
+    assert_eq!(
+        rows_values(text),
+        vec![s("name", "Jordan A"), s("ssn", "900-12-3456")]
+    );
+}
+
+#[test]
+fn a_kept_amount_is_read_when_another_box_shares_its_row() {
+    // Form 1040 prints two lines per row ("2a Tax-exempt interest  0.00
+    // b Taxable interest  412.88"): the first amount is still the value of
+    // its line, though the rest of the row holds another label.
+    let text = "Demo Statement 2025\n1 Interest income   12.00   Recipient's TIN   900-14-2231\n";
+    let p = packs();
+    let e = doc(text, TextOrigin::TextLayer);
+    let m = template::match_template(&e, &p).unwrap();
+    let out = template::apply(&e, &m);
+    let kept: Vec<&str> = out
+        .keep
+        .iter()
+        .map(|(_, s)| &text[s.start..s.end])
+        .collect();
+    assert_eq!(kept, vec!["12.00"]);
+}

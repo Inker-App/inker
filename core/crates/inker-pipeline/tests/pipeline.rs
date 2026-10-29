@@ -424,6 +424,7 @@ fn no_sample_shows_any_part_of_the_synthetic_names() {
         "k1-tidewater-2025.txt",
         "closing-statement-granite-2025.txt",
         "bank-statement-harbor-2025-03.txt",
+        "1040-example-2023.txt",
     ] {
         let w = World::new();
         let view = ingest_and_view(&w, name);
@@ -434,4 +435,94 @@ fn no_sample_shows_any_part_of_the_synthetic_names() {
         }
     }
     assert!(leaks.is_empty(), "name parts leaked:\n{}", leaks.join("\n"));
+}
+
+#[test]
+fn a_joint_1040_is_recognised_and_every_identifier_is_inked() {
+    // A dropped federal return was classified as a generic tax form and
+    // its names came back as a stream of "can't place it" questions.
+    let w = World::new();
+    let src = w.download("1040-example-2023.txt");
+    let outcomes = w
+        .pipeline
+        .ingest(std::slice::from_ref(&src), IngestMode::Copy)
+        .expect("ingest");
+    let id = outcomes[0].id;
+    let questions: Vec<_> = w
+        .pipeline
+        .core()
+        .pending_reviews()
+        .expect("questions")
+        .into_iter()
+        .filter(|q| q.document == id)
+        .map(|q| q.prompt.unwrap_or_default())
+        .collect();
+    assert!(questions.is_empty(), "questions on the 1040: {questions:?}");
+    let rec = w.pipeline.core().document(id).expect("record");
+    assert_eq!(rec.state, DocState::Ready, "{:?}", rec.status_note);
+    assert_eq!(rec.kind.as_str(), "1040");
+    assert_eq!(rec.year, Some(2023));
+    assert!(
+        rec.codename.as_str().starts_with("1040-2023"),
+        "codename {}",
+        rec.codename
+    );
+
+    let view = resolved_view(&w, &Handle::new(rec.codename));
+    for real in [
+        // Taxpayer, spouse and dependent: names and SSNs.
+        "Jordan",
+        "Example",
+        JORDAN_SSN,
+        "Riley",
+        "Sample",
+        "666-48-2210",
+        "Casey",
+        "900-12-7788",
+        // Home address.
+        "48 Lantern Way",
+        // Direct deposit.
+        "123456789",
+        "00012345678",
+        // Designee.
+        "Morgan",
+        "Placeholder",
+        "(503) 555-0175",
+        "40917",
+        // Signature block.
+        "Field Engineer",
+        "Data Analyst",
+        "000417",
+        "(503) 555-0118",
+        "jordan.example@example.com",
+        // Paid preparer.
+        "P00000000",
+        "Ledgerline",
+        "79-2020304",
+        "12 Ledger Lane",
+        "(541) 555-0190",
+    ] {
+        assert!(
+            !view.contains(real),
+            "{real:?} visible on the 1040:\n{view}"
+        );
+    }
+    for token in ["[SSN_", "[PERSON_", "[ROUTING_", "[ACCOUNT_"] {
+        assert!(view.contains(token), "no {token} token:\n{view}");
+    }
+    for kept in [
+        "84,250.00",  // 1a wages
+        "104,447.04", // 9 total income
+        "103,140.04", // 11 adjusted gross income
+        "75,440.04",  // 15 taxable income
+        "8,628.00",   // 16 tax
+        "9,242.00",   // 24 total tax
+        "11,912.40",  // 25d withholding
+        "2,670.40",   // 35a refund
+    ] {
+        assert!(
+            view.contains(kept),
+            "money line {kept} must be kept:\n{view}"
+        );
+    }
 }
