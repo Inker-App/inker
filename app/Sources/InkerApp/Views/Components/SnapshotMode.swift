@@ -28,9 +28,14 @@ struct PopoverScroll<Content: View>: View {
 
     var body: some View {
         if snapshotMode {
-            content
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .clipped()
+            // GeometryReader takes exactly the space it is offered whatever
+            // its child wants, which a flexible frame does not: a frame's
+            // lower bound is its child's size, so content taller than the
+            // popover pushed the header and footer out of the snapshot.
+            GeometryReader { _ in
+                content.frame(maxWidth: .infinity, alignment: .top)
+            }
+            .clipped()
         } else {
             ScrollView(.vertical, showsIndicators: false) {
                 content
