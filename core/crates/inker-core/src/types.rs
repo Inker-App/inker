@@ -25,6 +25,11 @@ impl DocumentId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
     }
+
+    /// From its string form, as the shell holds it.
+    pub fn parse(s: &str) -> Option<Self> {
+        Uuid::parse_str(s.trim()).ok().map(Self)
+    }
 }
 
 impl Default for DocumentId {
@@ -41,6 +46,11 @@ pub struct FolderId(pub Uuid);
 impl FolderId {
     pub fn new() -> Self {
         Self(Uuid::new_v4())
+    }
+
+    /// From its string form, as the shell holds it.
+    pub fn parse(s: &str) -> Option<Self> {
+        Uuid::parse_str(s.trim()).ok().map(Self)
     }
 }
 
@@ -758,6 +768,15 @@ mod tests {
         for (a, b) in illegal {
             assert!(!a.can_transition_to(b), "{a:?} -> {b:?}");
         }
+    }
+
+    #[test]
+    fn ids_parse_their_own_string_form_only() {
+        let d = DocumentId::new();
+        assert_eq!(DocumentId::parse(&d.0.to_string()), Some(d));
+        assert_eq!(DocumentId::parse(" d-1 "), None);
+        let f = FolderId::new();
+        assert_eq!(FolderId::parse(&format!(" {} ", f.0)), Some(f));
     }
 
     #[test]

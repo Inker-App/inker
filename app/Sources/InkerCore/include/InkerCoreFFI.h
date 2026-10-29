@@ -316,6 +316,11 @@ uint64_t uniffi_inker_ffi_fn_constructor_corehandle_preview(RustBuffer scenario,
 void uniffi_inker_ffi_fn_method_corehandle_answer(uint64_t ptr, RustBuffer question_id, RustBuffer answer, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_BOARD
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_BOARD
+RustBuffer uniffi_inker_ffi_fn_method_corehandle_board(uint64_t ptr, RustBuffer tag, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_CLEAR_LISTENER
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_CLEAR_LISTENER
 void uniffi_inker_ffi_fn_method_corehandle_clear_listener(uint64_t ptr, RustCallStatus *_Nonnull out_status
@@ -326,9 +331,24 @@ void uniffi_inker_ffi_fn_method_corehandle_clear_listener(uint64_t ptr, RustCall
 void uniffi_inker_ffi_fn_method_corehandle_close(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_DETAILS
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_DETAILS
+RustBuffer uniffi_inker_ffi_fn_method_corehandle_details(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_DOCTOR
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_DOCTOR
 RustBuffer uniffi_inker_ffi_fn_method_corehandle_doctor(uint64_t ptr, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_FIND
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_FIND
+RustBuffer uniffi_inker_ffi_fn_method_corehandle_find(uint64_t ptr, RustBuffer query, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_FORGET
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_FORGET
+void uniffi_inker_ffi_fn_method_corehandle_forget(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_HANDLE_STRING
@@ -339,6 +359,16 @@ RustBuffer uniffi_inker_ffi_fn_method_corehandle_handle_string(uint64_t ptr, Rus
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_INGEST
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_INGEST
 void uniffi_inker_ffi_fn_method_corehandle_ingest(uint64_t ptr, RustBuffer paths, RustBuffer mode, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_INK_AGAIN
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_INK_AGAIN
+void uniffi_inker_ffi_fn_method_corehandle_ink_again(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_LOCATE
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_LOCATE
+RustBuffer uniffi_inker_ffi_fn_method_corehandle_locate(uint64_t ptr, RustBuffer handle, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_QUEUE
@@ -642,6 +672,12 @@ uint16_t uniffi_inker_ffi_checksum_method_corehandle_answer(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_BOARD
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_BOARD
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_board(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_CLEAR_LISTENER
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_CLEAR_LISTENER
 uint16_t uniffi_inker_ffi_checksum_method_corehandle_clear_listener(void
@@ -654,9 +690,27 @@ uint16_t uniffi_inker_ffi_checksum_method_corehandle_close(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_DETAILS
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_DETAILS
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_details(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_DOCTOR
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_DOCTOR
 uint16_t uniffi_inker_ffi_checksum_method_corehandle_doctor(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_FIND
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_FIND
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_find(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_FORGET
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_FORGET
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_forget(void
     
 );
 #endif
@@ -669,6 +723,18 @@ uint16_t uniffi_inker_ffi_checksum_method_corehandle_handle_string(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_INGEST
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_INGEST
 uint16_t uniffi_inker_ffi_checksum_method_corehandle_ingest(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_INK_AGAIN
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_INK_AGAIN
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_ink_again(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_LOCATE
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_LOCATE
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_locate(void
     
 );
 #endif

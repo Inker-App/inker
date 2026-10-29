@@ -471,6 +471,22 @@ private let UNIFFI_CALLBACK_UNEXPECTED_ERROR: Int32 = 2
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterUInt16: FfiConverterPrimitive {
+    typealias FfiType = UInt16
+    typealias SwiftType = UInt16
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UInt16 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterUInt32: FfiConverterPrimitive {
     typealias FfiType = UInt32
     typealias SwiftType = UInt32
@@ -622,6 +638,12 @@ public protocol CoreHandleProtocol: AnyObject, Sendable {
     
     func answer(questionId: String, answer: ReviewAnswer) throws 
     
+    /**
+     * The ready board grouped by year. `tag` keeps only the documents under
+     * that chip; the chip counts and the total always cover everything.
+     */
+    func board(tag: String?)  -> Board
+    
     func clearListener() 
     
     /**
@@ -631,9 +653,27 @@ public protocol CoreHandleProtocol: AnyObject, Sendable {
     func close() 
     
     /**
+     * The expanded row.
+     */
+    func details(id: String) throws  -> DocDetails
+    
+    /**
      * Whether the MCP socket is live, the data dir and the private folder.
      */
     func doctor()  -> DoctorReport
+    
+    /**
+     * Find: best field first, then newest drop. The handle prefix is
+     * optional. Takes the core's lock on the real backend, so call it off
+     * the main thread.
+     */
+    func find(query: String)  -> [FindMatch]
+    
+    /**
+     * "Forget this file" or "Forget this folder": out of the index and out
+     * of every write's scope. The files stay where they are.
+     */
+    func forget(id: String) throws 
     
     /**
      * `🐙/w2-acme-2025` or `ink/w2-acme-2025`, for the clipboard.
@@ -644,6 +684,18 @@ public protocol CoreHandleProtocol: AnyObject, Sendable {
      * Ingest dropped files or folders.
      */
     func ingest(paths: [String], mode: IngestMode) throws 
+    
+    /**
+     * "Ink again": read and ink the original again, keeping the handle.
+     */
+    func inkAgain(id: String) throws 
+    
+    /**
+     * The document or folder a pasted handle (`🐙/x` or `ink/x`, nothing
+     * else) points at, if the app holds it. For the clipboard chip and the
+     * footer's last-read button.
+     */
+    func locate(handle: String)  -> BoardEntry?
     
     func queue()  -> [QueueItem]
     
@@ -756,6 +808,20 @@ open func answer(questionId: String, answer: ReviewAnswer)throws   {try rustCall
 }
 }
     
+    /**
+     * The ready board grouped by year. `tag` keeps only the documents under
+     * that chip; the chip counts and the total always cover everything.
+     */
+open func board(tag: String?) -> Board  {
+    return try!  FfiConverterTypeBoard_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_board(
+            self.uniffiCloneHandle(),
+        FfiConverterOptionString.lower(tag),uniffiCallStatus
+    )
+})
+}
+    
 open func clearListener()  {try! rustCall() {
         uniffiCallStatus in
     uniffi_inker_ffi_fn_method_corehandle_clear_listener(
@@ -777,6 +843,19 @@ open func close()  {try! rustCall() {
 }
     
     /**
+     * The expanded row.
+     */
+open func details(id: String)throws  -> DocDetails  {
+    return try  FfiConverterTypeDocDetails_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_details(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+})
+}
+    
+    /**
      * Whether the MCP socket is live, the data dir and the private folder.
      */
 open func doctor() -> DoctorReport  {
@@ -786,6 +865,34 @@ open func doctor() -> DoctorReport  {
             self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
+}
+    
+    /**
+     * Find: best field first, then newest drop. The handle prefix is
+     * optional. Takes the core's lock on the real backend, so call it off
+     * the main thread.
+     */
+open func find(query: String) -> [FindMatch]  {
+    return try!  FfiConverterSequenceTypeFindMatch.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_find(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(query),uniffiCallStatus
+    )
+})
+}
+    
+    /**
+     * "Forget this file" or "Forget this folder": out of the index and out
+     * of every write's scope. The files stay where they are.
+     */
+open func forget(id: String)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_forget(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+}
 }
     
     /**
@@ -813,6 +920,33 @@ open func ingest(paths: [String], mode: IngestMode)throws   {try rustCallWithErr
         FfiConverterTypeIngestMode_lower(mode),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * "Ink again": read and ink the original again, keeping the handle.
+     */
+open func inkAgain(id: String)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_ink_again(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+}
+}
+    
+    /**
+     * The document or folder a pasted handle (`🐙/x` or `ink/x`, nothing
+     * else) points at, if the app holds it. For the clipboard chip and the
+     * footer's last-read button.
+     */
+open func locate(handle: String) -> BoardEntry?  {
+    return try!  FfiConverterOptionTypeBoardEntry.lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_locate(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(handle),uniffiCallStatus
+    )
+})
 }
     
 open func queue() -> [QueueItem]  {
@@ -922,6 +1056,162 @@ public func FfiConverterTypeCoreHandle_lower(_ value: CoreHandle) -> UInt64 {
 
 
 /**
+ * The ready board at any size. Mirrors `inker_core::find::Board`.
+ */
+public struct Board: Equatable, Hashable {
+    /**
+     * Newest year first, `UNDATED` last.
+     */
+    public let groups: [YearGroup]
+    /**
+     * Every tag with at least one file, most files first.
+     */
+    public let tags: [TagCount]
+    /**
+     * Every document, whatever its state and whatever chip is active.
+     */
+    public let total: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Newest year first, `UNDATED` last.
+         */groups: [YearGroup], 
+        /**
+         * Every tag with at least one file, most files first.
+         */tags: [TagCount], 
+        /**
+         * Every document, whatever its state and whatever chip is active.
+         */total: UInt32) {
+        self.groups = groups
+        self.tags = tags
+        self.total = total
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension Board: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBoard: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Board {
+        return
+            try Board(
+                groups: FfiConverterSequenceTypeYearGroup.read(from: &buf), 
+                tags: FfiConverterSequenceTypeTagCount.read(from: &buf), 
+                total: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: Board, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeYearGroup.write(value.groups, into: &buf)
+        FfiConverterSequenceTypeTagCount.write(value.tags, into: &buf)
+        FfiConverterUInt32.write(value.total, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBoard_lift(_ buf: RustBuffer) throws -> Board {
+    return try FfiConverterTypeBoard.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBoard_lower(_ value: Board) -> RustBuffer {
+    return FfiConverterTypeBoard.lower(value)
+}
+
+
+/**
+ * The expanded row.
+ */
+public struct DocDetails: Equatable, Hashable {
+    /**
+     * Folder inside the private folder, `Taxes 2025/`, or empty at the root.
+     */
+    public let location: String
+    public let droppedAt: Date
+    /**
+     * Files that came in the same folder drop, not counting this one.
+     */
+    public let droppedWith: UInt32
+    public let lastRead: ReadEvent?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Folder inside the private folder, `Taxes 2025/`, or empty at the root.
+         */location: String, droppedAt: Date, 
+        /**
+         * Files that came in the same folder drop, not counting this one.
+         */droppedWith: UInt32, lastRead: ReadEvent?) {
+        self.location = location
+        self.droppedAt = droppedAt
+        self.droppedWith = droppedWith
+        self.lastRead = lastRead
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DocDetails: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDocDetails: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DocDetails {
+        return
+            try DocDetails(
+                location: FfiConverterString.read(from: &buf), 
+                droppedAt: FfiConverterTimestamp.read(from: &buf), 
+                droppedWith: FfiConverterUInt32.read(from: &buf), 
+                lastRead: FfiConverterOptionTypeReadEvent.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DocDetails, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.location, into: &buf)
+        FfiConverterTimestamp.write(value.droppedAt, into: &buf)
+        FfiConverterUInt32.write(value.droppedWith, into: &buf)
+        FfiConverterOptionTypeReadEvent.write(value.lastRead, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDocDetails_lift(_ buf: RustBuffer) throws -> DocDetails {
+    return try FfiConverterTypeDocDetails.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDocDetails_lower(_ value: DocDetails) -> RustBuffer {
+    return FfiConverterTypeDocDetails.lower(value)
+}
+
+
+/**
  * One document row.
  */
 public struct DocItem: Equatable, Hashable {
@@ -959,6 +1249,27 @@ public struct DocItem: Equatable, Hashable {
      * Set while `state == NeedsAttention`.
      */
     public let question: ReviewQuestion?
+    /**
+     * Tax year, once classified; the board groups by it.
+     */
+    public let year: UInt16?
+    /**
+     * "Acme Robotics": the employer, payer or lender a template attributed.
+     * Shown in the popover only; a setting hides it.
+     */
+    public let payer: String?
+    /**
+     * The chip it counts under ("Taxes"); `None` is under `All` only.
+     */
+    public let tag: String?
+    /**
+     * When it was dropped.
+     */
+    public let droppedAt: Date
+    /**
+     * Original name of the folder it came in with, if any.
+     */
+    public let folderName: String?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -986,7 +1297,23 @@ public struct DocItem: Equatable, Hashable {
          */statusNote: String?, loader: Loader, 
         /**
          * Set while `state == NeedsAttention`.
-         */question: ReviewQuestion?) {
+         */question: ReviewQuestion?, 
+        /**
+         * Tax year, once classified; the board groups by it.
+         */year: UInt16?, 
+        /**
+         * "Acme Robotics": the employer, payer or lender a template attributed.
+         * Shown in the popover only; a setting hides it.
+         */payer: String?, 
+        /**
+         * The chip it counts under ("Taxes"); `None` is under `All` only.
+         */tag: String?, 
+        /**
+         * When it was dropped.
+         */droppedAt: Date, 
+        /**
+         * Original name of the folder it came in with, if any.
+         */folderName: String?) {
         self.id = id
         self.codename = codename
         self.originalName = originalName
@@ -997,6 +1324,11 @@ public struct DocItem: Equatable, Hashable {
         self.statusNote = statusNote
         self.loader = loader
         self.question = question
+        self.year = year
+        self.payer = payer
+        self.tag = tag
+        self.droppedAt = droppedAt
+        self.folderName = folderName
     }
 
     
@@ -1024,7 +1356,12 @@ public struct FfiConverterTypeDocItem: FfiConverterRustBuffer {
                 inked: FfiConverterUInt32.read(from: &buf), 
                 statusNote: FfiConverterOptionString.read(from: &buf), 
                 loader: FfiConverterTypeLoader.read(from: &buf), 
-                question: FfiConverterOptionTypeReviewQuestion.read(from: &buf)
+                question: FfiConverterOptionTypeReviewQuestion.read(from: &buf), 
+                year: FfiConverterOptionUInt16.read(from: &buf), 
+                payer: FfiConverterOptionString.read(from: &buf), 
+                tag: FfiConverterOptionString.read(from: &buf), 
+                droppedAt: FfiConverterTimestamp.read(from: &buf), 
+                folderName: FfiConverterOptionString.read(from: &buf)
         )
     }
 
@@ -1039,6 +1376,11 @@ public struct FfiConverterTypeDocItem: FfiConverterRustBuffer {
         FfiConverterOptionString.write(value.statusNote, into: &buf)
         FfiConverterTypeLoader.write(value.loader, into: &buf)
         FfiConverterOptionTypeReviewQuestion.write(value.question, into: &buf)
+        FfiConverterOptionUInt16.write(value.year, into: &buf)
+        FfiConverterOptionString.write(value.payer, into: &buf)
+        FfiConverterOptionString.write(value.tag, into: &buf)
+        FfiConverterTimestamp.write(value.droppedAt, into: &buf)
+        FfiConverterOptionString.write(value.folderName, into: &buf)
     }
 }
 
@@ -1283,6 +1625,190 @@ public func FfiConverterTypeExtractedPage_lift(_ buf: RustBuffer) throws -> Extr
 #endif
 public func FfiConverterTypeExtractedPage_lower(_ value: ExtractedPage) -> RustBuffer {
     return FfiConverterTypeExtractedPage.lower(value)
+}
+
+
+/**
+ * One Find result.
+ */
+public struct FindMatch: Equatable, Hashable {
+    public let doc: DocItem
+    public let field: MatchField
+    /**
+     * The matched characters as they appear in that field, for underlining.
+     */
+    public let matched: String
+    /**
+     * For a text match: the line around the hit, ellipsised.
+     */
+    public let snippet: String?
+    /**
+     * The query was this document's whole handle.
+     */
+    public let exactHandle: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(doc: DocItem, field: MatchField, 
+        /**
+         * The matched characters as they appear in that field, for underlining.
+         */matched: String, 
+        /**
+         * For a text match: the line around the hit, ellipsised.
+         */snippet: String?, 
+        /**
+         * The query was this document's whole handle.
+         */exactHandle: Bool) {
+        self.doc = doc
+        self.field = field
+        self.matched = matched
+        self.snippet = snippet
+        self.exactHandle = exactHandle
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FindMatch: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFindMatch: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FindMatch {
+        return
+            try FindMatch(
+                doc: FfiConverterTypeDocItem.read(from: &buf), 
+                field: FfiConverterTypeMatchField.read(from: &buf), 
+                matched: FfiConverterString.read(from: &buf), 
+                snippet: FfiConverterOptionString.read(from: &buf), 
+                exactHandle: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FindMatch, into buf: inout [UInt8]) {
+        FfiConverterTypeDocItem.write(value.doc, into: &buf)
+        FfiConverterTypeMatchField.write(value.field, into: &buf)
+        FfiConverterString.write(value.matched, into: &buf)
+        FfiConverterOptionString.write(value.snippet, into: &buf)
+        FfiConverterBool.write(value.exactHandle, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFindMatch_lift(_ buf: RustBuffer) throws -> FindMatch {
+    return try FfiConverterTypeFindMatch.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFindMatch_lower(_ value: FindMatch) -> RustBuffer {
+    return FfiConverterTypeFindMatch.lower(value)
+}
+
+
+/**
+ * A dropped folder on the board: a sub-group inside its year.
+ */
+public struct FolderItem: Equatable, Hashable {
+    public let id: String
+    /**
+     * `folder-0412`
+     */
+    public let codename: String
+    /**
+     * The folder's original name, for line 1 of its row.
+     */
+    public let name: String
+    /**
+     * Where it lives now, for Show in Finder.
+     */
+    public let path: String
+    public let summary: FolderSummary
+    /**
+     * Newest drop first.
+     */
+    public let children: [DocItem]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(id: String, 
+        /**
+         * `folder-0412`
+         */codename: String, 
+        /**
+         * The folder's original name, for line 1 of its row.
+         */name: String, 
+        /**
+         * Where it lives now, for Show in Finder.
+         */path: String, summary: FolderSummary, 
+        /**
+         * Newest drop first.
+         */children: [DocItem]) {
+        self.id = id
+        self.codename = codename
+        self.name = name
+        self.path = path
+        self.summary = summary
+        self.children = children
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FolderItem: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFolderItem: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FolderItem {
+        return
+            try FolderItem(
+                id: FfiConverterString.read(from: &buf), 
+                codename: FfiConverterString.read(from: &buf), 
+                name: FfiConverterString.read(from: &buf), 
+                path: FfiConverterString.read(from: &buf), 
+                summary: FfiConverterTypeFolderSummary.read(from: &buf), 
+                children: FfiConverterSequenceTypeDocItem.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FolderItem, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterString.write(value.codename, into: &buf)
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.path, into: &buf)
+        FfiConverterTypeFolderSummary.write(value.summary, into: &buf)
+        FfiConverterSequenceTypeDocItem.write(value.children, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFolderItem_lift(_ buf: RustBuffer) throws -> FolderItem {
+    return try FfiConverterTypeFolderItem.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFolderItem_lower(_ value: FolderItem) -> RustBuffer {
+    return FfiConverterTypeFolderItem.lower(value)
 }
 
 
@@ -1808,6 +2334,124 @@ public func FfiConverterTypeStatus_lower(_ value: Status) -> RustBuffer {
 
 
 /**
+ * `Taxes · 24` on a chip.
+ */
+public struct TagCount: Equatable, Hashable {
+    public let tag: String
+    public let count: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(tag: String, count: UInt32) {
+        self.tag = tag
+        self.count = count
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TagCount: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTagCount: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TagCount {
+        return
+            try TagCount(
+                tag: FfiConverterString.read(from: &buf), 
+                count: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TagCount, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.tag, into: &buf)
+        FfiConverterUInt32.write(value.count, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTagCount_lift(_ buf: RustBuffer) throws -> TagCount {
+    return try FfiConverterTypeTagCount.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTagCount_lower(_ value: TagCount) -> RustBuffer {
+    return FfiConverterTypeTagCount.lower(value)
+}
+
+
+/**
+ * `2025 · 14 FILES`; `year` is `None` for `UNDATED`.
+ */
+public struct YearGroup: Equatable, Hashable {
+    public let year: UInt16?
+    public let files: UInt32
+    public let entries: [BoardEntry]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(year: UInt16?, files: UInt32, entries: [BoardEntry]) {
+        self.year = year
+        self.files = files
+        self.entries = entries
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension YearGroup: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeYearGroup: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> YearGroup {
+        return
+            try YearGroup(
+                year: FfiConverterOptionUInt16.read(from: &buf), 
+                files: FfiConverterUInt32.read(from: &buf), 
+                entries: FfiConverterSequenceTypeBoardEntry.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: YearGroup, into buf: inout [UInt8]) {
+        FfiConverterOptionUInt16.write(value.year, into: &buf)
+        FfiConverterUInt32.write(value.files, into: &buf)
+        FfiConverterSequenceTypeBoardEntry.write(value.entries, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeYearGroup_lift(_ buf: RustBuffer) throws -> YearGroup {
+    return try FfiConverterTypeYearGroup.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeYearGroup_lower(_ value: YearGroup) -> RustBuffer {
+    return FfiConverterTypeYearGroup.lower(value)
+}
+
+
+/**
  * The clients INKER can register itself with. `ClaudeDesktop` is the chat
  * app and the primary target; the rest are coding agents, which also get
  * exclusion rules for the private folder.
@@ -1888,6 +2532,82 @@ public func FfiConverterTypeAgentKind_lift(_ buf: RustBuffer) throws -> AgentKin
 #endif
 public func FfiConverterTypeAgentKind_lower(_ value: AgentKind) -> RustBuffer {
     return FfiConverterTypeAgentKind.lower(value)
+}
+
+
+
+/**
+ * One row of a year group. A UniFFI enum cannot box its payload, so the
+ * size difference between the variants is accepted.
+ */
+
+public enum BoardEntry: Equatable, Hashable {
+    
+    case doc(item: DocItem
+    )
+    case folder(item: FolderItem
+    )
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension BoardEntry: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBoardEntry: FfiConverterRustBuffer {
+    typealias SwiftType = BoardEntry
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BoardEntry {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .doc(item: try FfiConverterTypeDocItem.read(from: &buf)
+        )
+        
+        case 2: return .folder(item: try FfiConverterTypeFolderItem.read(from: &buf)
+        )
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: BoardEntry, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case let .doc(item):
+            writeInt(&buf, Int32(1))
+            FfiConverterTypeDocItem.write(item, into: &buf)
+            
+        
+        case let .folder(item):
+            writeInt(&buf, Int32(2))
+            FfiConverterTypeFolderItem.write(item, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBoardEntry_lift(_ buf: RustBuffer) throws -> BoardEntry {
+    return try FfiConverterTypeBoardEntry.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBoardEntry_lower(_ value: BoardEntry) -> RustBuffer {
+    return FfiConverterTypeBoardEntry.lower(value)
 }
 
 
@@ -2337,7 +3057,119 @@ public func FfiConverterTypeLoader_lower(_ value: Loader) -> RustBuffer {
 
 
 /**
- * The four popover boards.
+ * Which field a Find query matched, in ranking order. Mirrors
+ * `inker_core::find::MatchField`.
+ */
+
+public enum MatchField: Equatable, Hashable {
+    
+    case fileName
+    case handle
+    case kind
+    case payer
+    case year
+    case folder
+    case tag
+    case text
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension MatchField: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMatchField: FfiConverterRustBuffer {
+    typealias SwiftType = MatchField
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MatchField {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .fileName
+        
+        case 2: return .handle
+        
+        case 3: return .kind
+        
+        case 4: return .payer
+        
+        case 5: return .year
+        
+        case 6: return .folder
+        
+        case 7: return .tag
+        
+        case 8: return .text
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: MatchField, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .fileName:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .handle:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .kind:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .payer:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .year:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .folder:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .tag:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .text:
+            writeInt(&buf, Int32(8))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMatchField_lift(_ buf: RustBuffer) throws -> MatchField {
+    return try FfiConverterTypeMatchField.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMatchField_lower(_ value: MatchField) -> RustBuffer {
+    return FfiConverterTypeMatchField.lower(value)
+}
+
+
+
+/**
+ * The four popover boards, plus the ready board at scale.
  */
 
 public enum PreviewScenario: Equatable, Hashable {
@@ -2358,6 +3190,10 @@ public enum PreviewScenario: Equatable, Hashable {
      * `AppPopReady`
      */
     case ready
+    /**
+     * `AppFindScale`: 30 files across three years, two dropped folders.
+     */
+    case scale
 
 
 
@@ -2387,6 +3223,8 @@ public struct FfiConverterTypePreviewScenario: FfiConverterRustBuffer {
         
         case 4: return .ready
         
+        case 5: return .scale
+        
         default: throw UniffiInternalError.unexpectedEnumCase
         }
     }
@@ -2409,6 +3247,10 @@ public struct FfiConverterTypePreviewScenario: FfiConverterRustBuffer {
         
         case .ready:
             writeInt(&buf, Int32(4))
+        
+        
+        case .scale:
+            writeInt(&buf, Int32(5))
         
         }
     }
@@ -2930,6 +3772,30 @@ public func FfiConverterCallbackInterfaceQueueListener_lower(_ v: QueueListener)
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionUInt16: FfiConverterRustBuffer {
+    typealias SwiftType = UInt16?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterUInt16.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterUInt16.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionUInt32: FfiConverterRustBuffer {
     typealias SwiftType = UInt32?
 
@@ -3002,6 +3868,30 @@ fileprivate struct FfiConverterOptionTypeExtractedFfi: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeReadEvent: FfiConverterRustBuffer {
+    typealias SwiftType = ReadEvent?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeReadEvent.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeReadEvent.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeReviewQuestion: FfiConverterRustBuffer {
     typealias SwiftType = ReviewQuestion?
 
@@ -3018,6 +3908,30 @@ fileprivate struct FfiConverterOptionTypeReviewQuestion: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeReviewQuestion.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeBoardEntry: FfiConverterRustBuffer {
+    typealias SwiftType = BoardEntry?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeBoardEntry.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeBoardEntry.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -3126,6 +4040,31 @@ fileprivate struct FfiConverterSequenceTypeExtractedPage: FfiConverterRustBuffer
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeFindMatch: FfiConverterRustBuffer {
+    typealias SwiftType = [FindMatch]
+
+    public static func write(_ value: [FindMatch], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeFindMatch.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [FindMatch] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [FindMatch]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeFindMatch.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePlanStep: FfiConverterRustBuffer {
     typealias SwiftType = [PlanStep]
 
@@ -3198,6 +4137,81 @@ fileprivate struct FfiConverterSequenceTypeReadEvent: FfiConverterRustBuffer {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeTagCount: FfiConverterRustBuffer {
+    typealias SwiftType = [TagCount]
+
+    public static func write(_ value: [TagCount], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTagCount.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TagCount] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TagCount]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTagCount.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeYearGroup: FfiConverterRustBuffer {
+    typealias SwiftType = [YearGroup]
+
+    public static func write(_ value: [YearGroup], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeYearGroup.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [YearGroup] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [YearGroup]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeYearGroup.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeBoardEntry: FfiConverterRustBuffer {
+    typealias SwiftType = [BoardEntry]
+
+    public static func write(_ value: [BoardEntry], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeBoardEntry.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [BoardEntry] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [BoardEntry]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeBoardEntry.read(from: &buf))
+        }
+        return seq
+    }
+}
+
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
@@ -3216,19 +4230,37 @@ private let initializationResult: InitializationResult = {
     if (uniffi_inker_ffi_checksum_method_corehandle_answer() != 46053) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_inker_ffi_checksum_method_corehandle_board() != 58770) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_inker_ffi_checksum_method_corehandle_clear_listener() != 1314) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_close() != 28050) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_inker_ffi_checksum_method_corehandle_details() != 25687) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_inker_ffi_checksum_method_corehandle_doctor() != 12534) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_inker_ffi_checksum_method_corehandle_find() != 20165) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_inker_ffi_checksum_method_corehandle_forget() != 54904) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_handle_string() != 4663) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_ingest() != 9122) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_inker_ffi_checksum_method_corehandle_ink_again() != 60824) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_inker_ffi_checksum_method_corehandle_locate() != 21599) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_queue() != 22593) {

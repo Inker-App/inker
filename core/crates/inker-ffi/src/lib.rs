@@ -33,8 +33,9 @@ pub use host_backend::HostBackend;
 pub use preview::{PreviewBackend, PreviewScenario, codename_from_name};
 pub use providers::{ExtractedFfi, ExtractedField, ExtractedPage, HostProviders, ProviderError};
 pub use types::{
-    DocItem, DocState, FolderSummary, HandleStyle, IngestMode, Loader, QueueItem, ReadEvent,
-    ReviewAnswer, ReviewQuestion, Status,
+    Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary,
+    HandleStyle, IngestMode, Loader, MatchField, QueueItem, ReadEvent, ReviewAnswer,
+    ReviewQuestion, Status, TagCount, YearGroup,
 };
 
 uniffi::setup_scaffolding!();

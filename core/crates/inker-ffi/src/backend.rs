@@ -6,7 +6,9 @@ use std::sync::Arc;
 use camino::Utf8PathBuf;
 
 use crate::error::FfiError;
-use crate::types::{QueueItem, ReadEvent, ReviewAnswer, Status};
+use crate::types::{
+    Board, BoardEntry, DocDetails, FindMatch, QueueItem, ReadEvent, ReviewAnswer, Status,
+};
 
 /// Called by a backend whenever the queue changes. Cheap and thread-safe; the
 /// handle forwards it to the Swift listener.
@@ -56,6 +58,18 @@ pub trait Backend: Send + Sync + fmt::Debug {
     fn recent_reads(&self, n: u32) -> Vec<ReadEvent>;
     /// Footer state.
     fn status(&self) -> Status;
+    /// The ready board, unfiltered; the handle applies a chip.
+    fn board(&self) -> Board;
+    /// Find results, best first. Empty for an empty query.
+    fn find(&self, query: &str) -> Vec<FindMatch>;
+    /// The board entry with this codename, if the app holds it.
+    fn locate(&self, codename: &str) -> Option<BoardEntry>;
+    /// The expanded row for a document id.
+    fn details(&self, id: &str) -> Result<DocDetails, FfiError>;
+    /// Forget a document or a folder by id. The files stay.
+    fn forget(&self, id: &str) -> Result<(), FfiError>;
+    /// Read and ink a document or a folder's documents again, keeping handles.
+    fn ink_again(&self, id: &str) -> Result<(), FfiError>;
     /// `doctor` lines: whether the socket is live, the data dir, the private
     /// folder. Never a document's content.
     fn doctor(&self) -> Vec<String>;

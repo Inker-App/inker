@@ -16,7 +16,10 @@ use crate::preview::{PreviewBackend, PreviewScenario};
 use crate::providers::{
     HostProviders, ProviderKeyStore, ProviderOcrSource, ProviderTextSource, SharedProviders,
 };
-use crate::types::{HandleStyle, IngestMode, QueueItem, ReadEvent, ReviewAnswer, Status};
+use crate::types::{
+    Board, BoardEntry, DocDetails, FindMatch, HandleStyle, IngestMode, QueueItem, ReadEvent,
+    ReviewAnswer, Status,
+};
 
 /// Implemented in Swift. Fired on any queue change, from a background thread;
 /// the Swift side hops to the main actor before touching UI.
@@ -199,6 +202,47 @@ impl CoreHandle {
 
     pub fn status(&self) -> Status {
         self.backend.status()
+    }
+
+    /// The ready board grouped by year. `tag` keeps only the documents under
+    /// that chip; the chip counts and the total always cover everything.
+    pub fn board(&self, tag: Option<String>) -> Board {
+        let board = self.backend.board();
+        match tag {
+            Some(t) => board.filtered(&t),
+            None => board,
+        }
+    }
+
+    /// Find: best field first, then newest drop. The handle prefix is
+    /// optional. Takes the core's lock on the real backend, so call it off
+    /// the main thread.
+    pub fn find(&self, query: String) -> Vec<FindMatch> {
+        self.backend.find(&query)
+    }
+
+    /// The document or folder a pasted handle (`🐙/x` or `ink/x`, nothing
+    /// else) points at, if the app holds it. For the clipboard chip and the
+    /// footer's last-read button.
+    pub fn locate(&self, handle: String) -> Option<BoardEntry> {
+        let h = Handle::parse(&handle).ok()?;
+        self.backend.locate(h.codename.as_str())
+    }
+
+    /// The expanded row.
+    pub fn details(&self, id: String) -> Result<DocDetails, FfiError> {
+        self.backend.details(&id)
+    }
+
+    /// "Forget this file" or "Forget this folder": out of the index and out
+    /// of every write's scope. The files stay where they are.
+    pub fn forget(&self, id: String) -> Result<(), FfiError> {
+        self.backend.forget(&id)
+    }
+
+    /// "Ink again": read and ink the original again, keeping the handle.
+    pub fn ink_again(&self, id: String) -> Result<(), FfiError> {
+        self.backend.ink_again(&id)
     }
 
     /// Stop the MCP socket and the ingest worker. Call on quit; dropping the

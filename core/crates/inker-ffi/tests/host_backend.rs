@@ -414,3 +414,92 @@ fn an_agent_over_the_socket_sees_tokens_only_and_its_read_reaches_the_footer() {
         (n.load(Ordering::SeqCst) >= 1).then_some(())
     });
 }
+
+// ---------------------------------------------------------------------------
+// Finding documents over the real core
+// ---------------------------------------------------------------------------
+
+use inker_ffi::{BoardEntry, MatchField};
+
+fn ready_doc(entry: &BoardEntry) -> &DocItem {
+    match entry {
+        BoardEntry::Doc { item } => item,
+        BoardEntry::Folder { .. } => panic!("a folder"),
+    }
+}
+
+#[test]
+fn the_board_carries_the_payer_the_tag_and_the_year_and_find_reads_the_inked_text() {
+    let w = World::new();
+    let h = w.open();
+    h.ingest(vec![w.download("w2-acme-2025.txt")], IngestMode::Move)
+        .unwrap();
+    wait_queue(&h, all_settled);
+    let b = h.board(None);
+    assert_eq!(b.total, 1);
+    assert_eq!(b.groups.len(), 1);
+    assert_eq!(b.groups[0].year, Some(2025));
+    let doc = ready_doc(&b.groups[0].entries[0]);
+    assert_eq!(doc.kind_label, "W-2");
+    assert_eq!(doc.tag.as_deref(), Some("Taxes"));
+    assert_eq!(doc.year, Some(2025));
+    assert_eq!(
+        doc.payer.as_deref(),
+        Some("Acme Robotics Inc"),
+        "the template's employer, read back through the vault"
+    );
+    assert_eq!(b.tags[0].tag, "Taxes");
+    assert_eq!(b.tags[0].count, 1);
+
+    let hits = h.find("wage and tax".into());
+    assert_eq!(hits.len(), 1, "{hits:#?}");
+    assert_eq!(hits[0].field, MatchField::Text);
+    assert!(
+        hits[0]
+            .snippet
+            .as_deref()
+            .unwrap()
+            .to_lowercase()
+            .contains("wage and tax")
+    );
+    let hits = h.find("robotics".into());
+    assert_eq!(hits[0].field, MatchField::Payer, "{hits:#?}");
+    assert_eq!(hits[0].matched, "Robotics");
+    assert!(
+        h.find(JORDAN_SSN.into()).is_empty(),
+        "a real value never matches"
+    );
+    let found = h.locate(format!("🐙/{}", doc.codename)).unwrap();
+    assert_eq!(ready_doc(&found).id, doc.id);
+    let d = h.details(doc.id.clone()).unwrap();
+    assert_eq!(d.location, "");
+    assert_eq!(d.dropped_with, 0);
+    assert!(d.last_read.is_none());
+}
+
+#[test]
+fn forget_leaves_the_file_and_ink_again_keeps_the_handle() {
+    let w = World::new();
+    let h = w.open();
+    h.ingest(vec![w.download("w2-acme-2025.txt")], IngestMode::Move)
+        .unwrap();
+    let q = wait_queue(&h, all_settled);
+    let doc = docs(&q)[0].clone();
+    let n = counter(&h);
+
+    h.ink_again(doc.id.clone()).unwrap();
+    let q = wait_queue(&h, |q| all_settled(q) && n.load(Ordering::SeqCst) >= 2);
+    let again = docs(&q)[0];
+    assert_eq!(again.codename, doc.codename, "the handle survives");
+    assert_eq!(again.state, DocState::Ready);
+
+    h.forget(doc.id.clone()).unwrap();
+    let q = wait_queue(&h, |q| q.is_empty());
+    assert!(q.is_empty());
+    assert!(
+        Path::new(&doc.path).exists(),
+        "the original stays in the private folder"
+    );
+    assert!(h.board(None).groups.is_empty());
+    assert!(matches!(h.forget(doc.id), Err(FfiError::NotFound { .. })));
+}

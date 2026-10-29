@@ -668,6 +668,23 @@ impl Core {
         self.index.set_state(id, state, note)
     }
 
+    /// Record what a document is as soon as a template matched, before
+    /// detection finishes, so the processing row can show its type. The
+    /// state is untouched; `complete_processing` sets the same fields again.
+    pub fn note_classification(
+        &self,
+        id: DocumentId,
+        kind: DocKind,
+        year: Option<u16>,
+        tag: Option<&str>,
+    ) -> Result<()> {
+        let mut rec = self.document(id)?;
+        rec.kind = kind;
+        rec.year = year;
+        rec.tag = tag.map(str::to_string);
+        self.index.update_document(&rec)
+    }
+
     /// Tokenize and store the results of extraction and detection, give the
     /// document its final codename, and set it `Ready`, or `NeedsAttention`
     /// with one review question per detection that `needs_review`. A bad
@@ -773,7 +790,8 @@ impl Core {
         }
     }
 
-    fn doc_views(&self) -> Result<(Vec<DocView>, Vec<FolderRecord>)> {
+    /// Every document as the board shows it, oldest first, with the folders.
+    pub fn doc_views(&self) -> Result<(Vec<DocView>, Vec<FolderRecord>)> {
         let folders = self.index.list_folders()?;
         let docs = self
             .index
@@ -2063,6 +2081,28 @@ mod tests {
                 .join("Taxes 2024/a.txt")
                 .exists()
         );
+    }
+
+    #[test]
+    fn a_classification_can_be_noted_before_inking_finishes() {
+        let f = fx();
+        let ids = f
+            .core
+            .begin_ingest(&[drop_file_root(&f.root, "a.txt", "a")], IngestMode::Move)
+            .unwrap();
+        f.core
+            .set_state(ids[0], DocState::Reading, Some("reading"))
+            .unwrap();
+        f.core
+            .note_classification(ids[0], DocKind("w2".into()), Some(2025), Some("Taxes"))
+            .unwrap();
+        let rec = f.core.document(ids[0]).unwrap();
+        assert_eq!(rec.state, DocState::Reading, "state untouched");
+        assert_eq!(rec.status_note.as_deref(), Some("reading"));
+        assert_eq!(rec.kind.as_str(), "w2");
+        assert_eq!(rec.year, Some(2025));
+        assert_eq!(rec.tag.as_deref(), Some("Taxes"));
+        assert!(rec.codename.as_str().starts_with("doc-"), "no codename yet");
     }
 
     #[test]

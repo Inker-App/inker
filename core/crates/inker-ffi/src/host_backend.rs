@@ -22,8 +22,9 @@ use std::time::{Duration, SystemTime};
 use camino::Utf8PathBuf;
 use chrono::{DateTime, Utc};
 use inker_core::facade::OUTPUT_KIND;
+use inker_core::find::{self, DocView};
 use inker_core::{
-    Core, Description, DocumentId, DocumentRecord, Error, Handle, ListEntry, QuestionId,
+    Core, Description, DocumentId, Error, FolderId, Handle, ListEntry, QuestionId,
     Resolved as CoreResolved,
 };
 use inker_extract::{FileKind, detect_file_kind};
@@ -34,8 +35,8 @@ use tokio_util::sync::CancellationToken;
 use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
 use crate::types::{
-    DocItem, DocState, FolderSummary, Loader, QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion,
-    Status,
+    Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary, Loader,
+    QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TagCount, YearGroup,
 };
 
 /// How many agent reads the snapshot keeps for the footer.
@@ -54,6 +55,7 @@ enum Job {
 struct Snapshot {
     queue: Vec<QueueItem>,
     reads: Vec<ReadEvent>,
+    board: Board,
 }
 
 /// State the worker, the socket and the handle share.
@@ -75,15 +77,16 @@ impl Shared {
     fn refresh(&self, host: &Host) -> Vec<DocumentId> {
         let built = {
             let core = host.core();
-            collect(&core).and_then(|(queue, queued)| {
+            collect(&core).and_then(|(queue, queued, board)| {
                 let reads = core.recent_reads(READS_KEPT)?;
-                Ok((queue, queued, reads))
+                Ok((queue, queued, board, reads))
             })
         };
         let queued = match built {
-            Ok((queue, queued, reads)) => {
+            Ok((queue, queued, board, reads)) => {
                 let mut snap = lock(&self.snapshot);
                 snap.queue = queue;
+                snap.board = board;
                 snap.reads = reads.into_iter().map(read_event).collect();
                 queued
             }
@@ -413,6 +416,87 @@ impl Backend for HostBackend {
         Some(self.host.core().paths().private_folder.to_string())
     }
 
+    fn board(&self) -> Board {
+        lock(&self.shared.snapshot).board.clone()
+    }
+
+    fn find(&self, query: &str) -> Vec<FindMatch> {
+        let core = self.host.core();
+        let found = core
+            .find(query)
+            .and_then(|m| Ok((m, core.pending_reviews()?)));
+        match found {
+            Ok((matches, pending)) => matches
+                .into_iter()
+                .map(|m| FindMatch {
+                    doc: doc_item(&m.doc, &pending),
+                    field: m.field.into(),
+                    matched: m.matched,
+                    snippet: m.snippet,
+                    exact_handle: m.exact_handle,
+                })
+                .collect(),
+            Err(e) => {
+                tracing::warn!(kind = error_kind(&e), "find failed");
+                Vec::new()
+            }
+        }
+    }
+
+    fn locate(&self, codename: &str) -> Option<BoardEntry> {
+        let snap = lock(&self.shared.snapshot);
+        snap.board
+            .entries()
+            .find(|e| e.codename() == codename)
+            .cloned()
+    }
+
+    fn details(&self, id: &str) -> Result<DocDetails, FfiError> {
+        let id = DocumentId::parse(id).ok_or_else(|| FfiError::NotFound {
+            reason: "no document with that id".into(),
+        })?;
+        let core = self.host.core();
+        let d = core.details(id).map_err(|e| core_error(&e))?;
+        Ok(DocDetails {
+            location: d.location,
+            dropped_at: SystemTime::from(d.dropped_at),
+            dropped_with: d.dropped_with,
+            last_read: d.last_read.map(read_event),
+        })
+    }
+
+    fn forget(&self, id: &str) -> Result<(), FfiError> {
+        let (doc, folder) = parse_ids(id)?;
+        {
+            let core = self.host.core();
+            if core.document(doc).is_ok() {
+                core.forget(doc).map_err(|e| core_error(&e))?;
+            } else {
+                core.forget_folder(folder).map_err(|e| core_error(&e))?;
+            }
+        }
+        self.shared.refresh(&self.host);
+        Ok(())
+    }
+
+    fn ink_again(&self, id: &str) -> Result<(), FfiError> {
+        let (doc, folder) = parse_ids(id)?;
+        let ids = {
+            let core = self.host.core();
+            if core.document(doc).is_ok() {
+                core.ink_again(doc).map_err(|e| core_error(&e))?;
+                vec![doc]
+            } else {
+                core.ink_again_folder(folder).map_err(|e| core_error(&e))?
+            }
+        };
+        self.shared.refresh(&self.host);
+        if !ids.is_empty() {
+            self.send(Job::Process(ids));
+        }
+        Ok(())
+    }
+
     fn doctor(&self) -> Vec<String> {
         let socket = lock(&self.server).as_ref().map(|s| s.path.clone());
         let mcp = match socket {
@@ -493,36 +577,56 @@ impl inker_mcp::Backend for McpBridge {
 // ---------------------------------------------------------------------------
 
 /// The queue, newest drop first, and the ids still `Queued`.
-fn collect(core: &Core) -> inker_core::Result<(Vec<QueueItem>, Vec<DocumentId>)> {
+/// A core `DocumentId`'s string form, as both a document and a folder id:
+/// the shell passes either, and the backend tries the document first.
+fn parse_ids(id: &str) -> Result<(DocumentId, FolderId), FfiError> {
+    match (DocumentId::parse(id), FolderId::parse(id)) {
+        (Some(d), Some(f)) => Ok((d, f)),
+        _ => Err(FfiError::NotFound {
+            reason: "no document or folder with that id".into(),
+        }),
+    }
+}
+
+type Collected = (Vec<QueueItem>, Vec<DocumentId>, Board);
+
+fn collect(core: &Core) -> inker_core::Result<Collected> {
     let pending = core.pending_reviews()?;
+    let (views, _) = core.doc_views()?;
+    let by_id: std::collections::HashMap<DocumentId, &DocView> =
+        views.iter().map(|v| (v.record.id, v)).collect();
+    let board = board_item(core.board(None)?, &pending);
     let mut groups: Vec<(Option<DateTime<Utc>>, QueueItem)> = Vec::new();
     let mut queued = Vec::new();
     for entry in core.list()? {
-        let recs = if entry.is_folder {
+        let recs: Vec<&DocView> = if entry.is_folder {
             let CoreResolved::Folder(f) = core.resolve(&entry.handle)? else {
                 continue;
             };
-            let mut recs: Vec<DocumentRecord> = f
+            let mut recs: Vec<&DocView> = f
                 .children
                 .iter()
                 .filter_map(|c| core.find_document(&c.handle).ok())
+                .filter_map(|r| by_id.get(&r.id).copied())
                 .collect();
             recs.sort_by(|a, b| {
-                (a.created_at, &a.original_name).cmp(&(b.created_at, &b.original_name))
+                (a.record.created_at, &a.record.original_name)
+                    .cmp(&(b.record.created_at, &b.record.original_name))
             });
             recs
         } else {
-            vec![core.find_document(&entry.handle)?]
+            let r = core.find_document(&entry.handle)?;
+            by_id.get(&r.id).copied().into_iter().collect()
         };
         queued.extend(
             recs.iter()
-                .filter(|r| r.state == inker_core::DocState::Queued)
-                .map(|r| r.id),
+                .filter(|v| v.record.state == inker_core::DocState::Queued)
+                .map(|v| v.record.id),
         );
-        let newest = recs.iter().map(|r| r.created_at).max();
-        let children: Vec<DocItem> = recs.iter().map(|r| doc_item(r, &pending)).collect();
+        let newest = recs.iter().map(|v| v.record.created_at).max();
+        let children: Vec<DocItem> = recs.iter().map(|v| doc_item(v, &pending)).collect();
         let item = if entry.is_folder {
-            let folder = recs.iter().find_map(|r| r.folder);
+            let folder = recs.iter().find_map(|v| v.record.folder);
             let summary = match folder {
                 Some(id) => core.folder_summary(id)?.into(),
                 None => FolderSummary::of(&children),
@@ -538,8 +642,9 @@ fn collect(core: &Core) -> inker_core::Result<(Vec<QueueItem>, Vec<DocumentId>)>
                 children,
             }
         } else {
+            let Some(first) = recs.first() else { continue };
             QueueItem {
-                id: recs[0].id.0.to_string(),
+                id: first.record.id.0.to_string(),
                 codename: entry.handle.codename.as_str().to_string(),
                 is_folder: false,
                 summary: FolderSummary::of(&children),
@@ -550,10 +655,50 @@ fn collect(core: &Core) -> inker_core::Result<(Vec<QueueItem>, Vec<DocumentId>)>
     }
     // Newest first; an empty folder (no time) last; ties by codename.
     groups.sort_by(|(ta, a), (tb, b)| tb.cmp(ta).then_with(|| a.codename.cmp(&b.codename)));
-    Ok((groups.into_iter().map(|(_, i)| i).collect(), queued))
+    Ok((groups.into_iter().map(|(_, i)| i).collect(), queued, board))
 }
 
-fn doc_item(rec: &DocumentRecord, pending: &[inker_core::ReviewQuestion]) -> DocItem {
+/// The core's board as the shell sees it.
+fn board_item(b: find::Board, pending: &[inker_core::ReviewQuestion]) -> Board {
+    let entry = |e: find::BoardEntry| match e {
+        find::BoardEntry::Doc(v) => BoardEntry::Doc {
+            item: doc_item(&v, pending),
+        },
+        find::BoardEntry::Folder(f) => BoardEntry::Folder {
+            item: FolderItem {
+                id: f.record.id.0.to_string(),
+                codename: f.record.codename.as_str().to_string(),
+                name: f.name,
+                path: f.record.path.to_string(),
+                summary: f.summary.into(),
+                children: f.children.iter().map(|c| doc_item(c, pending)).collect(),
+            },
+        },
+    };
+    Board {
+        groups: b
+            .groups
+            .into_iter()
+            .map(|g| YearGroup {
+                year: g.year,
+                files: g.files,
+                entries: g.entries.into_iter().map(entry).collect(),
+            })
+            .collect(),
+        tags: b
+            .tags
+            .into_iter()
+            .map(|t| TagCount {
+                tag: t.tag,
+                count: t.count,
+            })
+            .collect(),
+        total: b.total,
+    }
+}
+
+fn doc_item(view: &DocView, pending: &[inker_core::ReviewQuestion]) -> DocItem {
+    let rec = &view.record;
     let state: DocState = rec.state.into();
     let question = if state == DocState::NeedsAttention {
         pending
@@ -574,12 +719,17 @@ fn doc_item(rec: &DocumentRecord, pending: &[inker_core::ReviewQuestion]) -> Doc
         codename: rec.codename.as_str().to_string(),
         original_name: rec.original_name.clone(),
         path: rec.path.to_string(),
-        kind_label: kind_label(rec.kind.as_str()),
+        kind_label: find::kind_label(&rec.kind),
         state,
         inked: rec.inked,
         loader: loader_for(state, status_note.as_deref()),
         status_note,
         question,
+        year: rec.year,
+        payer: view.payer.clone(),
+        tag: rec.tag.clone(),
+        dropped_at: SystemTime::from(rec.created_at),
+        folder_name: view.folder_name.clone(),
     }
 }
 
@@ -620,17 +770,6 @@ fn read_event(r: inker_core::AgentRead) -> ReadEvent {
         agent: r.agent,
         codename: r.handle.codename.as_str().to_string(),
         at: SystemTime::from(r.at),
-    }
-}
-
-/// The queue row's kind: "W-2", "1099-INT", "K-1", "bank statement".
-pub(crate) fn kind_label(kind: &str) -> String {
-    match kind {
-        "" | inker_core::DocKind::UNKNOWN => "document".into(),
-        "w2" => "W-2".into(),
-        k if k.starts_with("k1-") || k == "k1" => "K-1".into(),
-        k if k.starts_with("109") => k.to_ascii_uppercase(),
-        k => k.replace('-', " "),
     }
 }
 
@@ -676,22 +815,6 @@ fn error_kind(e: &Error) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn kind_labels_read_like_the_boards() {
-        assert_eq!(kind_label("w2"), "W-2");
-        assert_eq!(kind_label("1099-int"), "1099-INT");
-        assert_eq!(kind_label("1099-nec"), "1099-NEC");
-        assert_eq!(kind_label("1095-a"), "1095-A");
-        assert_eq!(kind_label("1098"), "1098");
-        assert_eq!(kind_label("k1-1065"), "K-1");
-        assert_eq!(kind_label("k1-1120s"), "K-1");
-        assert_eq!(kind_label("bank-statement"), "bank statement");
-        assert_eq!(kind_label("closing-statement"), "closing statement");
-        assert_eq!(kind_label("scan"), "scan");
-        assert_eq!(kind_label("unknown"), "document");
-        assert_eq!(kind_label(""), "document");
-    }
 
     #[test]
     fn core_errors_cross_as_their_kind_only() {

@@ -162,6 +162,264 @@ pub struct DocItem {
     pub loader: Loader,
     /// Set while `state == NeedsAttention`.
     pub question: Option<ReviewQuestion>,
+    /// Tax year, once classified; the board groups by it.
+    pub year: Option<u16>,
+    /// "Acme Robotics": the employer, payer or lender a template attributed.
+    /// Shown in the popover only; a setting hides it.
+    pub payer: Option<String>,
+    /// The chip it counts under ("Taxes"); `None` is under `All` only.
+    pub tag: Option<String>,
+    /// When it was dropped.
+    pub dropped_at: SystemTime,
+    /// Original name of the folder it came in with, if any.
+    pub folder_name: Option<String>,
+}
+
+/// A dropped folder on the board: a sub-group inside its year.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FolderItem {
+    pub id: String,
+    /// `folder-0412`
+    pub codename: String,
+    /// The folder's original name, for line 1 of its row.
+    pub name: String,
+    /// Where it lives now, for Show in Finder.
+    pub path: String,
+    pub summary: FolderSummary,
+    /// Newest drop first.
+    pub children: Vec<DocItem>,
+}
+
+/// One row of a year group. A UniFFI enum cannot box its payload, so the
+/// size difference between the variants is accepted.
+#[allow(clippy::large_enum_variant)]
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
+pub enum BoardEntry {
+    Doc { item: DocItem },
+    Folder { item: FolderItem },
+}
+
+impl BoardEntry {
+    pub fn id(&self) -> &str {
+        match self {
+            BoardEntry::Doc { item } => &item.id,
+            BoardEntry::Folder { item } => &item.id,
+        }
+    }
+
+    pub fn codename(&self) -> &str {
+        match self {
+            BoardEntry::Doc { item } => &item.codename,
+            BoardEntry::Folder { item } => &item.codename,
+        }
+    }
+
+    fn files(&self) -> u32 {
+        match self {
+            BoardEntry::Doc { .. } => 1,
+            BoardEntry::Folder { item } => u32::try_from(item.children.len()).unwrap_or(u32::MAX),
+        }
+    }
+
+    fn dropped_at(&self) -> Option<SystemTime> {
+        match self {
+            BoardEntry::Doc { item } => Some(item.dropped_at),
+            BoardEntry::Folder { item } => item.children.iter().map(|c| c.dropped_at).max(),
+        }
+    }
+
+    /// A folder's year is the one most of its files have (ties to the
+    /// newest drop among them), as in `inker_core::find`.
+    fn year(&self) -> Option<u16> {
+        match self {
+            BoardEntry::Doc { item } => item.year,
+            BoardEntry::Folder { item } => {
+                let mut counts: Vec<(u16, usize, SystemTime)> = Vec::new();
+                for c in &item.children {
+                    let Some(y) = c.year else { continue };
+                    match counts.iter_mut().find(|(v, _, _)| *v == y) {
+                        Some(e) => {
+                            e.1 += 1;
+                            e.2 = e.2.max(c.dropped_at);
+                        }
+                        None => counts.push((y, 1, c.dropped_at)),
+                    }
+                }
+                counts
+                    .into_iter()
+                    .max_by(|a, b| (a.1, a.2).cmp(&(b.1, b.2)))
+                    .map(|(y, _, _)| y)
+            }
+        }
+    }
+
+    fn keep_tag(&self, tag: &str) -> Option<BoardEntry> {
+        match self {
+            BoardEntry::Doc { item } => (item.tag.as_deref() == Some(tag)).then(|| self.clone()),
+            BoardEntry::Folder { item } => {
+                let children: Vec<DocItem> = item
+                    .children
+                    .iter()
+                    .filter(|c| c.tag.as_deref() == Some(tag))
+                    .cloned()
+                    .collect();
+                (!children.is_empty()).then(|| BoardEntry::Folder {
+                    item: FolderItem {
+                        summary: FolderSummary::of(&children),
+                        children,
+                        ..item.clone()
+                    },
+                })
+            }
+        }
+    }
+}
+
+/// `2025 · 14 FILES`; `year` is `None` for `UNDATED`.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct YearGroup {
+    pub year: Option<u16>,
+    pub files: u32,
+    pub entries: Vec<BoardEntry>,
+}
+
+/// `Taxes · 24` on a chip.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TagCount {
+    pub tag: String,
+    pub count: u32,
+}
+
+/// The ready board at any size. Mirrors `inker_core::find::Board`.
+#[derive(Debug, Clone, PartialEq, Eq, Default, uniffi::Record)]
+pub struct Board {
+    /// Newest year first, `UNDATED` last.
+    pub groups: Vec<YearGroup>,
+    /// Every tag with at least one file, most files first.
+    pub tags: Vec<TagCount>,
+    /// Every document, whatever its state and whatever chip is active.
+    pub total: u32,
+}
+
+impl Board {
+    /// Group entries by year, newest year first, `UNDATED` last; inside a
+    /// year, newest drop first. The preview builds its board with this.
+    pub fn assemble(entries: Vec<BoardEntry>, tags: Vec<TagCount>, total: u32) -> Self {
+        let mut groups: Vec<YearGroup> = Vec::new();
+        for e in entries {
+            let year = e.year();
+            match groups.iter_mut().find(|g| g.year == year) {
+                Some(g) => g.entries.push(e),
+                None => groups.push(YearGroup {
+                    year,
+                    files: 0,
+                    entries: vec![e],
+                }),
+            }
+        }
+        for g in &mut groups {
+            g.entries.sort_by_key(|e| std::cmp::Reverse(e.dropped_at()));
+            g.files = g.entries.iter().map(BoardEntry::files).sum();
+        }
+        groups.sort_by(|a, b| match (a.year, b.year) {
+            (Some(x), Some(y)) => y.cmp(&x),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        });
+        Self {
+            groups,
+            tags,
+            total,
+        }
+    }
+
+    /// The board under one chip. Tag counts and the total stay as they are.
+    pub fn filtered(self, tag: &str) -> Self {
+        let entries: Vec<BoardEntry> = self
+            .groups
+            .into_iter()
+            .flat_map(|g| g.entries)
+            .filter_map(|e| e.keep_tag(tag))
+            .collect();
+        Self::assemble(entries, self.tags, self.total)
+    }
+
+    /// Every entry, in board order, folders included.
+    pub fn entries(&self) -> impl Iterator<Item = &BoardEntry> {
+        self.groups.iter().flat_map(|g| g.entries.iter())
+    }
+
+    /// Chip counts from a flat list of documents, most files first.
+    pub fn count_tags(docs: &[DocItem]) -> Vec<TagCount> {
+        let mut out: Vec<TagCount> = Vec::new();
+        for d in docs {
+            let Some(t) = d.tag.as_deref() else { continue };
+            match out.iter_mut().find(|c| c.tag == t) {
+                Some(c) => c.count += 1,
+                None => out.push(TagCount {
+                    tag: t.to_string(),
+                    count: 1,
+                }),
+            }
+        }
+        out.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.tag.cmp(&b.tag)));
+        out
+    }
+}
+
+/// Which field a Find query matched, in ranking order. Mirrors
+/// `inker_core::find::MatchField`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, uniffi::Enum)]
+pub enum MatchField {
+    FileName,
+    Handle,
+    Kind,
+    Payer,
+    Year,
+    Folder,
+    Tag,
+    Text,
+}
+
+impl From<inker_core::find::MatchField> for MatchField {
+    fn from(f: inker_core::find::MatchField) -> Self {
+        use inker_core::find::MatchField as F;
+        match f {
+            F::FileName => Self::FileName,
+            F::Handle => Self::Handle,
+            F::Kind => Self::Kind,
+            F::Payer => Self::Payer,
+            F::Year => Self::Year,
+            F::Folder => Self::Folder,
+            F::Tag => Self::Tag,
+            F::Text => Self::Text,
+        }
+    }
+}
+
+/// One Find result.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct FindMatch {
+    pub doc: DocItem,
+    pub field: MatchField,
+    /// The matched characters as they appear in that field, for underlining.
+    pub matched: String,
+    /// For a text match: the line around the hit, ellipsised.
+    pub snippet: Option<String>,
+    /// The query was this document's whole handle.
+    pub exact_handle: bool,
+}
+
+/// The expanded row.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct DocDetails {
+    /// Folder inside the private folder, `Taxes 2025/`, or empty at the root.
+    pub location: String,
+    pub dropped_at: SystemTime,
+    /// Files that came in the same folder drop, not counting this one.
+    pub dropped_with: u32,
+    pub last_read: Option<ReadEvent>,
 }
 
 /// "4 files · 1 ready · 3 inking". Mirrors `inker_core::FolderSummary`.

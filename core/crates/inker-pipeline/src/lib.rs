@@ -134,6 +134,17 @@ impl Pipeline {
         self.core.set_state(id, DocState::Reading, Some(note))?;
         let extracted = self.extractor.extract(&rec.path)?;
 
+        // The row shows its type as soon as a template matches, before
+        // detection (the slow part) runs. Detection classifies again.
+        if let Some(m) = inker_detect::template::match_template(&extracted, &self.packs) {
+            self.core.note_classification(
+                id,
+                inker_core::DocKind(m.template.kind.clone()),
+                m.year,
+                m.template.tag.as_deref(),
+            )?;
+        }
+
         self.core.set_state(id, DocState::Inking, Some("inking"))?;
         let mut detector = Detector::new(&self.packs);
         if let Some(model) = self.model.as_deref() {
