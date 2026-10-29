@@ -171,6 +171,9 @@ class Paths(WithoutPublishedSamples):
         self.assertEqual(cp.check_file("samples/synthetic/w2.pdf", b"%PDF-1.7"), [])
         self.assertEqual(cp.check_file("docs/handoff/design/x.png", b"\x89PNG"), [])
         self.assertEqual(cp.check_file("docs/screenshot.png", b"\x89PNG"), [])
+        # The app icon is artwork, not a document.
+        self.assertEqual(cp.check_file("app/Resources/AppIcon-1024.png", b"\x89PNG"), [])
+        self.assertEqual(kinds(cp.check_file("app/Resources/scan.pdf", b"%PDF")), ["document-file"])
 
     def test_fixture_dirs_still_reject_documents(self):
         self.assertEqual(kinds(cp.check_file("core/tests/fixtures/a.pdf", b"%PDF")), ["document-file"])
