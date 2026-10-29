@@ -137,7 +137,12 @@ Rust-only and not in the Swift bindings.
 
 ## Codesigning and notarization (later)
 
-The app must be Developer ID signed and **not** sandboxed (stack-decision section 4: a stdio
+`make app` ad-hoc signs the bundle (`SIGN_IDENTITY=-`), and `make sign` re-signs it after
+anything is added to `Contents/MacOS`. Ad-hoc is the floor: without any signature macOS
+reports a downloaded copy as "damaged" and offers only the Trash. With it, a quarantined
+copy gets the "unidentified developer" dialog and the Open Anyway switch in System Settings.
+
+The app must eventually be Developer ID signed and **not** sandboxed (stack-decision section 4: a stdio
 helper cannot inherit the sandbox). When there is a certificate, add to the `app` target in
 the Makefile, after the bundle is assembled:
 

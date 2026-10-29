@@ -7,8 +7,13 @@
 
 CONFIG ?= release
 APP := build/INKER.app
+# Signing identity. "-" is ad-hoc: enough for macOS to run the bundle after
+# the quarantine flag is cleared or "Open Anyway" is chosen. Without any
+# signature Gatekeeper reports a downloaded copy as "damaged". Pass a
+# "Developer ID Application: ..." identity for a real release; see BUILD.md.
+SIGN_IDENTITY ?= -
 
-.PHONY: rust app run test clean
+.PHONY: rust app sign run test clean
 
 rust:
 	scripts/build-rust.sh
@@ -22,8 +27,17 @@ app:
 	  cp "$$BIN/INKER" $(APP)/Contents/MacOS/INKER && \
 	  cp -R "$$BIN/INKER_InkerApp.bundle" $(APP)/Contents/Resources/
 	cp Resources/MenuBarIcon.svg $(APP)/Contents/Resources/
-	@# Codesigning and notarization slot in here; see BUILD.md.
+	$(MAKE) sign
 	@echo "built $(APP)"
+
+# Sign nested executables first, then the bundle, then verify. Re-run after
+# adding anything to Contents/MacOS (the release workflow copies inker-cli in).
+sign:
+	for f in $(APP)/Contents/MacOS/*; do \
+	  [ "$$f" = "$(APP)/Contents/MacOS/INKER" ] || codesign --force --sign "$(SIGN_IDENTITY)" "$$f"; \
+	done
+	codesign --force --sign "$(SIGN_IDENTITY)" --identifier sh.inker.app $(APP)
+	codesign --verify --deep --strict --verbose=2 $(APP)
 
 run: app
 	open $(APP)

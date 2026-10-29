@@ -79,13 +79,18 @@ jobs:
       - name: Swift build and INKER.app
         working-directory: app
         run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.v.outputs.version }}" Resources/Info.plist
           make app
           # Ship the CLI/shim inside the app bundle so the Desktop config and
           # the .mcpb can point at one place. Named inker-cli: APFS is
           # case-insensitive, so "inker" would overwrite the app's "INKER".
           cp ../dist/out/inker build/INKER.app/Contents/MacOS/inker-cli
+          # Re-sign now that the bundle has a second executable in it.
+          make sign
           ls -la build/INKER.app/Contents/MacOS
           test -s build/INKER.app/Contents/MacOS/INKER && test -s build/INKER.app/Contents/MacOS/inker-cli
+          codesign -dvv build/INKER.app 2>&1 | grep -E "Identifier|Signature|Sealed"
+          spctl --assess --type execute --verbose=4 build/INKER.app || echo "(expected: ad-hoc signature is not notarized)"
 
       - name: Claude Desktop bundle (.mcpb)
         run: |
@@ -118,5 +123,5 @@ jobs:
           gh release create "$TAG" dist/out/* \
             --title "INKER $V" \
             --prerelease \
-            --notes "First build. Unsigned: right-click INKER.app and choose Open, or run \`xattr -dr com.apple.quarantine INKER.app\`. See docs/stack-decision.md for what works and what does not." \
+            --notes "Ad-hoc signed, not notarized. After unzipping run \`xattr -dr com.apple.quarantine INKER.app\`, or open it once, then allow it under System Settings > Privacy & Security > Open Anyway. See docs/stack-decision.md for what works and what does not." \
             || gh release upload "$TAG" dist/out/* --clobber
