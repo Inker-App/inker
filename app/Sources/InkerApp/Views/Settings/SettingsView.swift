@@ -32,6 +32,7 @@ struct SettingsView: View {
                 .frame(width: PopoverLayout.width, alignment: .topLeading)
             }
             .frame(maxHeight: .infinity)
+            Hairline()
             HStack {
                 Button("Quit INKER") { NSApp.terminate(nil) }
                     .buttonStyle(.plain)
@@ -46,8 +47,7 @@ struct SettingsView: View {
             }
             .frame(height: 36)
             .padding(.horizontal, PopoverLayout.gutter)
-            .padding(.top, 8)
-            .padding(.bottom, 12)
+            .padding(.vertical, 12)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear {
