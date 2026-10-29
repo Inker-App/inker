@@ -76,7 +76,9 @@ jobs:
         working-directory: app
         # The static Rust lib prints a linker warning per object file; drop
         # those so compile errors and test failures stay in the log.
-        run: set -o pipefail; swift test 2>&1 | grep -v "ld: warning: object file"
+        run: |
+          set -o pipefail
+          swift test 2>&1 | grep -v "ld: warning: object file"
 
       - name: Swift build and INKER.app
         working-directory: app
