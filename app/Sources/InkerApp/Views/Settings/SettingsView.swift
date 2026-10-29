@@ -20,6 +20,7 @@ struct SettingsView: View {
             PopoverScroll {
                 VStack(alignment: .leading, spacing: 20) {
                     handles
+                    privateFolder
                     codingAgents
                     setup
                 }
@@ -60,6 +61,24 @@ struct SettingsView: View {
                         accessibilityLabel: "Copy handles as ink slash instead of the octopus emoji")
                 .font(Typography.small)
                 .foregroundColor(Palette.checkLabel)
+        }
+    }
+
+    /// Where the files went, and a way there. Placement is a placeholder for Ben.
+    private var privateFolder: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabelText(PrivateFolderSection.title)
+            HStack(spacing: 8) {
+                Text(store.privateFolderDisplay)
+                    .font(Typography.mono(12))
+                    .foregroundColor(Palette.paper)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Spacer(minLength: 8)
+                Button(PrivateFolderSection.openButton) { store.openPrivateFolder() }
+                    .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 28, horizontalPadding: 12))
+                    .accessibilityLabel("Open the private folder in Finder")
+            }
         }
     }
 

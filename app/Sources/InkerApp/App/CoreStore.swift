@@ -93,7 +93,11 @@ final class CoreStore: ObservableObject {
     }
 
     var privateFolder: URL {
-        settings.privateFolderPath.map { URL(fileURLWithPath: $0) } ?? FolderPickerWarnings.defaultFolder(home: home)
+        PrivateFolderSection.folder(stored: settings.privateFolderPath, home: home)
+    }
+
+    var privateFolderDisplay: String {
+        PrivateFolderSection.display(stored: settings.privateFolderPath, home: home)
     }
 
     func refresh() {
@@ -129,6 +133,19 @@ final class CoreStore: ObservableObject {
     func reveal(path: String) {
         let url = PathDisplay.expand(path, home: home)
         NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    /// "Open in Finder" in Settings shows the private folder's contents. The
+    /// host creates the folder when the core opens, so it exists by now; if
+    /// it has gone missing, select its parent instead of doing nothing.
+    func openPrivateFolder() {
+        let url = privateFolder
+        if FileManager.default.fileExists(atPath: url.path) {
+            NSWorkspace.shared.open(url)
+        } else {
+            log.error("private folder missing; revealing its parent")
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
     }
 
     // MARK: Settings

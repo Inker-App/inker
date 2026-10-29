@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
         }
         let home = FileManager.default.homeDirectoryForCurrentUser
         let settings = AppSettings(store: UserDefaults.standard)
-        let privateFolder = settings.privateFolderPath ?? FolderPickerWarnings.defaultFolder(home: home).path
+        let privateFolder = PrivateFolderSection.folder(stored: settings.privateFolderPath, home: home).path
         // Must match `inker_ipc::paths::data_dir()` on macOS, which is where
         // the `inker mcp` shim looks for the socket. The core creates it 0700.
         let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
