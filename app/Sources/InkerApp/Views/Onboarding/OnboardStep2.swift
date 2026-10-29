@@ -70,7 +70,7 @@ struct OnboardStep2: View {
         let json = """
         {
           "mcpServers": {
-            "inker": { "command": "inker", "args": ["mcp"] }
+            "inker": { "command": "/Applications/INKER.app/Contents/MacOS/inker-cli", "args": ["mcp"] }
           }
         }
         """

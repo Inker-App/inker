@@ -66,7 +66,7 @@ jobs:
             target/aarch64-apple-darwin/release/inker \
             target/x86_64-apple-darwin/release/inker \
             -output ../dist/out/inker
-          ../dist/out/inker --help | head -3
+          ../dist/out/inker --help >/dev/null
 
       - name: Rust FFI, bindings, xcframework
         working-directory: app
@@ -74,16 +74,18 @@ jobs:
 
       - name: Swift tests
         working-directory: app
-        run: swift test 2>&1 | tail -60
+        run: set -o pipefail; swift test 2>&1 | tail -60
 
       - name: Swift build and INKER.app
         working-directory: app
         run: |
           make app
           # Ship the CLI/shim inside the app bundle so the Desktop config and
-          # the .mcpb can point at one place.
-          cp ../dist/out/inker build/INKER.app/Contents/MacOS/inker
+          # the .mcpb can point at one place. Named inker-cli: APFS is
+          # case-insensitive, so "inker" would overwrite the app's "INKER".
+          cp ../dist/out/inker build/INKER.app/Contents/MacOS/inker-cli
           ls -la build/INKER.app/Contents/MacOS
+          test -s build/INKER.app/Contents/MacOS/INKER && test -s build/INKER.app/Contents/MacOS/inker-cli
 
       - name: Claude Desktop bundle (.mcpb)
         run: |

@@ -35,7 +35,7 @@ and keeping every other server and setting:
 {
   "mcpServers": {
     "inker": {
-      "command": "/Applications/INKER.app/Contents/MacOS/inker",
+      "command": "/Applications/INKER.app/Contents/MacOS/inker-cli",
       "args": ["mcp"],
       "env": {}
     }
@@ -44,7 +44,7 @@ and keeping every other server and setting:
 ```
 
 The command is the absolute path of the `inker` binary that ran `setup` (the path above is an
-example; where the app bundle keeps the shim is not settled yet). Running setup again
+the release workflow ships the CLI inside the app bundle as `Contents/MacOS/inker-cli`). Running setup again
 changes nothing. If the file is not valid JSON, setup stops and says so rather than overwrite it.
 `inker setup --agent all` does Claude Desktop first, then the coding agents (Claude Code, Cursor,
 Codex). `inker doctor` reports whether Claude Desktop is installed and has INKER registered.
