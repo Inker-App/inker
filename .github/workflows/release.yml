@@ -1,0 +1,120 @@
+name: release
+
+# Builds INKER.app, the inker CLI and the Claude Desktop bundle on a macOS
+# runner and publishes them as a GitHub pre-release. The dev box is Linux,
+# so this is where the Swift shell actually compiles.
+#
+# Trigger by pushing a tag like v0.0, or by hand with a version input.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (tag without the v, e.g. 0.0)"
+        required: true
+        default: "0.0"
+      publish:
+        description: "Create the GitHub release (false = build only)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  MACOSX_DEPLOYMENT_TARGET: "26.0"
+
+jobs:
+  build:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchains
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo --version
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Version
+        id: v
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rust core (universal CLI)
+        working-directory: core
+        run: |
+          cargo build --release -p inker --target aarch64-apple-darwin
+          cargo build --release -p inker --target x86_64-apple-darwin
+          mkdir -p ../dist/out
+          lipo -create \
+            target/aarch64-apple-darwin/release/inker \
+            target/x86_64-apple-darwin/release/inker \
+            -output ../dist/out/inker
+          ../dist/out/inker --help | head -3
+
+      - name: Rust FFI, bindings, xcframework
+        working-directory: app
+        run: ./scripts/build-rust.sh --universal
+
+      - name: Swift tests
+        working-directory: app
+        run: swift test 2>&1 | tail -60
+
+      - name: Swift build and INKER.app
+        working-directory: app
+        run: |
+          make app
+          # Ship the CLI/shim inside the app bundle so the Desktop config and
+          # the .mcpb can point at one place.
+          cp ../dist/out/inker build/INKER.app/Contents/MacOS/inker
+          ls -la build/INKER.app/Contents/MacOS
+
+      - name: Claude Desktop bundle (.mcpb)
+        run: |
+          ./dist/out/inker bundle --out dist/out/inker.mcpb \
+            --version "${{ steps.v.outputs.version }}" \
+            --binary dist/out/inker
+          ls -la dist/out
+
+      - name: Package
+        run: |
+          cd app/build && ditto -c -k --keepParent INKER.app ../../dist/out/INKER-${{ steps.v.outputs.version }}-macos.zip && cd -
+          cd dist/out && mv inker inker-${{ steps.v.outputs.version }}-macos-universal && mv inker.mcpb inker-${{ steps.v.outputs.version }}.mcpb && shasum -a 256 * > SHA256SUMS.txt && cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: inker-${{ steps.v.outputs.version }}
+          path: dist/out/*
+          if-no-files-found: error
+
+      - name: Publish pre-release
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ steps.v.outputs.version }}"
+          TAG="v$V"
+          if [ "${{ github.event_name }}" != "push" ]; then
+            git tag -f "$TAG" && git push -f origin "$TAG"
+          fi
+          gh release create "$TAG" dist/out/* \
+            --title "INKER $V" \
+            --prerelease \
+            --notes "First build. Unsigned: right-click INKER.app and choose Open, or run \`xattr -dr com.apple.quarantine INKER.app\`. See docs/stack-decision.md for what works and what does not." \
+            || gh release upload "$TAG" dist/out/* --clobber
