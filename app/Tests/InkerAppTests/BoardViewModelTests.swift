@@ -111,7 +111,7 @@ struct BoardViewModelTests {
         #expect(f.copyEnabled)
         #expect(!f.isOpen)
         #expect(f.children.count == 9)
-        #expect(f.children.allSatisfy(\.indented))
+        #expect(f.children.allSatisfy { $0.indented })
         #expect(f.menu.forget == "Forget this folder")
         #expect(f.menu.forgetConfirm == "Forget Taxes 2025")
         #expect(f.menu.copyOctopus == "Copy 🐙/folder-0412")

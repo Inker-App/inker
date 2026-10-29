@@ -43,7 +43,7 @@ struct FindSupportTests {
                                           calendar: Calendar(identifier: .gregorian), timeZone: TimeZone(identifier: "UTC")!)
         #expect(lines.map(\.label) == ["In", "Dropped", "Last read"])
         #expect(lines[0].value == "~/Private/Taxes 2025/")
-        #expect(lines[1].value.hasSuffix(", with 8 others"), lines[1].value)
+        #expect(lines[1].value.hasSuffix(", with 8 others"), "\(lines[1].value)")
         #expect(lines[2].value == "Claude, 2m ago · saw only ink")
         let loose = DocDetails(location: "", droppedAt: now, droppedWith: 0, lastRead: nil)
         let l2 = DocDetailsModel.lines(loose, privateFolderDisplay: "~/Private", now: now,
