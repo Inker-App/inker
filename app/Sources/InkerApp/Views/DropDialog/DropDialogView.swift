@@ -2,15 +2,19 @@ import InkerCore
 import InkerKit
 import SwiftUI
 
-/// AppDropDialog: "Move these 4 files out of ~/Downloads?" 440x280.
-struct DropDialogView: View {
+/// "Move these 4 files out of ~/Downloads?" as a card inside the popover,
+/// replacing the AppDropDialog window (it opened behind the popover).
+struct DropDecisionCard: View {
     let batch: DropBatch
     let onAnswer: (IngestMode?, Bool) -> Void
     @State private var alwaysMove = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            // The 392-wide dialog scene, scaled to the popover's inner width.
             DialogScene(fileCount: batch.count, source: batch.sourceDisplay ?? "~/Downloads")
+                .scaleEffect(328.0 / 392.0, anchor: .topLeading)
+                .frame(width: 328, height: 76 * 328.0 / 392.0, alignment: .topLeading)
             VStack(alignment: .leading, spacing: 4) {
                 Text(DropDialogCopy.title(for: batch)).font(Typography.title)
                 Text(DropDialogCopy.body).foregroundColor(Palette.muted).fixedSize(horizontal: false, vertical: true)
@@ -18,8 +22,12 @@ struct DropDialogView: View {
             InkCheckbox(isOn: $alwaysMove, label: Text(DropDialogCopy.alwaysMove), accessibilityLabel: DropDialogCopy.alwaysMove)
                 .font(Typography.small)
                 .foregroundColor(Palette.checkLabel)
-            Spacer(minLength: 0)
             HStack(spacing: 8) {
+                Button(DropDialogCopy.cancel) { onAnswer(nil, false) }
+                    .buttonStyle(.plain)
+                    .font(Typography.body)
+                    .foregroundColor(Palette.muted)
+                    .keyboardShortcut(.cancelAction)
                 Spacer()
                 Button(DropDialogCopy.copyInstead) { onAnswer(.copy, false) }
                     .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 32, horizontalPadding: 14, fontSize: 13))
@@ -28,19 +36,8 @@ struct DropDialogView: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(.vertical, 20)
-        .padding(.horizontal, 24)
-        .frame(width: 440, height: 280, alignment: .top)
-        .background(Palette.background)
-        .foregroundColor(Palette.paper)
-        .font(Typography.body)
-        // Esc cancels the drop (not on the board; closing the window does the same).
-        .background(
-            Button("") { onAnswer(nil, false) }
-                .keyboardShortcut(.cancelAction)
-                .opacity(0)
-                .accessibilityHidden(true)
-        )
+        .padding(16)
+        .frame(width: 360, alignment: .topLeading)
     }
 }
 

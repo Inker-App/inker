@@ -9,7 +9,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
     private var store: CoreStore?
     private var statusController: StatusItemController?
     private var onboarding: OnboardingWindowController?
-    private var dropDialog: DropDialogWindowController?
+    private var settingsWindow: SettingsWindowController?
+    /// Joins Cmd+Tab while a window is open; menu bar only otherwise.
+    private var presence = WindowPresence()
     private var clock: RenderClock { RenderClock.shared }
     private let log = Logger(subsystem: "sh.inker.app", category: "app")
 
@@ -64,13 +66,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
     // MARK: Settings menu (not on the boards; placeholder until Ben designs it)
 
     private func showSettingsMenu() {
-        guard let store else { return }
         let menu = NSMenu()
-        let ascii = NSMenuItem(title: "Copy handles as ink/", action: #selector(toggleHandleStyle(_:)), keyEquivalent: "")
-        ascii.target = self
-        ascii.state = store.settings.handleStyle == .ascii ? .on : .off
-        menu.addItem(ascii)
-        let setup = NSMenuItem(title: "Set up agents…", action: #selector(openOnboarding(_:)), keyEquivalent: "")
+        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
+        let setup = NSMenuItem(title: "Set up your chat…", action: #selector(openOnboarding(_:)), keyEquivalent: "")
         setup.target = self
         menu.addItem(setup)
         menu.addItem(.separator())
@@ -79,16 +79,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
         _ = menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
-    @objc private func toggleHandleStyle(_ sender: Any?) {
-        guard let store else { return }
-        store.setHandleStyle(store.settings.handleStyle == .ascii ? .octopus : .ascii)
-    }
-
     @objc private func openOnboarding(_ sender: Any?) {
         presentOnboarding()
     }
 
+    @objc private func openSettings(_ sender: Any?) {
+        presentSettings()
+    }
+
+    // MARK: Windows and Cmd+Tab
+
+    private func windowOpened(_ id: String) {
+        if let policy = presence.opened(id) { apply(policy) }
+    }
+
+    private func windowClosed(_ id: String) {
+        if let policy = presence.closed(id) { apply(policy) }
+    }
+
+    private func apply(_ policy: WindowPresence.Policy) {
+        // VERIFY: switching to .regular adds a Dock tile and a Cmd+Tab entry
+        // at once; switching back removes them once no window is key.
+        NSApp.setActivationPolicy(policy == .regular ? .regular : .accessory)
+        if policy == .regular { NSApp.activate() }
+    }
+
+    func presentSettings() {
+        guard let store else { return }
+        if let settingsWindow {
+            settingsWindow.show()
+            return
+        }
+        let controller = SettingsWindowController(store: store, clock: clock) { [weak self] in
+            self?.windowClosed("settings")
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.settingsWindow = nil } }
+        }
+        settingsWindow = controller
+        windowOpened("settings")
+        controller.show()
+    }
+
     // MARK: CorePresenter
+
+    func presentPopover() {
+        statusController?.showPopover()
+    }
 
     func presentOnboarding() {
         guard let store else { return }
@@ -96,24 +131,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
             onboarding.show()
             return
         }
-        let controller = OnboardingWindowController(store: store, clock: clock) { [weak self] in
+        let controller = OnboardingWindowController(store: store, clock: clock, onFinish: {
             var state = OnboardingState(store: UserDefaults.standard)
             state.markComplete()
+        }, onClose: { [weak self] in
+            self?.windowClosed("onboarding")
             // Release after the button action that got us here has unwound.
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.onboarding = nil } }
-        }
+        })
         onboarding = controller
-        controller.show()
-    }
-
-    func presentDropDialog(for batch: DropBatch, completion: @escaping (IngestMode?, Bool) -> Void) {
-        dropDialog?.close()
-        let controller = DropDialogWindowController(batch: batch, clock: clock) { [weak self] mode, always in
-            completion(mode, always)
-            // Release after the window's own callbacks have unwound.
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.dropDialog = nil } }
-        }
-        dropDialog = controller
+        windowOpened("onboarding")
         controller.show()
     }
 }

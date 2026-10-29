@@ -79,7 +79,7 @@ async fn forwards_initialize_list_and_resolve() {
         .call("resolve", json!({"handle": "🐙/1099-int-bank-2025"}))
         .await;
     assert!(is_error(&r));
-    assert_eq!(fake.reads()[0].0, "claude-code");
+    assert_eq!(fake.reads()[0].0, "Claude Code");
 
     // Agent closes stdin: the shim exits cleanly.
     drop(agent);

@@ -9,7 +9,8 @@ import UniformTypeIdentifiers
 /// Presents the windows the store needs (implemented by AppDelegate).
 @MainActor
 protocol CorePresenter: AnyObject {
-    func presentDropDialog(for batch: DropBatch, completion: @escaping (IngestMode?, Bool) -> Void)
+    /// Open the popover, e.g. so the move-or-copy card is seen.
+    func presentPopover()
     func presentOnboarding()
 }
 
@@ -21,6 +22,8 @@ final class CoreStore: ObservableObject {
     @Published private(set) var copyFeedback = CopyFeedback()
     /// A drag is over the status item or the popover.
     @Published var isDropTargeted = false
+    /// A drop waiting for the move-or-copy answer; the popover shows the card.
+    @Published private(set) var pendingDrop: DropBatch?
 
     let handle: CoreHandle
     weak var presenter: CorePresenter?
@@ -119,23 +122,22 @@ final class CoreStore: ObservableObject {
                                               return fm.fileExists(atPath: url.path, isDirectory: &isDir) && isDir.boolValue
                                           })
         guard !batch.isEmpty else { return }
-        if !batch.needsMoveDecision {
-            ingest(batch, mode: .move)
-            return
+        switch DropDecision.resolve(needsMoveDecision: batch.needsMoveDecision, remembered: dropPreferences.rememberedMode) {
+        case .ingest(let mode):
+            ingest(batch, mode: mode)
+        case .ask:
+            pendingDrop = batch
+            presenter?.presentPopover()
         }
-        if let remembered = dropPreferences.rememberedMode {
-            ingest(batch, mode: remembered)
-            return
-        }
-        guard let presenter else {
-            ingest(batch, mode: .move)
-            return
-        }
-        presenter.presentDropDialog(for: batch) { [weak self] mode, always in
-            guard let self, let mode else { return }
-            self.dropPreferences.record(mode, always: always)
-            self.ingest(batch, mode: mode)
-        }
+    }
+
+    /// The card's answer. `nil` cancels the drop and leaves the files where they are.
+    func answerDrop(_ mode: IngestMode?, always: Bool) {
+        guard let batch = pendingDrop else { return }
+        pendingDrop = nil
+        guard let mode else { return }
+        dropPreferences.record(mode, always: always)
+        ingest(batch, mode: mode)
     }
 
     private func ingest(_ batch: DropBatch, mode: IngestMode) {
@@ -181,10 +183,14 @@ final class CoreStore: ObservableObject {
         return true
     }
 
-    // MARK: Agents (stubs until the writers are wired)
+    // MARK: Agents
 
-    func planAgents(_ agents: [AgentKind]) -> [Plan] {
-        agents.compactMap { try? handle.setupAgent(agent: $0, dryRun: true) }
+    /// The `inker-cli` the release puts next to the app executable.
+    var cliPath: String { AgentConfigSnippet.cliPath(executable: Bundle.main.executableURL) }
+
+    /// Write (or, dry, plan) one client's configuration with the core's writers.
+    func setupAgent(_ agent: AgentKind, dryRun: Bool = false) throws -> Plan {
+        try handle.setupAgent(agent: agent, dryRun: dryRun, inkerBin: cliPath, home: home.path)
     }
 }
 

@@ -27,10 +27,12 @@ struct GroupSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            GroupHeader(group: group)
-                .padding(.top, 14)
-                .padding(.bottom, 10)
-            Hairline()
+            if group.showsHeader {
+                GroupHeader(group: group)
+                    .padding(.top, 14)
+                    .padding(.bottom, 10)
+                Hairline()
+            }
             ForEach(Array(group.rows.enumerated()), id: \.element.id) { index, row in
                 QueueRow(row: row)
                 if index < group.rows.count - 1 {

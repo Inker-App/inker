@@ -1,33 +1,57 @@
-//! Agent setup and the `doctor` report. `setup_agent` is a stub returning
-//! fixed plans until the writers in `inker-agents` are wired; the doctor
-//! lines come from the backend. The per-agent wording follows decision 5.3 and
-//! section 3.8: none of these is called a "deny rule".
+//! Agent setup over the writers in `inker-agents`, and the `doctor` report.
+//! `setup_agent` plans (dry run) or applies one agent's configuration. The
+//! per-agent wording follows decision 5.3 and section 3.8: none of these is
+//! called a "deny rule". Chat apps come first (section 9).
+
+use std::path::{Path, PathBuf};
+
+use inker_agents::codex::CodexOptions;
+use inker_agents::{DryRun, Env};
 
 use crate::error::FfiError;
 
-/// The agents onboarding knows how to keep out.
+/// The clients INKER can register itself with. `ClaudeDesktop` is the chat
+/// app and the primary target; the rest are coding agents, which also get
+/// exclusion rules for the private folder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, uniffi::Enum)]
 pub enum AgentKind {
+    ClaudeDesktop,
     ClaudeCode,
     Codex,
     Cursor,
 }
 
-/// One file the writer would touch, and what it would do there.
+impl AgentKind {
+    /// The row's trailing text in onboarding and settings.
+    pub fn summary(self) -> &'static str {
+        match self {
+            AgentKind::ClaudeDesktop => "the Claude app on this Mac",
+            AgentKind::ClaudeCode => "permission rule, sandbox and hook",
+            AgentKind::Codex => "permission profile (replaces your sandbox mode)",
+            AgentKind::Cursor => "read hook",
+        }
+    }
+}
+
+/// One file the writer would touch (or command it would run), and what it
+/// would do there. Paths are shown with `~` for the home folder.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct PlanStep {
     pub path: String,
     pub description: String,
 }
 
-/// What `setup_agent` would do (dry run) or did.
+/// What `setup_agent` would do (dry run) or did. Empty `steps` means the
+/// agent was already set up.
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
 pub struct Plan {
     pub agent: AgentKind,
-    /// The onboarding row's trailing text, e.g. "read hook".
+    /// The row's trailing text, e.g. "read hook".
     pub summary: String,
     pub dry_run: bool,
     pub steps: Vec<PlanStep>,
+    /// Things the user has to do, e.g. restart the Claude app.
+    pub warnings: Vec<String>,
 }
 
 /// The doctor report, one line per check.
@@ -36,69 +60,59 @@ pub struct DoctorReport {
     pub lines: Vec<String>,
 }
 
-fn step(path: &str, description: &str) -> PlanStep {
-    PlanStep {
-        path: path.into(),
-        description: description.into(),
+fn tilde(path: &Path, home: &Path) -> String {
+    match path.strip_prefix(home) {
+        Ok(rel) => format!("~/{}", rel.display()),
+        Err(_) => path.display().to_string(),
     }
 }
 
-/// The fixed plan for each agent. `dry_run == false` is refused until the
-/// real writers exist, so the stub can never touch a config file.
-pub fn setup_agent(agent: AgentKind, dry_run: bool) -> Result<Plan, FfiError> {
-    if !dry_run {
-        return Err(FfiError::Backend {
-            reason: "agent config writers are not wired yet; only dry runs are available".into(),
-        });
+/// Plan or apply `agent`'s configuration. `inker_bin` is the CLI the client
+/// should launch (the `inker-cli` inside the app bundle); `home` is the
+/// user's home folder, passed in so tests can use a scratch one.
+pub fn setup_agent(
+    agent: AgentKind,
+    dry_run: bool,
+    inker_bin: &str,
+    home: &str,
+    private_folder: &str,
+) -> Result<Plan, FfiError> {
+    let home = PathBuf::from(home);
+    let env = Env::detect(&home, Path::new(inker_bin), Path::new(private_folder));
+    let dry = DryRun(dry_run);
+    let plan = match agent {
+        AgentKind::ClaudeDesktop => inker_agents::claude_desktop::setup(&env, dry),
+        AgentKind::ClaudeCode => inker_agents::claude::setup(&env, dry),
+        AgentKind::Codex => inker_agents::codex::setup(
+            &env,
+            CodexOptions {
+                permission_profile: true,
+            },
+            dry,
+        ),
+        AgentKind::Cursor => inker_agents::cursor::setup(&env, dry),
     }
-    let (summary, steps) = match agent {
-        AgentKind::ClaudeCode => (
-            "permission rule, sandbox and hook",
-            vec![
-                step(
-                    "~/.claude.json",
-                    "register the inker MCP server (claude mcp add --scope user)",
-                ),
-                step(
-                    "~/.claude/settings.json",
-                    "permissions.deny Read and Edit of the private folder",
-                ),
-                step(
-                    "~/.claude/settings.json",
-                    "sandbox.filesystem.denyRead for the private folder",
-                ),
-                step(
-                    "~/.claude/settings.json",
-                    "PreToolUse hook that warns on direct reads",
-                ),
-            ],
-        ),
-        AgentKind::Codex => (
-            "permission profile (replaces your sandbox mode)",
-            vec![
-                step("~/.codex/config.toml", "register [mcp_servers.inker]"),
-                step(
-                    "~/.codex/config.toml",
-                    "[permissions.inker.filesystem] denies the private folder; default_permissions replaces sandbox_mode",
-                ),
-            ],
-        ),
-        AgentKind::Cursor => (
-            "read hook",
-            vec![
-                step("~/.cursor/mcp.json", "register the inker MCP server"),
-                step(
-                    "~/.cursor/hooks.json",
-                    "beforeReadFile and beforeShellExecution hooks for the private folder",
-                ),
-            ],
-        ),
-    };
+    .map_err(|e| FfiError::Backend {
+        reason: e.to_string(),
+    })?;
+    let mut steps: Vec<PlanStep> = plan
+        .edits
+        .iter()
+        .map(|e| PlanStep {
+            path: tilde(&e.path, &home),
+            description: e.summary.clone(),
+        })
+        .collect();
+    steps.extend(plan.commands.iter().map(|c| PlanStep {
+        path: c.display(),
+        description: c.summary.clone(),
+    }));
     Ok(Plan {
         agent,
-        summary: summary.into(),
+        summary: agent.summary().into(),
         dry_run,
         steps,
+        warnings: plan.warnings,
     })
 }
 

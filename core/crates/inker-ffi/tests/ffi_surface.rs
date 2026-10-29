@@ -398,38 +398,127 @@ fn codename_from_names() {
 }
 
 // ---------------------------------------------------------------------------
-// setup_agent / doctor stubs
+// setup_agent: the real writers from inker-agents, on a scratch home
 // ---------------------------------------------------------------------------
 
+/// A handle over the real core on a scratch dir, plus a scratch home the
+/// writers may edit. Nothing here touches the user's own config files.
+fn setup_world(name: &str) -> (Arc<CoreHandle>, PathBuf, String) {
+    let dir = scratch(name);
+    let home = dir.join("home");
+    std::fs::create_dir_all(&home).unwrap();
+    let private = home.join("Private");
+    let data = dir.join("data");
+    let h = CoreHandle::open_with_rust_providers(
+        private.to_string_lossy().into_owned(),
+        data.to_string_lossy().into_owned(),
+    )
+    .unwrap();
+    let bin = dir.join("INKER.app/Contents/MacOS/inker-cli");
+    (h, home, bin.to_string_lossy().into_owned())
+}
+
+fn s(p: &std::path::Path) -> String {
+    p.to_string_lossy().into_owned()
+}
+
 #[test]
-fn setup_agent_plans_match_decision_5_3() {
-    let h = CoreHandle::preview(PreviewScenario::Empty);
-    let claude = h.setup_agent(AgentKind::ClaudeCode, true).unwrap();
-    assert!(claude.dry_run);
+fn setup_agent_claude_desktop_dry_run_plans_the_config_edit_and_writes_nothing() {
+    let (h, home, bin) = setup_world("cd-dry");
+    let plan = h
+        .setup_agent(AgentKind::ClaudeDesktop, true, bin.clone(), s(&home))
+        .unwrap();
+    assert!(plan.dry_run);
+    assert_eq!(plan.agent, AgentKind::ClaudeDesktop);
+    assert_eq!(plan.summary, "the Claude app on this Mac");
+    let step = &plan.steps[0];
+    assert_eq!(
+        step.path,
+        "~/Library/Application Support/Claude/claude_desktop_config.json"
+    );
+    assert!(step.description.contains("mcpServers.inker"), "{step:?}");
+    assert!(
+        plan.warnings.iter().any(|w| w.contains("Quit Claude")),
+        "{:?}",
+        plan.warnings
+    );
+    assert!(!home.join("Library").exists(), "dry run wrote a file");
+    h.close();
+}
+
+#[test]
+fn setup_agent_claude_desktop_writes_the_config_pointing_at_the_bundled_cli() {
+    let (h, home, bin) = setup_world("cd-write");
+    let plan = h
+        .setup_agent(AgentKind::ClaudeDesktop, false, bin.clone(), s(&home))
+        .unwrap();
+    assert!(!plan.dry_run);
+    let written = std::fs::read_to_string(
+        home.join("Library/Application Support/Claude/claude_desktop_config.json"),
+    )
+    .unwrap();
+    assert!(written.contains(&bin), "{written}");
+    assert!(written.contains("\"mcp\""), "{written}");
+    // Running it again changes nothing.
+    let again = h
+        .setup_agent(AgentKind::ClaudeDesktop, false, bin, s(&home))
+        .unwrap();
+    assert!(again.steps.is_empty(), "{again:?}");
+    assert!(again.warnings.is_empty(), "{again:?}");
+    h.close();
+}
+
+#[test]
+fn setup_agent_coding_agents_keep_their_row_summaries() {
+    let (h, home, bin) = setup_world("coding");
+    let cursor = h
+        .setup_agent(AgentKind::Cursor, true, bin.clone(), s(&home))
+        .unwrap();
+    assert_eq!(cursor.summary, "read hook");
+    assert!(
+        cursor
+            .steps
+            .iter()
+            .any(|st| st.path == "~/.cursor/hooks.json"),
+        "{cursor:?}"
+    );
+    let codex = h
+        .setup_agent(AgentKind::Codex, true, bin.clone(), s(&home))
+        .unwrap();
+    assert_eq!(
+        codex.summary,
+        "permission profile (replaces your sandbox mode)"
+    );
+    assert!(
+        codex
+            .steps
+            .iter()
+            .any(|st| st.path == "~/.codex/config.toml"),
+        "{codex:?}"
+    );
+    let claude = h
+        .setup_agent(AgentKind::ClaudeCode, true, bin, s(&home))
+        .unwrap();
     assert_eq!(claude.summary, "permission rule, sandbox and hook");
     assert!(
         claude
             .steps
             .iter()
-            .any(|s| s.path == "~/.claude/settings.json")
+            .any(|st| st.path == "~/.claude/settings.json"),
+        "{claude:?}"
     );
-    let codex = h.setup_agent(AgentKind::Codex, true).unwrap();
-    assert_eq!(
-        codex.summary,
-        "permission profile (replaces your sandbox mode)"
-    );
-    let cursor = h.setup_agent(AgentKind::Cursor, true).unwrap();
-    assert_eq!(cursor.summary, "read hook");
-    for p in [&claude, &codex, &cursor] {
+    for p in [&cursor, &codex, &claude] {
         assert!(!p.summary.contains("deny rule"));
     }
+    h.close();
 }
 
 #[test]
-fn setup_agent_stub_refuses_to_write_for_real() {
+fn setup_agent_is_refused_in_a_preview() {
     let h = CoreHandle::preview(PreviewScenario::Empty);
     assert!(matches!(
-        h.setup_agent(AgentKind::Cursor, false).unwrap_err(),
+        h.setup_agent(AgentKind::Cursor, true, "/x/inker-cli".into(), "/x".into())
+            .unwrap_err(),
         FfiError::Backend { .. }
     ));
 }

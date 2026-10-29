@@ -409,6 +409,10 @@ impl Backend for HostBackend {
         }
     }
 
+    fn private_folder(&self) -> Option<String> {
+        Some(self.host.core().paths().private_folder.to_string())
+    }
+
     fn doctor(&self) -> Vec<String> {
         let socket = lock(&self.server).as_ref().map(|s| s.path.clone());
         let mcp = match socket {

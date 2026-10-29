@@ -1400,6 +1400,7 @@ version = "0.1.0"
 dependencies = [
  "camino",
  "chrono",
+ "inker-agents",
  "inker-core",
  "inker-extract",
  "inker-host",

@@ -7,18 +7,19 @@
 
 CONFIG ?= release
 APP := build/INKER.app
+ICONSET := build/AppIcon.iconset
 # Signing identity. "-" is ad-hoc: enough for macOS to run the bundle after
 # the quarantine flag is cleared or "Open Anyway" is chosen. Without any
 # signature Gatekeeper reports a downloaded copy as "damaged". Pass a
 # "Developer ID Application: ..." identity for a real release; see BUILD.md.
 SIGN_IDENTITY ?= -
 
-.PHONY: rust app sign run test clean
+.PHONY: rust app icon sign run test clean
 
 rust:
 	scripts/build-rust.sh
 
-app:
+app: icon
 	swift build -c $(CONFIG) --product INKER
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Resources
@@ -27,8 +28,19 @@ app:
 	  cp "$$BIN/INKER" $(APP)/Contents/MacOS/INKER && \
 	  cp -R "$$BIN/INKER_InkerApp.bundle" $(APP)/Contents/Resources/
 	cp Resources/MenuBarIcon.svg $(APP)/Contents/Resources/
+	cp build/AppIcon.icns $(APP)/Contents/Resources/
 	$(MAKE) sign
 	@echo "built $(APP)"
+
+# AppIcon.icns from the rendered 1024 px PNG (scripts/make-icon.py draws the
+# SVG; the PNG is rendered from it and committed). macOS tools only.
+icon:
+	rm -rf $(ICONSET) && mkdir -p $(ICONSET)
+	for s in 16 32 128 256 512; do \
+	  sips -z $$s $$s Resources/AppIcon-1024.png --out $(ICONSET)/icon_$${s}x$${s}.png >/dev/null; \
+	  d=$$((s * 2)); sips -z $$d $$d Resources/AppIcon-1024.png --out $(ICONSET)/icon_$${s}x$${s}@2x.png >/dev/null; \
+	done
+	iconutil -c icns $(ICONSET) -o build/AppIcon.icns
 
 # Sign nested executables first, then the bundle, then verify. Re-run after
 # adding anything to Contents/MacOS (the release workflow copies inker-cli in).

@@ -171,9 +171,23 @@ impl CoreHandle {
         }
     }
 
-    /// Stub: fixed plans; refuses to write (see `agents`).
-    pub fn setup_agent(&self, agent: AgentKind, dry_run: bool) -> Result<Plan, FfiError> {
-        agents::setup_agent(agent, dry_run)
+    /// Plan (dry run) or apply one agent's configuration with the writers
+    /// in `inker-agents`. `inker_bin` is the CLI inside the app bundle;
+    /// `home` the user's home folder. Refused in a preview.
+    pub fn setup_agent(
+        &self,
+        agent: AgentKind,
+        dry_run: bool,
+        inker_bin: String,
+        home: String,
+    ) -> Result<Plan, FfiError> {
+        let private = self
+            .backend
+            .private_folder()
+            .ok_or_else(|| FfiError::Backend {
+                reason: "no private folder to set agents up for in a preview".into(),
+            })?;
+        agents::setup_agent(agent, dry_run, &inker_bin, &home, &private)
     }
 
     /// Whether the MCP socket is live, the data dir and the private folder.

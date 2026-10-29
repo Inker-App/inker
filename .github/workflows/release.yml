@@ -89,6 +89,7 @@ jobs:
           make sign
           ls -la build/INKER.app/Contents/MacOS
           test -s build/INKER.app/Contents/MacOS/INKER && test -s build/INKER.app/Contents/MacOS/inker-cli
+          test -s build/INKER.app/Contents/Resources/AppIcon.icns
           codesign -dvv build/INKER.app 2>&1 | grep -E "Identifier|Signature|Sealed"
           spctl --assess --type execute --verbose=4 build/INKER.app || echo "(expected: ad-hoc signature is not notarized)"
 

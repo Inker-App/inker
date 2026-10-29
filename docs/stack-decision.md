@@ -257,6 +257,30 @@ Plus hardening: partial-overlap union, a lock file against a second writer, `wri
 
 ---
 
+### 2026-10-28, evening: first runs on Ben's Mac (0.0 to 0.0.2)
+
+- **0.0** launched as "damaged": the bundle had no signature at all. **0.0.1** ad-hoc signs
+  (`make sign`, re-run after `inker-cli` is copied in); a quarantined copy now gets the
+  unidentified-developer dialog and Open Anyway. Developer ID plus notarization is still to do.
+- **0.0.2**, from Ben's first session with the app:
+  - Onboarding was written for coding agents. It is now for chat users: step 1 is the folder
+    picker only; step 2 "Your chat asks INKER" has Claude (Connect writes
+    `claude_desktop_config.json` for real through `inker-agents`, then says to restart Claude),
+    ChatGPT as coming soon, and Copy config for anything else; step 3 is "Drag it into INKER
+    first". The coding-agent rows (Claude Code, Codex) moved to a Settings window. Cursor is
+    CLI-only now; Ben is not focused on it. "The octopus" is gone from the copy: it is INKER.
+  - The FFI `setup_agent` stub is replaced by the real writers; Swift passes the bundled
+    `inker-cli` path and the home folder. `AgentKind` gained `ClaudeDesktop`.
+  - The MCP server maps `clientInfo.name` to a product name ("claude-ai" is "Claude") for the
+    popover's last-read line.
+  - The move-or-copy question is a card inside the popover, not a window (it opened behind the
+    popover). Cancel is new, since there is no window to close.
+  - A menu bar app is invisible to Cmd+Tab, so onboarding could vanish behind other windows.
+    The app now switches to a regular activation policy while onboarding or settings is open
+    (`WindowPresence`), and back to accessory when the last window closes.
+  - App icon: the MARK bitmap as halftone dots on the dark tile, Apple's 1024 template
+    (`app/scripts/make-icon.py`, rendered PNG committed, `make icon` builds the `.icns`).
+
 ## 9. Target clients (reframed 2026-10-28)
 
 INKER is for the chat window. Research on 2026-10-28 (search summaries only; vendor pages were unreachable from the dev box that day, so re-read primary sources before relying on a detail):

@@ -27,6 +27,15 @@ struct PopoverRootView: View {
 
     @ViewBuilder
     private var content: some View {
+        if let batch = store.pendingDrop {
+            DropDecisionCard(batch: batch) { mode, always in store.answerDrop(mode, always: always) }
+        } else {
+            board
+        }
+    }
+
+    @ViewBuilder
+    private var board: some View {
         switch store.model.mode {
         case .empty:
             EmptyBoard()

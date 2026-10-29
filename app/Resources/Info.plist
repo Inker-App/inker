@@ -8,6 +8,8 @@
 	<string>INKER</string>
 	<key>CFBundleExecutable</key>
 	<string>INKER</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>sh.inker.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>

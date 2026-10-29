@@ -32,6 +32,7 @@ required-features = ["bindgen"]
 [dependencies]
 inker-core.workspace = true
 inker-extract.workspace = true
+inker-agents.workspace = true
 inker-host.workspace = true
 inker-ipc.workspace = true
 inker-mcp.workspace = true

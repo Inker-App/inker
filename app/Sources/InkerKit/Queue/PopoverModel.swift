@@ -29,6 +29,9 @@ public struct GroupModel: Equatable, Sendable, Identifiable {
     /// "4 files · 1 ready · 3 inking".
     public var summaryLine: String
     public var isFolder: Bool
+    /// Folders and ready single files draw the handle header. A single file
+    /// still in flight is just its row, so it is never listed twice.
+    public var showsHeader: Bool
     /// Decision 5.5: a folder copies once at least one child is ready.
     public var copyEnabled: Bool
     public var rows: [RowModel]

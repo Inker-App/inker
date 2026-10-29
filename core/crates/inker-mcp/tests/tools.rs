@@ -135,7 +135,7 @@ async fn resolve_document_in_all_handle_forms_and_records_the_read() {
     assert!(
         reads
             .iter()
-            .all(|(a, h)| a == "claude-code" && h.to_string() == "🐙/w2-acme-2025")
+            .all(|(a, h)| a == "Claude Code" && h.to_string() == "🐙/w2-acme-2025")
     );
     assert_no_real_values(&c);
 }
@@ -210,7 +210,7 @@ async fn describe_gives_roles_and_treatments() {
         "{t}"
     );
     assert!(t.contains("generalize"), "{t}");
-    assert_eq!(fake.reads()[0].0, "cursor");
+    assert_eq!(fake.reads()[0].0, "Cursor");
     assert_no_real_values(&c);
 }
 
@@ -311,7 +311,7 @@ async fn stateless_2026_era_discover_and_call_with_meta_client_info() {
         )
         .await;
     assert!(text(&r).contains("[SSN_1]"), "{r}");
-    assert_eq!(fake.reads()[0].0, "claude-code");
+    assert_eq!(fake.reads()[0].0, "Claude Code");
 }
 
 /// Chat clients such as Claude Desktop reportedly ignore the server

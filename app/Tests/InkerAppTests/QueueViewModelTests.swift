@@ -137,6 +137,29 @@ struct QueueViewModelTests {
         #expect(g.copyEnabled)
     }
 
+    /// Ben saw "🐙/tax-form-2023" twice, the second indented: the single-file
+    /// group drew a header and then the same document as a row.
+    @Test func singleFileGroupIsOneRowNotTwo() {
+        let ready = QueueItem(id: "g-2", codename: "w2-acme-2025", isFolder: false,
+                              summary: FolderSummary(total: 1, ready: 1, inking: 0, needsAttention: 0, failed: 0, inked: 6),
+                              children: [doc("1", "w2-acme-2025", "W2.pdf", "W-2", .ready, inked: 6)])
+        let g = build([ready]).groups[0]
+        #expect(g.showsHeader)
+        #expect(g.rows.isEmpty, "the header is the row")
+
+        let reading = QueueItem(id: "g-3", codename: "notes", isFolder: false,
+                                summary: FolderSummary(total: 1, ready: 0, inking: 1, needsAttention: 0, failed: 0, inked: 0),
+                                children: [doc("2", "notes", "notes.pdf", "x", .reading, loader: .read)])
+        let p = build([reading]).groups[0]
+        #expect(!p.showsHeader, "a file still being read shows its name and loader, once")
+        #expect(p.rows.count == 1)
+        #expect(p.rows[0].title == "notes.pdf")
+
+        let folder = build([folder([doc("3", "a", "a.pdf", "W-2", .ready, inked: 2)])]).groups[0]
+        #expect(folder.showsHeader)
+        #expect(folder.rows.count == 1)
+    }
+
     @Test func summaryLineVariants() {
         func s(_ t: UInt32, _ r: UInt32, _ i: UInt32, _ n: UInt32, _ f: UInt32, _ k: UInt32) -> String {
             SummaryLine.text(FolderSummary(total: t, ready: r, inking: i, needsAttention: n, failed: f, inked: k))

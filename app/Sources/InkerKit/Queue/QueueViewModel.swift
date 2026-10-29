@@ -62,6 +62,7 @@ public enum QueueViewModel {
         }
         let summary: String
         let copyEnabled: Bool
+        var showsHeader = true
         if item.isFolder {
             summary = SummaryLine.text(item.summary)
             copyEnabled = item.summary.ready > 0
@@ -69,12 +70,17 @@ public enum QueueViewModel {
             let only = item.children.first
             if let only, only.state == .ready {
                 summary = SummaryLine.docDetail(kind: only.kindLabel, inked: only.inked)
+                // The header is the row for a single ready file.
+                rows.removeAll()
             } else {
                 summary = only?.statusNote ?? ""
+                // A held file keeps its header above the attention card; one
+                // still being read or failed is only its row.
+                showsHeader = attention != nil
             }
             copyEnabled = only?.state == .ready
         }
-        return GroupModel(id: item.id, handle: handle, summaryLine: summary, isFolder: item.isFolder,
+        return GroupModel(id: item.id, handle: handle, summaryLine: summary, isFolder: item.isFolder, showsHeader: showsHeader,
                           copyEnabled: copyEnabled, rows: rows, attention: attention)
     }
 

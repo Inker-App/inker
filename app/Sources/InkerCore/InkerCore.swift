@@ -655,9 +655,11 @@ public protocol CoreHandleProtocol: AnyObject, Sendable {
     func setListener(listener: QueueListener) 
     
     /**
-     * Stub: fixed plans; refuses to write (see `agents`).
+     * Plan (dry run) or apply one agent's configuration with the writers
+     * in `inker-agents`. `inker_bin` is the CLI inside the app bundle;
+     * `home` the user's home folder. Refused in a preview.
      */
-    func setupAgent(agent: AgentKind, dryRun: Bool) throws  -> Plan
+    func setupAgent(agent: AgentKind, dryRun: Bool, inkerBin: String, home: String) throws  -> Plan
     
     func status()  -> Status
     
@@ -845,15 +847,19 @@ open func setListener(listener: QueueListener)  {try! rustCall() {
 }
     
     /**
-     * Stub: fixed plans; refuses to write (see `agents`).
+     * Plan (dry run) or apply one agent's configuration with the writers
+     * in `inker-agents`. `inker_bin` is the CLI inside the app bundle;
+     * `home` the user's home folder. Refused in a preview.
      */
-open func setupAgent(agent: AgentKind, dryRun: Bool)throws  -> Plan  {
+open func setupAgent(agent: AgentKind, dryRun: Bool, inkerBin: String, home: String)throws  -> Plan  {
     return try  FfiConverterTypePlan_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
         uniffiCallStatus in
     uniffi_inker_ffi_fn_method_corehandle_setup_agent(
             self.uniffiCloneHandle(),
         FfiConverterTypeAgentKind_lower(agent),
-        FfiConverterBool.lower(dryRun),uniffiCallStatus
+        FfiConverterBool.lower(dryRun),
+        FfiConverterString.lower(inkerBin),
+        FfiConverterString.lower(home),uniffiCallStatus
     )
 })
 }
@@ -1354,27 +1360,36 @@ public func FfiConverterTypeFolderSummary_lower(_ value: FolderSummary) -> RustB
 
 
 /**
- * What `setup_agent` would do (dry run) or did.
+ * What `setup_agent` would do (dry run) or did. Empty `steps` means the
+ * agent was already set up.
  */
 public struct Plan: Equatable, Hashable {
     public let agent: AgentKind
     /**
-     * The onboarding row's trailing text, e.g. "read hook".
+     * The row's trailing text, e.g. "read hook".
      */
     public let summary: String
     public let dryRun: Bool
     public let steps: [PlanStep]
+    /**
+     * Things the user has to do, e.g. restart the Claude app.
+     */
+    public let warnings: [String]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
     public init(agent: AgentKind, 
         /**
-         * The onboarding row's trailing text, e.g. "read hook".
-         */summary: String, dryRun: Bool, steps: [PlanStep]) {
+         * The row's trailing text, e.g. "read hook".
+         */summary: String, dryRun: Bool, steps: [PlanStep], 
+        /**
+         * Things the user has to do, e.g. restart the Claude app.
+         */warnings: [String]) {
         self.agent = agent
         self.summary = summary
         self.dryRun = dryRun
         self.steps = steps
+        self.warnings = warnings
     }
 
     
@@ -1396,7 +1411,8 @@ public struct FfiConverterTypePlan: FfiConverterRustBuffer {
                 agent: FfiConverterTypeAgentKind.read(from: &buf), 
                 summary: FfiConverterString.read(from: &buf), 
                 dryRun: FfiConverterBool.read(from: &buf), 
-                steps: FfiConverterSequenceTypePlanStep.read(from: &buf)
+                steps: FfiConverterSequenceTypePlanStep.read(from: &buf), 
+                warnings: FfiConverterSequenceString.read(from: &buf)
         )
     }
 
@@ -1405,6 +1421,7 @@ public struct FfiConverterTypePlan: FfiConverterRustBuffer {
         FfiConverterString.write(value.summary, into: &buf)
         FfiConverterBool.write(value.dryRun, into: &buf)
         FfiConverterSequenceTypePlanStep.write(value.steps, into: &buf)
+        FfiConverterSequenceString.write(value.warnings, into: &buf)
     }
 }
 
@@ -1425,7 +1442,8 @@ public func FfiConverterTypePlan_lower(_ value: Plan) -> RustBuffer {
 
 
 /**
- * One file the writer would touch, and what it would do there.
+ * One file the writer would touch (or command it would run), and what it
+ * would do there. Paths are shown with `~` for the home folder.
  */
 public struct PlanStep: Equatable, Hashable {
     public let path: String
@@ -1790,11 +1808,14 @@ public func FfiConverterTypeStatus_lower(_ value: Status) -> RustBuffer {
 
 
 /**
- * The agents onboarding knows how to keep out.
+ * The clients INKER can register itself with. `ClaudeDesktop` is the chat
+ * app and the primary target; the rest are coding agents, which also get
+ * exclusion rules for the private folder.
  */
 
 public enum AgentKind: Equatable, Hashable {
     
+    case claudeDesktop
     case claudeCode
     case codex
     case cursor
@@ -1819,11 +1840,13 @@ public struct FfiConverterTypeAgentKind: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .claudeCode
+        case 1: return .claudeDesktop
         
-        case 2: return .codex
+        case 2: return .claudeCode
         
-        case 3: return .cursor
+        case 3: return .codex
+        
+        case 4: return .cursor
         
         default: throw UniffiInternalError.unexpectedEnumCase
         }
@@ -1833,16 +1856,20 @@ public struct FfiConverterTypeAgentKind: FfiConverterRustBuffer {
         switch value {
         
         
-        case .claudeCode:
+        case .claudeDesktop:
             writeInt(&buf, Int32(1))
         
         
-        case .codex:
+        case .claudeCode:
             writeInt(&buf, Int32(2))
         
         
-        case .cursor:
+        case .codex:
             writeInt(&buf, Int32(3))
+        
+        
+        case .cursor:
+            writeInt(&buf, Int32(4))
         
         }
     }
@@ -3213,7 +3240,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_inker_ffi_checksum_method_corehandle_set_listener() != 61806) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inker_ffi_checksum_method_corehandle_setup_agent() != 24674) {
+    if (uniffi_inker_ffi_checksum_method_corehandle_setup_agent() != 13679) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_status() != 43568) {

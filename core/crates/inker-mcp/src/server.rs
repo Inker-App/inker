@@ -353,10 +353,30 @@ fn is_inker_cli(ctx: &RequestContext<RoleServer>) -> bool {
 fn agent_name(ctx: &RequestContext<RoleServer>) -> String {
     let from_meta = ctx.meta.client_info().map(|i| i.name);
     let from_init = || ctx.peer.peer_info().map(|i| i.client_info.name.clone());
-    from_meta
-        .or_else(from_init)
-        .filter(|n| !n.trim().is_empty())
-        .unwrap_or_else(|| UNKNOWN_AGENT.to_string())
+    display_agent_name(&from_meta.or_else(from_init).unwrap_or_default())
+}
+
+/// The product name for a client's `clientInfo.name`, for the popover's
+/// "Claude read 🐙/w2-2025" line. Unknown clients keep their own name.
+pub fn display_agent_name(raw: &str) -> String {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return UNKNOWN_AGENT.to_string();
+    }
+    let key: String = raw
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect();
+    match key.as_str() {
+        "claudeai" | "claude" | "claudedesktop" => "Claude",
+        "claudecode" => "Claude Code",
+        "cursor" => "Cursor",
+        "codex" | "codexcli" => "Codex",
+        k if k.contains("chatgpt") => "ChatGPT",
+        _ => raw,
+    }
+    .to_string()
 }
 
 impl InkerServer {
@@ -707,4 +727,26 @@ pub async fn serve_stdio(
         CancellationToken::new(),
     )
     .await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::display_agent_name;
+
+    #[test]
+    fn chat_clients_get_their_product_names() {
+        assert_eq!(display_agent_name("claude-ai"), "Claude");
+        assert_eq!(display_agent_name("Claude Desktop"), "Claude");
+        assert_eq!(display_agent_name("claude-code"), "Claude Code");
+        assert_eq!(display_agent_name("cursor"), "Cursor");
+        assert_eq!(display_agent_name("codex"), "Codex");
+        assert_eq!(display_agent_name("chatgpt"), "ChatGPT");
+        assert_eq!(display_agent_name("openai-chatgpt"), "ChatGPT");
+    }
+
+    #[test]
+    fn unknown_clients_keep_their_own_name() {
+        assert_eq!(display_agent_name("my-client"), "my-client");
+        assert_eq!(display_agent_name("  "), super::UNKNOWN_AGENT);
+    }
 }

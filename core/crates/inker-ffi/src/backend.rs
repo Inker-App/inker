@@ -59,6 +59,11 @@ pub trait Backend: Send + Sync + fmt::Debug {
     /// `doctor` lines: whether the socket is live, the data dir, the private
     /// folder. Never a document's content.
     fn doctor(&self) -> Vec<String>;
+    /// The absolute private folder, for the agent writers. `None` in a
+    /// preview, which has no folder to keep anyone out of.
+    fn private_folder(&self) -> Option<String> {
+        None
+    }
     /// Stop background work (worker threads, the socket). Idempotent. The
     /// default does nothing.
     fn close(&self) {}

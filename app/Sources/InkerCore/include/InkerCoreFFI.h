@@ -358,7 +358,7 @@ void uniffi_inker_ffi_fn_method_corehandle_set_listener(uint64_t ptr, uint64_t l
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_SETUP_AGENT
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_SETUP_AGENT
-RustBuffer uniffi_inker_ffi_fn_method_corehandle_setup_agent(uint64_t ptr, RustBuffer agent, int8_t dry_run, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_inker_ffi_fn_method_corehandle_setup_agent(uint64_t ptr, RustBuffer agent, int8_t dry_run, RustBuffer inker_bin, RustBuffer home, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_STATUS

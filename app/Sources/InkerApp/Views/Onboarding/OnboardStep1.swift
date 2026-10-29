@@ -3,20 +3,21 @@ import InkerCore
 import InkerKit
 import SwiftUI
 
-/// AppOnboard1: pick a folder they can't see; keep these agents out.
+/// AppOnboard1: pick a folder the chat can't see. (The coding-agent rows
+/// moved to Settings; this screen is for chat users.)
 struct OnboardStep1: View {
     let onContinue: () -> Void
     @EnvironmentObject private var store: CoreStore
     @State private var folderText = ""
     @State private var warnings: [FolderWarning] = []
-    @State private var enabled: Set<String> = Set(AgentRows.keepOut.map(\.id))
     private let home = FileManager.default.homeDirectoryForCurrentUser
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             DownloadsScene()
-            OnboardHeading(step: 1, title: "Pick a folder they can't see",
-                           text: "Agents can read anything in their workspace, Downloads included. Your private folder lives outside it.")
+            // Copy is a placeholder for Ben.
+            OnboardHeading(step: 1, title: "Pick a folder your chat can't see",
+                           text: "Anything you drag into a chat window gets uploaded. Files you drop on INKER move into a private folder on this Mac instead.")
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     TextField("Private folder", text: $folderText, onCommit: { check() })
@@ -35,25 +36,6 @@ struct OnboardStep1: View {
                     Text(w.message).font(Typography.small).foregroundColor(Palette.paper)
                 }
             }
-            VStack(alignment: .leading, spacing: 8) {
-                LabelText("Keep these agents out")
-                VStack(spacing: 0) {
-                    Hairline()
-                    ForEach(AgentRows.keepOut) { row in
-                        HStack {
-                            (Text(row.title) + Text(" · \(row.detail)").font(Typography.caption).foregroundColor(Palette.muted))
-                            Spacer()
-                            Toggle("", isOn: binding(for: row.id))
-                                .toggleStyle(.checkbox)
-                                .labelsHidden()
-                                .accessibilityLabel(row.accessibilityLabel)
-                        }
-                        .frame(height: 40)
-                        Hairline()
-                    }
-                }
-                Text(AgentRows.footnote).font(Typography.small).foregroundColor(Palette.muted)
-            }
             Spacer(minLength: 0)
             OnboardNav(primary: "Continue", onPrimary: finish)
         }
@@ -61,11 +43,6 @@ struct OnboardStep1: View {
             folderText = PathDisplay.abbreviate(store.privateFolder, home: home)
             check()
         }
-    }
-
-    private func binding(for id: String) -> Binding<Bool> {
-        Binding(get: { enabled.contains(id) },
-                set: { on in if on { enabled.insert(id) } else { enabled.remove(id) } })
     }
 
     private var folderURL: URL {
@@ -97,9 +74,6 @@ struct OnboardStep1: View {
         let url = folderURL
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         store.setPrivateFolder(url)
-        // Dry runs only until the writers in inker-agents are wired.
-        let agents = AgentRows.keepOut.filter { enabled.contains($0.id) }.map(\.agent)
-        _ = store.planAgents(agents)
         onContinue()
     }
 }

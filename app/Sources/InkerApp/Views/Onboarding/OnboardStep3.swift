@@ -1,15 +1,15 @@
 import InkerKit
 import SwiftUI
 
-/// AppOnboard3: drop it on the octopus, not in the chat.
+/// AppOnboard3: drag it into INKER first. Copy is a placeholder for Ben.
 struct OnboardStep3: View {
     let onBack: () -> Void
     let onDone: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            OnboardHeading(step: 3, title: "Drop it on the octopus, not in the chat",
-                           text: "Instead of dragging a file into Claude or Cursor, drag it onto Inker in your menu bar.")
+            OnboardHeading(step: 3, title: "Drag it into INKER first",
+                           text: "One small change in habit protects you. Drag the file onto INKER in your menu bar instead of into the chat, then paste the handle it gives you.")
             ZStack {
                 HowItWorksCanvas()
                 EyeLayer(makeScene: { PasteScene() })
@@ -20,7 +20,7 @@ struct OnboardStep3: View {
             HStack(alignment: .top, spacing: 12) {
                 stepColumn("1  Drop", Text("It moves into ~/Private and gets inked."))
                 stepColumn("2  Copy", Text("A ") + Text("🐙/").font(Typography.mono(12)).foregroundColor(Palette.paper) + Text(" handle lands on your clipboard."))
-                stepColumn("3  Paste", Text("Your agent reads it. The eyes only see ink."))
+                stepColumn("3  Paste", Text("Your chat reads it and never sees the real values."))
             }
             Spacer(minLength: 0)
             OnboardNav(onBack: onBack, primary: "Done", onPrimary: onDone)
