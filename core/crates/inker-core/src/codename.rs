@@ -1,6 +1,6 @@
 //! Codename proposals: the human-readable part of a handle.
 //!
-//! `w2-acme-2025`, `1099int-chase-2025`, `receipt-4471` (no org, no year),
+//! `w2-acme-2025`, `1099-int-chase-2025`, `receipt-4471` (no org, no year),
 //! `folder-4471` (a folder), `w2-acme-2025-summary` (a `write` output).
 //! Collisions get `-2`, `-3`, ... (decision 5.7). Every function returns a
 //! valid [`Codename`] built through [`Codename::parse`].
@@ -10,7 +10,7 @@ use crate::{Codename, DocKind};
 /// Longest codename we propose, leaving room for a collision suffix under the
 /// 64-character limit.
 const MAX_LEN: usize = 60;
-const MAX_KIND: usize = 16;
+const MAX_KIND: usize = 20;
 const MAX_ORG: usize = 20;
 const MAX_ORG_JOINED: usize = 16;
 
@@ -116,15 +116,27 @@ pub fn slugify_org(name: &str) -> Option<String> {
     })
 }
 
-/// Slug for a document kind: `W-2` -> `w2`, `1099-INT` -> `1099int`.
+/// Slug for a document kind: lowercase words joined by hyphens, a single
+/// letter glued to the number after it. `W-2` -> `w2`, `1099-INT` ->
+/// `1099-int`, `k1-1065` -> `k1-1065`, `bank-statement` -> `bank-statement`.
 /// Unknown or empty kinds become `doc`.
 pub fn kind_slug(kind: &DocKind) -> String {
-    let s: String = kind
+    let parts: Vec<String> = kind
         .as_str()
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .map(|c| c.to_ascii_lowercase())
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_ascii_lowercase)
         .collect();
+    let mut s = String::new();
+    let mut prev_letter = false;
+    for p in &parts {
+        let glue = prev_letter && p.starts_with(|c: char| c.is_ascii_digit());
+        if !s.is_empty() && !glue {
+            s.push('-');
+        }
+        s.push_str(p);
+        prev_letter = p.len() == 1 && p.starts_with(|c: char| c.is_ascii_alphabetic());
+    }
     if s.is_empty() || s == DocKind::UNKNOWN {
         "doc".into()
     } else {
@@ -225,7 +237,28 @@ mod tests {
             Some(2025),
             1,
         );
-        assert_eq!(c.as_str(), "1099int-chase-2025");
+        assert_eq!(c.as_str(), "1099-int-chase-2025");
+    }
+
+    #[test]
+    fn kind_slugs_keep_the_hyphens_that_make_them_readable() {
+        for (kind, slug) in [
+            ("w2", "w2"),
+            ("W-2", "w2"),
+            ("1098", "1098"),
+            ("1095-A", "1095-a"),
+            ("1099-int", "1099-int"),
+            ("1099-NEC", "1099-nec"),
+            ("k1-1065", "k1-1065"),
+            ("k1-1120s", "k1-1120s"),
+            ("K-1 1065", "k1-1065"),
+            ("bank-statement", "bank-statement"),
+            ("closing statement", "closing-statement"),
+            ("receipt", "receipt"),
+            ("--odd--kind--", "odd-kind"),
+        ] {
+            assert_eq!(kind_slug(&k(kind)), slug, "{kind}");
+        }
     }
 
     #[test]

@@ -356,3 +356,82 @@ fn a_document_left_mid_processing_is_recovered_and_processed() {
     let outcome = p.process(id);
     assert_eq!(outcome.state, DocState::Ready, "{:?}", outcome.error);
 }
+
+/// Every page and field of a Ready document's resolved view, as one string.
+fn resolved_view(w: &World, handle: &Handle) -> String {
+    match w.pipeline.core().resolve(handle).expect("resolve") {
+        Resolved::Document(d) => {
+            let mut out: Vec<String> = d.pages.into_iter().map(|p| p.text).collect();
+            out.extend(d.fields.into_iter().map(|f| format!("{f:?}")));
+            out.join("\n")
+        }
+        Resolved::Folder(_) => panic!("expected a document"),
+    }
+}
+
+/// Ingest one sample and return its resolved view (pages plus fields).
+fn ingest_and_view(w: &World, name: &str) -> String {
+    let src = w.download(name);
+    let outcomes = w
+        .pipeline
+        .ingest(std::slice::from_ref(&src), IngestMode::Copy)
+        .expect("ingest");
+    let id = outcomes[0].id;
+    // A held document is answered "Ink it" throughout, as a user who inks
+    // everything would.
+    for q in w.pipeline.core().pending_reviews().expect("questions") {
+        if q.document == id {
+            w.pipeline
+                .core()
+                .answer_review(q.id, inker_core::ReviewAnswer::InkIt)
+                .expect("answer");
+        }
+    }
+    let rec = w.pipeline.core().document(id).expect("record");
+    assert_eq!(
+        rec.state,
+        DocState::Ready,
+        "{name} should be Ready: {:?}",
+        rec.status_note
+    );
+    resolved_view(w, &Handle::new(rec.codename))
+}
+
+#[test]
+fn the_w2_pdf_never_shows_any_part_of_the_employee_name() {
+    // First real end-to-end run: box e's IRS layout prints the first name
+    // and initial in one column and the last name in the next. The template
+    // read only the first column, so "Example" passed through.
+    let w = World::new();
+    let view = ingest_and_view(&w, "w2-acme-2025.pdf");
+    for part in ["Jordan", "Example"] {
+        assert!(
+            !view.contains(part),
+            "name part {part:?} leaked from the W-2 PDF:\n{view}"
+        );
+    }
+    assert!(view.contains("[PERSON_"), "the name is one token:\n{view}");
+}
+
+#[test]
+fn no_sample_shows_any_part_of_the_synthetic_names() {
+    let mut leaks = Vec::new();
+    for name in [
+        "w2-acme-2025.txt",
+        "1098-harbor-2025.txt",
+        "1099-int-harbor-2025.txt",
+        "1099-int-harbor-2025.pdf",
+        "k1-tidewater-2025.txt",
+        "closing-statement-granite-2025.txt",
+        "bank-statement-harbor-2025-03.txt",
+    ] {
+        let w = World::new();
+        let view = ingest_and_view(&w, name);
+        for part in ["Jordan", "Example"] {
+            if let Some(line) = view.lines().find(|l| l.contains(part)) {
+                leaks.push(format!("{name}: {part:?} in {line:?}"));
+            }
+        }
+    }
+    assert!(leaks.is_empty(), "name parts leaked:\n{}", leaks.join("\n"));
+}

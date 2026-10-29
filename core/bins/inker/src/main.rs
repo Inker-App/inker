@@ -17,7 +17,7 @@ use inker_agents::{Agent, DryRun, Env, Plan};
 use inker_core::{DocState, Handle, HandleStyle, IngestMode};
 use inker_host::{Host, HostConfig};
 use inker_ipc::{host, paths, shim};
-use inker_mcp::{Backend, FakeBackend, McpClient, ServerOptions};
+use inker_mcp::{Backend, FakeBackend, INKER_CLI_CLIENT, McpClient, ServerOptions, ToolOutput};
 use serde_json::json;
 use tokio_util::sync::CancellationToken;
 
@@ -141,6 +141,31 @@ enum Cmd {
         #[arg(long)]
         socket: Option<PathBuf>,
     },
+    /// List the running app's open attention-card questions: id, handle,
+    /// kind, page, the prompt and the words around the value (never the value).
+    Review {
+        #[arg(long)]
+        json: bool,
+        #[arg(long)]
+        socket: Option<PathBuf>,
+    },
+    /// Answer one question from `inker review`: `ink` it or `leave` it.
+    Answer {
+        /// The question id, as `inker review` shows it after `#`.
+        question: i64,
+        #[arg(value_enum)]
+        answer: AnswerArg,
+        #[arg(long)]
+        socket: Option<PathBuf>,
+    },
+}
+
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum AnswerArg {
+    /// Ink it: the value is sensitive.
+    Ink,
+    /// Leave it: show the value, for this document only.
+    Leave,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -266,6 +291,23 @@ fn run(cmd: Cmd) -> Result<ExitCode> {
             json,
             socket,
         } => client_call(socket, "describe", json!({"handle": handle}), json),
+        Cmd::Review { json, socket } => client_call(socket, "inker/review", json!({}), json),
+        Cmd::Answer {
+            question,
+            answer,
+            socket,
+        } => {
+            let answer = match answer {
+                AnswerArg::Ink => "ink",
+                AnswerArg::Leave => "leave",
+            };
+            client_call(
+                socket,
+                "inker/answer",
+                json!({"question": question, "answer": answer}),
+                false,
+            )
+        }
     }
 }
 
@@ -477,7 +519,8 @@ fn print_plan(title: &str, plan: &Plan, dry: bool) {
 fn doctor(private: Option<String>, socket: Option<PathBuf>) -> Result<ExitCode> {
     let socket = socket.unwrap_or_else(paths::socket_path);
     let shown = socket.display();
-    if std::os::unix::net::UnixStream::connect(&socket).is_ok() {
+    let live = std::os::unix::net::UnixStream::connect(&socket).is_ok();
+    if live {
         println!("MCP: running at {shown}");
     } else if socket.exists() {
         println!("MCP: not running (stale socket at {shown})");
@@ -485,8 +528,26 @@ fn doctor(private: Option<String>, socket: Option<PathBuf>) -> Result<ExitCode> 
         println!("MCP: not running (no socket at {shown})");
     }
     println!("Data dir: {}", paths::data_dir().display());
-    let env = env_for(private)?;
-    println!("Private folder: {}", env.private.display());
+    // A live server knows the folder it serves; the default may not be it.
+    let served = if live {
+        runtime()?
+            .block_on(cli_tool(&socket, "inker/status", json!({})))
+            .ok()
+            .flatten()
+            .filter(|o| !o.is_error)
+            .and_then(|o| o.structured)
+            .and_then(|v| v["private_folder"].as_str().map(String::from))
+    } else {
+        None
+    };
+    let env = match (&private, &served) {
+        (None, Some(folder)) => env_for(Some(folder.clone()))?,
+        _ => env_for(private)?,
+    };
+    match served {
+        Some(folder) => println!("Private folder: {folder} (running server)"),
+        None => println!("Private folder: {}", env.private.display()),
+    }
     for s in inker_agents::doctor(&env) {
         let state = match (s.installed, s.registered) {
             (false, false) => "not installed".to_string(),
@@ -527,6 +588,20 @@ fn guard_cmd(private: &Path, format: GuardFormat) -> Result<ExitCode> {
     }
 }
 
+/// Call one tool on the running server as the INKER CLI. `None` when nothing
+/// is listening on `socket`.
+async fn cli_tool(
+    socket: &Path,
+    tool: &str,
+    args: serde_json::Value,
+) -> Result<Option<ToolOutput>> {
+    let Ok(stream) = tokio::net::UnixStream::connect(socket).await else {
+        return Ok(None);
+    };
+    let mut client = McpClient::connect(stream, INKER_CLI_CLIENT).await?;
+    Ok(Some(client.call_tool(tool, args).await?))
+}
+
 fn client_call(
     socket: Option<PathBuf>,
     tool: &str,
@@ -535,12 +610,10 @@ fn client_call(
 ) -> Result<ExitCode> {
     let socket = socket.unwrap_or_else(paths::socket_path);
     runtime()?.block_on(async {
-        let Ok(stream) = tokio::net::UnixStream::connect(&socket).await else {
+        let Some(out) = cli_tool(&socket, tool, args).await? else {
             eprintln!("{}", shim::NOT_RUNNING_MESSAGE);
             return Ok(ExitCode::FAILURE);
         };
-        let mut client = McpClient::connect(stream, "inker-cli").await?;
-        let out = client.call_tool(tool, args).await?;
         if out.is_error {
             eprintln!("{}", out.text);
             return Ok(ExitCode::FAILURE);

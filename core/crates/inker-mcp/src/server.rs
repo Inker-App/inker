@@ -3,10 +3,20 @@
 //! Every string built here goes to an agent. It may contain handles, tokens,
 //! kinds, years, states and counts. It must never contain a real value, a
 //! private-folder path, or a backend error's detail text.
+//!
+//! The exception is the INKER-only tools (`inker/review`, `inker/answer`,
+//! `inker/status`) that the `inker` CLI uses to answer attention-card
+//! questions and report the served folder without the app. They are never in
+//! `tools/list`, and `tools/call` serves them only on a connection whose
+//! `initialize` gave the client name [`INKER_CLI_CLIENT`]; to anyone else
+//! they are an unknown tool. The name is a hiding rule, not authentication:
+//! the socket is the user's own (0600), and an agent never chooses the client
+//! name its harness sends. They still return no value, only prompts, kinds,
+//! pages and the core's blanked context words; `inker/status` returns a path.
 
 use std::sync::Arc;
 
-use inker_core::{DocState, Handle, ListEntry};
+use inker_core::{DocState, Handle, ListEntry, QuestionId, ReviewAnswer};
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
     ListToolsResult, MetaObject, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
@@ -20,12 +30,19 @@ use serde_json::{Value, json};
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::sync::CancellationToken;
 
-use crate::backend::{Backend, Resolved};
+use crate::backend::{Backend, PendingReview, Resolved};
 use crate::handle::parse_handle_arg;
 use crate::instructions::instructions;
 
 /// `_meta` key Claude Code reads to keep a tool out of deferred tool search.
 pub const ALWAYS_LOAD_META_KEY: &str = "anthropic/alwaysLoad";
+
+/// The `initialize` client name the `inker` CLI sends. Only a connection
+/// that sent it may call the INKER-only tools.
+pub const INKER_CLI_CLIENT: &str = "inker-cli";
+
+/// The INKER-only tools: never listed, served only to [`INKER_CLI_CLIENT`].
+pub const CLI_TOOLS: &[&str] = &["inker/review", "inker/answer", "inker/status"];
 
 /// Agent name recorded when the client did not identify itself.
 pub const UNKNOWN_AGENT: &str = "unknown agent";
@@ -70,6 +87,83 @@ pub struct WriteArgs {
     pub name: String,
     /// The text to save, using tokens like `[SSN_1]` where real values belong.
     pub content: String,
+}
+
+/// The user's answer as the CLI sends it.
+#[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum AnswerWord {
+    /// Ink it: the value is sensitive.
+    Ink,
+    /// Leave it: show the value, for this document only.
+    Leave,
+}
+
+/// Arguments of `inker/answer`.
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AnswerArgs {
+    /// The question id from `inker/review`.
+    pub question: i64,
+    pub answer: AnswerWord,
+}
+
+/// One open question as the CLI shows it.
+#[derive(Debug, Serialize)]
+struct ReviewView {
+    id: i64,
+    handle: String,
+    kind: String,
+    page: u32,
+    page_count: u32,
+    prompt: String,
+    context_before: String,
+    context_after: String,
+}
+
+/// Prompt shown when the core stored none.
+const DEFAULT_PROMPT: &str = "Ink it?";
+
+impl From<&PendingReview> for ReviewView {
+    fn from(q: &PendingReview) -> Self {
+        Self {
+            id: q.id.0,
+            handle: q.handle.to_string(),
+            kind: q.kind.label().to_ascii_lowercase(),
+            page: q.page,
+            page_count: q.page_count,
+            prompt: q
+                .prompt
+                .clone()
+                .unwrap_or_else(|| DEFAULT_PROMPT.to_string()),
+            context_before: q.context_before.clone(),
+            context_after: q.context_after.clone(),
+        }
+    }
+}
+
+impl ReviewView {
+    /// `#12 · 🐙/scan-2025 · person · page 1 of 2`, the prompt, and the
+    /// words around the held value with the value as `[ ? ]`.
+    fn lines(&self) -> String {
+        let page = if self.page_count > 0 {
+            format!("page {} of {}", self.page, self.page_count)
+        } else {
+            format!("page {}", self.page)
+        };
+        let peek = format!(
+            "{} [ ? ] {}",
+            self.context_before.trim(),
+            self.context_after.trim()
+        );
+        format!(
+            "#{} · {} · {} · {page}\n  {}\n  {}",
+            self.id,
+            self.handle,
+            self.kind,
+            self.prompt,
+            peek.trim()
+        )
+    }
 }
 
 /// One row as shown to agents: the handle rendered with its prefix.
@@ -247,6 +341,15 @@ fn args<T: for<'de> Deserialize<'de>>(p: &CallToolRequestParams) -> Result<T, Mc
         .map_err(|e| McpError::invalid_params(format!("bad arguments: {e}"), None))
 }
 
+/// True when this connection's `initialize` named the client `inker-cli`.
+/// Per-request `_meta` client info does not count: the gate is the
+/// handshake only.
+fn is_inker_cli(ctx: &RequestContext<RoleServer>) -> bool {
+    ctx.peer
+        .peer_info()
+        .is_some_and(|i| i.client_info.name == INKER_CLI_CLIENT)
+}
+
 fn agent_name(ctx: &RequestContext<RoleServer>) -> String {
     let from_meta = ctx.meta.client_info().map(|i| i.name);
     let from_init = || ctx.peer.peer_info().map(|i| i.client_info.name.clone());
@@ -413,6 +516,67 @@ impl InkerServer {
         ))
     }
 
+    async fn review(&self) -> Result<CallToolResult, McpError> {
+        let qs = match self.blocking(|b| b.pending_reviews()).await? {
+            Ok(qs) => qs,
+            Err(e) => return Ok(self.fail("inker/review", None, &e)),
+        };
+        let views: Vec<ReviewView> = qs.iter().map(ReviewView::from).collect();
+        let mut text = match views.len() {
+            0 => "No open questions.".to_string(),
+            1 => "1 open question:".to_string(),
+            n => format!("{n} open questions:"),
+        };
+        for v in &views {
+            text.push('\n');
+            text.push_str(&v.lines());
+        }
+        Ok(ok(text, json!({ "questions": views })))
+    }
+
+    async fn answer(&self, a: AnswerArgs) -> Result<CallToolResult, McpError> {
+        let id = QuestionId(a.question);
+        let pending = match self.blocking(|b| b.pending_reviews()).await? {
+            Ok(qs) => qs,
+            Err(e) => return Ok(self.fail("inker/answer", None, &e)),
+        };
+        let Some(q) = pending.into_iter().find(|q| q.id == id) else {
+            return Ok(tool_error(format!("no open question #{}", a.question)));
+        };
+        let answer = match a.answer {
+            AnswerWord::Ink => ReviewAnswer::InkIt,
+            AnswerWord::Leave => ReviewAnswer::LeaveIt,
+        };
+        let state = match self.blocking(move |b| b.answer_review(id, answer)).await? {
+            Ok(s) => s,
+            Err(e) => return Ok(self.fail("inker/answer", Some(&q.handle), &e)),
+        };
+        let what = match a.answer {
+            AnswerWord::Ink => "inked",
+            AnswerWord::Leave => "left as is",
+        };
+        let text = format!(
+            "#{} {what}. {} is {}.",
+            a.question,
+            q.handle,
+            state_label(state)
+        );
+        Ok(ok(
+            text,
+            json!({"question": a.question, "handle": q.handle.to_string(), "state": state}),
+        ))
+    }
+
+    async fn status(&self) -> Result<CallToolResult, McpError> {
+        match self.blocking(|b| b.status()).await? {
+            Ok(s) => Ok(ok(
+                format!("Private folder: {}", s.private_folder),
+                json!({ "private_folder": s.private_folder }),
+            )),
+            Err(e) => Ok(self.fail("inker/status", None, &e)),
+        }
+    }
+
     async fn write(&self, a: WriteArgs) -> Result<CallToolResult, McpError> {
         let h = match parse_handle_arg(&a.handle) {
             Ok(h) => h,
@@ -475,6 +639,9 @@ impl ServerHandler for InkerServer {
             "resolve" => self.resolve(args(&request)?, agent).await?,
             "describe" => self.describe(args(&request)?, agent).await?,
             "write" => self.write(args(&request)?).await?,
+            "inker/review" if is_inker_cli(&context) => self.review().await?,
+            "inker/answer" if is_inker_cli(&context) => self.answer(args(&request)?).await?,
+            "inker/status" if is_inker_cli(&context) => self.status().await?,
             other => {
                 return Err(McpError::invalid_params(
                     format!("unknown tool: {other}"),

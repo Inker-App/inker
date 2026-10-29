@@ -8,10 +8,14 @@ use std::sync::Mutex;
 
 use inker_core::{
     Codename, Description, DocKind, DocState, FormField, Handle, KindTreatment, ListEntry,
-    ResolvedDocument, ResolvedFolder, ResolvedPage, Token, TokenKind, TokenRole, Treatment,
+    QuestionId, ResolvedDocument, ResolvedFolder, ResolvedPage, ReviewAnswer, Token, TokenKind,
+    TokenRole, Treatment,
 };
 
-use crate::backend::{Backend, Resolved, WriteReceipt};
+use crate::backend::{Backend, PendingReview, Resolved, ServerStatus, WriteReceipt};
+
+/// The private folder the fake reports through `status`.
+pub const FAKE_PRIVATE_FOLDER: &str = "/fake/Private";
 
 /// The real values the fake pretends to hold in its vault. Tests assert no
 /// server response ever contains any of these. All synthetic.
@@ -64,6 +68,7 @@ pub struct FakeBackend {
     order: Mutex<Vec<String>>,
     reads: Mutex<Vec<(String, Handle)>>,
     writes: Mutex<BTreeMap<String, String>>,
+    questions: Mutex<Vec<PendingReview>>,
 }
 
 fn handle(codename: &str) -> Handle {
@@ -138,10 +143,25 @@ impl FakeBackend {
                 2,
                 false,
             ),
-            pages: vec![],
+            pages: vec![
+                "Form 1099-INT Interest Income 2025\nAccount number (see instructions): [ACCOUNT_1]"
+                    .into(),
+                "Instructions for Recipient".into(),
+            ],
             fields: vec![],
             roles: vec![],
             children: vec![],
+        };
+        // The held 1099's one open question.
+        let question = PendingReview {
+            id: QuestionId(1),
+            handle: handle("1099-int-bank-2025"),
+            kind: TokenKind::Account,
+            page: 1,
+            page_count: 2,
+            prompt: Some("Is this an account number?".into()),
+            context_before: "Account number (see instructions):".into(),
+            context_after: String::new(),
         };
         let inking = FakeDoc {
             entry: entry("1098-mortgage-2025", "1098", DocState::Inking, 0, false),
@@ -175,6 +195,7 @@ impl FakeBackend {
             order: Mutex::new(order),
             reads: Mutex::new(Vec::new()),
             writes: Mutex::new(BTreeMap::new()),
+            questions: Mutex::new(vec![question]),
         }
     }
 
@@ -342,6 +363,33 @@ impl Backend for FakeBackend {
 
     fn note_read(&self, agent: &str, h: &Handle) {
         lock(&self.reads).push((agent.to_string(), h.clone()));
+    }
+
+    fn pending_reviews(&self) -> inker_core::Result<Vec<PendingReview>> {
+        Ok(lock(&self.questions).clone())
+    }
+
+    fn answer_review(&self, id: QuestionId, _answer: ReviewAnswer) -> inker_core::Result<DocState> {
+        let mut qs = lock(&self.questions);
+        let at = qs
+            .iter()
+            .position(|q| q.id == id)
+            .ok_or_else(|| inker_core::Error::Index("no open question with that id".into()))?;
+        let h = qs.remove(at).handle;
+        let mut docs = lock(&self.docs);
+        let doc = docs
+            .get_mut(h.codename.as_str())
+            .ok_or_else(|| inker_core::Error::UnknownHandle(h.to_string()))?;
+        if !qs.iter().any(|q| q.handle == h) {
+            doc.entry.state = DocState::Ready;
+        }
+        Ok(doc.entry.state)
+    }
+
+    fn status(&self) -> inker_core::Result<ServerStatus> {
+        Ok(ServerStatus {
+            private_folder: FAKE_PRIVATE_FOLDER.into(),
+        })
     }
 }
 

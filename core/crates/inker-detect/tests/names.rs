@@ -179,3 +179,36 @@ fn run_at_reads_exactly_at_the_start() {
         "a state is not a name"
     );
 }
+
+#[test]
+fn a_name_heading_a_mailing_address_is_a_person() {
+    // A statement's mailing block has no label: the name line sits directly
+    // above a street line. The bank statement sample leaked its holder's
+    // full name this way (first end-to-end run, 2026-10-28).
+    use TokenKind::Person;
+    let text = "Harbor Street Credit Union\n\
+                9 Harbor Street, Portland, OR 97209   (503) 555-0142\n\
+                Member Statement   March 1, 2025 - March 31, 2025\n\
+                \n\
+                Jordan A Example\n\
+                48 Lantern Way Apt 3\n\
+                Springfield, OR 97477\n";
+    let people: Vec<_> = found(text)
+        .into_iter()
+        .filter(|(k, _, _)| *k == Person)
+        .collect();
+    assert_eq!(people, one(Person, "Jordan A Example", None));
+
+    // Not a name: a heading above a street line, or a line with more on it.
+    for text in [
+        "Member Statement\n48 Lantern Way Apt 3\n",
+        "Pay To Jordan A Example For Services\n48 Lantern Way Apt 3\n",
+        "Jordan A Example\nThank you for banking with us\n",
+    ] {
+        assert!(
+            !found(text).iter().any(|(k, _, _)| *k == Person),
+            "{text:?}: {:?}",
+            found(text)
+        );
+    }
+}

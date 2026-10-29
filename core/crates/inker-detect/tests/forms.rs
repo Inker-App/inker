@@ -648,3 +648,144 @@ fn templates_do_not_cross_match() {
         assert_eq!(matching, vec![id], "{file}");
     }
 }
+
+/// The text each template detection of `field` reads on `text`.
+fn read_field(text: &str, field: &str) -> Vec<String> {
+    let e = Extracted {
+        pages: vec![PageText {
+            page: 1,
+            text: text.to_string(),
+            origin: TextOrigin::TextLayer,
+        }],
+        fields: vec![],
+    };
+    let set = packs();
+    let m = template::match_template(&e, &set).expect("a template");
+    template::apply(&e, &m)
+        .detections
+        .iter()
+        .filter(|d| matches!(&d.source, DetectionSource::Template { field: f, .. } if f == field))
+        .map(|d| {
+            assert_eq!(d.kind, Person, "{field} is a person");
+            text[d.span.start..d.span.end].to_string()
+        })
+        .collect()
+}
+
+/// `fixture_name` with its first `from` replaced by `to`.
+fn with_line(fixture_name: &str, from: &str, to: &str) -> String {
+    let text = fixture(fixture_name);
+    assert!(text.contains(from), "{fixture_name} has no {from:?}");
+    text.replacen(from, to, 1)
+}
+
+#[test]
+fn w2_box_e_reads_the_whole_name_across_its_columns() {
+    // Box e as the IRS layout prints it: the label line with its three
+    // column heads, then first name and initial, last name, suffix as
+    // columns. The whole line is one Person: reading only the first column
+    // left the surname in the clear (first end-to-end run, 2026-10-28).
+    let sample = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../samples/synthetic/w2-acme-2025.txt"),
+    )
+    .unwrap();
+    assert!(sample.contains("  Jordan A    Example\n"));
+    assert_eq!(read_field(&sample, "e"), ["Jordan A    Example"]);
+
+    let suffixed = with_line("w2.txt", "Jane Q Doe", "  Jane Q    Doe    Jr");
+    assert_eq!(read_field(&suffixed, "e"), ["Jane Q    Doe    Jr"]);
+}
+
+#[test]
+fn name_lines_on_every_form_read_the_whole_name() {
+    let cases: &[(&str, &str, &str, &str, &str)] = &[
+        // (fixture, line, split line, field, whole name read)
+        (
+            "1095-a.txt",
+            "Jane Q Doe",
+            "Jane Q    Doe",
+            "4",
+            "Jane Q    Doe",
+        ),
+        (
+            "1095-b.txt",
+            "Pat R Example\n",
+            "Pat R    Example\n",
+            "1",
+            "Pat R    Example",
+        ),
+        (
+            "1095-b.txt",
+            "23 Pat R Example   945-67-8901   X",
+            "23 Pat   R   Example   945-67-8901   X",
+            "23_name",
+            "Pat   R   Example",
+        ),
+        (
+            "1095-b.txt",
+            "24 Robin Example   05/05/2015   X",
+            "24 Robin   Example   05/05/2015   X",
+            "24_name",
+            "Robin   Example",
+        ),
+        (
+            "1095-c.txt",
+            "Jane Q Doe\n",
+            "Jane Q    Doe\n",
+            "1",
+            "Jane Q    Doe",
+        ),
+        (
+            // A trailing checkbox mark is not an initial.
+            "1095-c.txt",
+            "19 Robin Doe   05/05/2015   X",
+            "19 Robin   Doe   X",
+            "19_name",
+            "Robin   Doe",
+        ),
+        (
+            "1098.txt",
+            "Jane Q Doe",
+            "Jane Q    Doe",
+            "borrower_name",
+            "Jane Q    Doe",
+        ),
+        (
+            "1099-nec.txt",
+            "Pat R Example",
+            "Pat R    Example    Jr.",
+            "recipient_name",
+            "Pat R    Example    Jr.",
+        ),
+        (
+            "1099-int.txt",
+            "John A Sample",
+            "John A    Sample",
+            "recipient_name",
+            "John A    Sample",
+        ),
+        (
+            "k1-1065.txt",
+            "Alex Mock",
+            "Alex    Mock",
+            "F_name",
+            "Alex    Mock",
+        ),
+    ];
+    for (fx, from, to, field, want) in cases {
+        let text = with_line(fx, from, to);
+        assert_eq!(read_field(&text, field), [*want], "{fx} field {field}");
+    }
+}
+
+#[test]
+fn a_name_line_stops_at_a_column_that_is_not_a_name_part() {
+    // 1095-C line 1 printed with the SSN column on the same line.
+    let text = with_line(
+        "1095-c.txt",
+        "Jane Q Doe\n",
+        "Jane Q    Doe    900-14-2231    Employee\n",
+    );
+    assert_eq!(read_field(&text, "1"), ["Jane Q    Doe"]);
+}

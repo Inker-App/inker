@@ -464,6 +464,24 @@ impl inker_mcp::Backend for McpBridge {
         self.host.backend().note_read(agent, h);
         self.nudge();
     }
+
+    fn pending_reviews(&self) -> inker_core::Result<Vec<inker_mcp::PendingReview>> {
+        self.host.backend().pending_reviews()
+    }
+
+    fn answer_review(
+        &self,
+        id: QuestionId,
+        answer: inker_core::ReviewAnswer,
+    ) -> inker_core::Result<inker_core::DocState> {
+        let out = self.host.backend().answer_review(id, answer);
+        self.nudge();
+        out
+    }
+
+    fn status(&self) -> inker_core::Result<inker_mcp::ServerStatus> {
+        self.host.backend().status()
+    }
 }
 
 // ---------------------------------------------------------------------------

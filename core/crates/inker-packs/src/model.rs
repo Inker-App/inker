@@ -93,7 +93,7 @@ pub struct CodenameRules {
     /// Used when a kind has no entry in `short`.
     #[serde(default)]
     pub default: Option<String>,
-    /// `DocKind` string -> short id, e.g. `1099-int` -> `1099int`.
+    /// `DocKind` string -> short id, e.g. `1099-int` -> `1099-int`.
     #[serde(default)]
     pub short: BTreeMap<String, String>,
 }
@@ -113,6 +113,9 @@ pub enum FieldKind {
 #[serde(rename_all = "snake_case")]
 pub enum ValueShape {
     /// The first column segment of the rest of the line, or of the next line.
+    /// For a `person` field, the following segments of that line that read
+    /// as name parts (last name, suffix) are taken too: the IRS prints a
+    /// name over columns (W-2 box e).
     Line,
     /// `lines` whole lines (addresses).
     Lines,
@@ -264,7 +267,7 @@ impl PackSet {
         !n.is_empty() && self.packs.iter().any(|p| p.boilerplate.contains(&n))
     }
 
-    /// Short codename segment for a document kind, e.g. `1099int`.
+    /// Short codename segment for a document kind, e.g. `1099-int`.
     pub fn codename_short(&self, kind: &DocKind) -> Option<&str> {
         self.packs
             .iter()

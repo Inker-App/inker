@@ -848,7 +848,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             core.document(ids[0]).unwrap().codename.as_str(),
-            "1099int-2025"
+            "1099-int-2025"
         );
     }
 
@@ -1234,15 +1234,15 @@ mod tests {
         )];
         assert_eq!(
             process(&f.core, &f, "a.txt", text, &dets, "1099-NEC"),
-            "1099nec-2025"
+            "1099-nec-2025"
         );
         assert_eq!(
             process(&f.core, &f, "b.txt", text, &dets, "1099-NEC"),
-            "1099nec-2025-2"
+            "1099-nec-2025-2"
         );
         assert_eq!(
             process(&f.core, &f, "c.txt", text, &dets, "1099-NEC"),
-            "1099nec-2025-3"
+            "1099-nec-2025-3"
         );
     }
 
@@ -1261,7 +1261,7 @@ mod tests {
         )];
         assert_eq!(
             process(&f.core, &f, "a.txt", text, &model, "1099-INT"),
-            "1099int-2025"
+            "1099-int-2025"
         );
         // A template org with a non-naming role does not either.
         let recip = [org_det(
@@ -1272,20 +1272,20 @@ mod tests {
         )];
         assert_eq!(
             process(&f.core, &f, "b.txt", text, &recip, "1099-INT"),
-            "1099int-2025-2"
+            "1099-int-2025-2"
         );
         // A template payer does, without its digits.
         let payer = [org_det(text, "Acme 07-3456789", template("payer"), "payer")];
         assert_eq!(
             process(&f.core, &f, "c.txt", text, &payer, "1099-INT"),
-            "1099int-acme-2025"
+            "1099-int-acme-2025"
         );
         // A held (unsure) payer is not trusted.
         let mut held = org_det(text, "Placeholder Bank", template("payer"), "payer");
         held.needs_review = true;
         assert_eq!(
             process(&f.core, &f, "e.txt", text, &[held], "1099-INT"),
-            "1099int-2025-3"
+            "1099-int-2025-3"
         );
     }
 

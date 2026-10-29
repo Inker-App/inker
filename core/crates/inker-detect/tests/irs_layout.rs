@@ -677,3 +677,45 @@ fn f1099_b_labels_are_read_in_full() {
         wraps: &["province,", "loss is not"],
     });
 }
+
+/// The person named on each IRS fixture.
+const IRS_NAMES: &[(&str, &str)] = &[
+    ("irs-1099-misc-2025.txt", "Sam T Sample"),
+    ("irs-1099-misc-2026.txt", "Sam T Sample"),
+    ("irs-1098-2025.txt", "Maria Example-Lopez"),
+    ("irs-1099-int-2025.txt", "John A Sample"),
+    ("irs-1099-nec-2025.txt", "Pat R Example"),
+    ("irs-w2-2025.txt", "Jane Q Doe"),
+    ("irs-k1-1065-2025.txt", "Lee M Example"),
+    ("irs-k1-1120s-2025.txt", "Robin K Sample"),
+    ("irs-1095-b-2025.txt", "Pat R Example"),
+    ("irs-1095-c-2025.txt", "Jane Q Doe"),
+    ("irs-1099-b-2025.txt", "Alex Mock"),
+];
+
+#[test]
+fn no_part_of_a_typed_name_is_visible_on_irs_layouts() {
+    // Not just the whole name: a template or stage that reads part of a
+    // name line must not leave the rest (a surname) beside its token.
+    let mut leaks = Vec::new();
+    for (file, name) in IRS_NAMES {
+        let (e, dets, _) = run(file);
+        let seen = visible(&e, &dets);
+        let original = &e.pages.iter().map(|p| p.text.as_str()).collect::<String>();
+        for part in name.split([' ', '-']).filter(|w| w.len() >= 3) {
+            // Count whole-word occurrences, minus those that are form
+            // wording in the blank IRS layout (before the typed values).
+            let words = |t: &str| {
+                t.split(|c: char| !c.is_alphanumeric())
+                    .filter(|w| *w == part)
+                    .count()
+            };
+            let typed_at = original.find(name).unwrap_or(original.len());
+            let in_form = words(&original[..typed_at]);
+            if words(&seen) > in_form {
+                leaks.push((file, part));
+            }
+        }
+    }
+    assert!(leaks.is_empty(), "name parts visible: {leaks:?}");
+}

@@ -15,10 +15,11 @@ use std::sync::{Mutex, MutexGuard};
 use camino::Utf8PathBuf;
 use inker_core::ports::{HostPaths, KeyStore};
 use inker_core::{
-    AgentRead, Core, Description, DocumentId, Error, Handle, IngestMode, ListEntry, Result,
+    AgentRead, Core, Description, DocState, DocumentId, Error, Handle, IngestMode, ListEntry,
+    QuestionId, Result, ReviewAnswer,
 };
 use inker_extract::{Extractor, FixtureOcr, PdfTextSource};
-use inker_mcp::{Backend, Resolved, WriteReceipt};
+use inker_mcp::{Backend, PendingReview, Resolved, ServerStatus, WriteReceipt};
 use inker_packs::PackSet;
 use inker_pipeline::{Outcome, Pipeline};
 
@@ -200,5 +201,48 @@ impl Backend for Host {
         if let Err(e) = self.lock().core().record_agent_read(agent, h) {
             tracing::warn!(error = %e, "could not record agent read");
         }
+    }
+
+    fn pending_reviews(&self) -> Result<Vec<PendingReview>> {
+        let p = self.lock();
+        let core = p.core();
+        core.pending_reviews()?
+            .into_iter()
+            .map(|q| {
+                let rec = core.document(q.document)?;
+                Ok(PendingReview {
+                    id: q.id,
+                    handle: Handle::new(rec.codename),
+                    kind: q.kind,
+                    page: q.page,
+                    page_count: q.page_count,
+                    prompt: q.prompt,
+                    context_before: q.context_before,
+                    context_after: q.context_after,
+                })
+            })
+            .collect()
+    }
+
+    fn answer_review(&self, id: QuestionId, answer: ReviewAnswer) -> Result<DocState> {
+        let p = self.lock();
+        let doc = p
+            .core()
+            .pending_reviews()?
+            .into_iter()
+            .find(|q| q.id == id)
+            .map(|q| q.document)
+            .ok_or_else(|| Error::Index("no open question with that id".into()))?;
+        let state = p.core().answer_review(id, answer)?;
+        if state == DocState::Queued {
+            return Ok(p.process(doc).state);
+        }
+        Ok(state)
+    }
+
+    fn status(&self) -> Result<ServerStatus> {
+        Ok(ServerStatus {
+            private_folder: self.lock().core().paths().private_folder.clone(),
+        })
     }
 }

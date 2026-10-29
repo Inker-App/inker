@@ -737,3 +737,179 @@ fn serve_real_core_refuses_when_the_private_folder_is_not_utf8_or_missing_parent
         .assert()
         .failure();
 }
+
+/// The `#N` question ids in `inker review` output.
+fn question_ids(review: &str) -> Vec<String> {
+    review
+        .lines()
+        .filter_map(|l| l.strip_prefix('#'))
+        .filter_map(|l| l.split_whitespace().next())
+        .map(String::from)
+        .collect()
+}
+
+#[test]
+fn review_and_answer_release_a_held_note_without_the_app() {
+    let s = Sandbox::new();
+    let downloads = s.dir.path().join("Downloads");
+    std::fs::create_dir_all(&downloads).unwrap();
+    let note = downloads.join("note.txt");
+    std::fs::write(
+        &note,
+        "Wire confirmation 00000000000 received\nAmount 1,250.00\n",
+    )
+    .unwrap();
+    // Held: ingest exits non-zero and says it needs you.
+    s.cmd()
+        .args(["ingest", "--private"])
+        .arg(s.private())
+        .arg(&note)
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("needs you"));
+
+    let mut host = s.serve_real();
+    let out = s
+        .cmd()
+        .arg("review")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let review = String::from_utf8(out.stdout).unwrap();
+    assert!(review.contains("1 open question"), "{review}");
+    let handle = review
+        .split_whitespace()
+        .find(|w| w.starts_with("🐙/"))
+        .unwrap_or_else(|| panic!("no handle: {review}"))
+        .to_string();
+    assert!(review.contains("page 1 of 1"), "{review}");
+    assert!(
+        review.contains("Wire confirmation"),
+        "context words: {review}"
+    );
+    assert!(!review.contains("00000000000"), "value shown: {review}");
+    let ids = question_ids(&review);
+    assert_eq!(ids.len(), 1, "{review}");
+
+    let out = s
+        .cmd()
+        .args(["review", "--json"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let v: Value = serde_json::from_slice(&out).unwrap();
+    assert_eq!(v["questions"][0]["id"].to_string(), ids[0]);
+
+    s.cmd()
+        .args(["answer", "999999", "ink"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("no open question #999999"));
+    s.cmd()
+        .args(["answer", &ids[0], "maybe"])
+        .assert()
+        .failure();
+    s.cmd()
+        .args(["answer", &ids[0], "ink"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("ready"));
+
+    s.cmd()
+        .arg("review")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("No open questions."));
+    s.cmd().arg("list").assert().success().stdout(
+        predicate::str::contains(format!("{handle} · ")).and(predicate::str::contains("· ready ·")),
+    );
+    s.cmd()
+        .args(["resolve", &handle])
+        .assert()
+        .success()
+        .stdout(
+            predicate::str::contains("1,250.00").and(predicate::str::contains("00000000000").not()),
+        );
+    host.kill().unwrap();
+    host.wait().unwrap();
+}
+
+#[test]
+fn answer_leave_works_against_the_fake_server() {
+    let s = Sandbox::new();
+    let mut host = s.serve(&[]);
+    let review = s
+        .cmd()
+        .arg("review")
+        .assert()
+        .success()
+        .get_output()
+        .clone();
+    let review = String::from_utf8(review.stdout).unwrap();
+    assert!(review.contains("🐙/1099-int-bank-2025"), "{review}");
+    let ids = question_ids(&review);
+    s.cmd()
+        .args(["answer", &ids[0], "leave"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("left as is"));
+    sigterm(&mut host);
+}
+
+#[test]
+fn the_cli_only_tools_never_reach_an_agent() {
+    let s = Sandbox::new();
+    let mut host = s.serve(&[]);
+    for client in ["cli-test", "inker-cli"] {
+        let shim = s
+            .std_cmd()
+            .arg("mcp")
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap();
+        let r = converse(
+            shim,
+            &[
+                json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":client,"version":"1"}}}),
+                json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+                json!({"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}),
+                json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"inker/review","arguments":{}}}),
+            ],
+        );
+        let names: Vec<&str> = r[1]["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["list", "resolve", "describe", "write"], "{client}");
+        if client == "cli-test" {
+            assert!(
+                r[2].get("error").is_some(),
+                "agent called inker/review: {}",
+                r[2]
+            );
+        }
+    }
+    sigterm(&mut host);
+}
+
+#[test]
+fn doctor_reports_the_running_servers_private_folder() {
+    let s = Sandbox::new();
+    // The server runs with a private folder that is not the default.
+    let mut host = s.serve_real();
+    let served = format!("Private folder: {} (running server)", s.private().display());
+    s.cmd()
+        .arg("doctor")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(served.as_str()));
+    host.kill().unwrap();
+    host.wait().unwrap();
+}

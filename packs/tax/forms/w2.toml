@@ -14,7 +14,9 @@
 #     role                employee | employer | payer | recipient | lender | borrower
 #     value               line | lines | tin | account | routing | date
 #                         (default from kind: tin for ssn/itin/ein, account,
-#                         routing, lines for address, else line)
+#                         routing, lines for address, else line). A person's
+#                         line also takes the columns after the first that
+#                         read as name parts (last name, suffix).
 #     skip_lines, lines   for addresses under a name line
 #     acroform            AcroForm field names in fillable IRS PDFs
 id = "w2"

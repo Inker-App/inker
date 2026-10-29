@@ -228,18 +228,18 @@ fn codename_short_falls_back_to_default() {
 
 const TAX_FORMS: &[(&str, &str)] = &[
     ("w2", "w2"),
-    ("1099-int", "1099int"),
-    ("1099-nec", "1099nec"),
-    ("1099-div", "1099div"),
-    ("1099-b", "1099b"),
-    ("1099-k", "1099k"),
-    ("1099-misc", "1099misc"),
+    ("1099-int", "1099-int"),
+    ("1099-nec", "1099-nec"),
+    ("1099-div", "1099-div"),
+    ("1099-b", "1099-b"),
+    ("1099-k", "1099-k"),
+    ("1099-misc", "1099-misc"),
     ("1098", "1098"),
-    ("1095-a", "1095a"),
-    ("1095-b", "1095b"),
-    ("1095-c", "1095c"),
-    ("k1-1065", "k1"),
-    ("k1-1120s", "k1"),
+    ("1095-a", "1095-a"),
+    ("1095-b", "1095-b"),
+    ("1095-c", "1095-c"),
+    ("k1-1065", "k1-1065"),
+    ("k1-1120s", "k1-1120s"),
 ];
 
 #[test]
@@ -260,10 +260,27 @@ fn builtin_tax_pack_loads_every_form() {
         assert!(!f.fields.is_empty(), "{} has no fields", f.id);
         assert!(f.year.is_some(), "{} has no year regex", f.id);
     }
-    assert_eq!(
-        set.codename_short(&DocKind("bank-statement".into())),
-        Some("bank")
-    );
+    for (kind, short) in [
+        ("bank-statement", "bank-statement"),
+        ("closing-statement", "closing-statement"),
+        ("receipt", "receipt"),
+    ] {
+        assert_eq!(set.codename_short(&DocKind(kind.into())), Some(short));
+    }
+}
+
+#[test]
+fn pack_shorts_agree_with_the_cores_kind_slug() {
+    // The core names documents with `kind_slug`; the pack's table is the
+    // documented form of the same names. They must never drift apart.
+    let set = PackSet::builtin().unwrap();
+    for (kind, short) in &set.packs[0].manifest.codename.short {
+        assert_eq!(
+            inker_core::codename::kind_slug(&DocKind(kind.clone())),
+            *short,
+            "{kind}"
+        );
+    }
 }
 
 #[test]

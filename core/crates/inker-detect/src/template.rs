@@ -329,6 +329,22 @@ fn acroform(extracted: &Extracted, t: &FormTemplate, out: &mut TemplateOutput) {
     }
 }
 
+/// True for a column segment that can continue a name: one to three
+/// capitalised words of letters (apostrophes, hyphens and periods allowed),
+/// none of them form wording.
+fn is_name_part(seg: &str) -> bool {
+    let words: Vec<&str> = seg.split_whitespace().collect();
+    !words.is_empty()
+        && words.len() <= 3
+        && words.iter().all(|w| {
+            w.chars().next().is_some_and(char::is_uppercase)
+                && w.chars().any(char::is_alphabetic)
+                && w.chars()
+                    .all(|c| c.is_alphabetic() || matches!(c, '\'' | '\u{2019}' | '-' | '.'))
+                && !crate::names::is_stop_word(w)
+        })
+}
+
 /// One page being read against a template.
 struct Page<'a> {
     text: &'a str,
@@ -384,6 +400,9 @@ impl Page<'_> {
                 {
                     return None;
                 }
+                if matches!(f.kind, FieldKind::Token(TokenKind::Person)) {
+                    return Some((s, self.name_columns(e)));
+                }
                 Some((s, e))
             }
             ValueShape::Lines => {
@@ -396,6 +415,42 @@ impl Page<'_> {
                 Some((taken.first()?.0, taken.last()?.1))
             }
         }
+    }
+
+    /// End of a name whose first column segment ends at `e`: the IRS prints
+    /// first name and initial, last name and suffix as columns of one line
+    /// (W-2 box e, 1095 rows), so every following segment on the line that
+    /// reads as a name part is taken with it. A segment that is not one (an
+    /// SSN, a date, a label) ends the name, and a lone trailing letter is a
+    /// checkbox mark, not an initial.
+    fn name_columns(&self, e: usize) -> usize {
+        let line_end = self.text[e..].find('\n').map_or(self.text.len(), |i| e + i);
+        let mut end = e;
+        let mut pos = e;
+        while pos < line_end {
+            let rest = &self.text[pos..line_end];
+            let lead = rest.len() - rest.trim_start().len();
+            let s = pos + lead;
+            if s >= line_end {
+                break;
+            }
+            let seg_rest = &self.text[s..line_end];
+            let seg_len = ["   ", "\t"]
+                .iter()
+                .filter_map(|b| seg_rest.find(b))
+                .min()
+                .unwrap_or(seg_rest.len());
+            let seg = seg_rest[..seg_len].trim_end();
+            let se = s + seg.len();
+            if !is_name_part(seg) || self.is_label(s, se) {
+                break;
+            }
+            if seg.chars().filter(|c| c.is_alphabetic()).count() > 1 {
+                end = se;
+            }
+            pos = s + seg_len;
+        }
+        end
     }
 
     fn first_in_window(

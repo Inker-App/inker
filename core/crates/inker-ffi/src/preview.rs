@@ -498,7 +498,7 @@ fn fixture(s: PreviewScenario) -> (Vec<Group>, Vec<ReadEvent>) {
     let int = |state, note, loader| {
         doc(
             "d-2",
-            "1099int-northwind-2025",
+            "1099-int-northwind-2025",
             "1099-INT_northwind.pdf",
             state,
             4,

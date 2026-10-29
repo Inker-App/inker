@@ -15,12 +15,12 @@ pub mod handle;
 pub mod instructions;
 pub mod server;
 
-pub use backend::{Backend, Resolved, WriteReceipt};
+pub use backend::{Backend, PendingReview, Resolved, ServerStatus, WriteReceipt};
 pub use client::{ClientError, McpClient, ToolOutput};
 pub use fake::FakeBackend;
 pub use handle::parse_handle_arg;
 pub use instructions::instructions;
 pub use server::{
-    ALWAYS_LOAD_META_KEY, InkerServer, ServeError, ServerOptions, UNKNOWN_AGENT, serve_pair,
-    serve_stdio, serve_stream, tool_definitions,
+    ALWAYS_LOAD_META_KEY, CLI_TOOLS, INKER_CLI_CLIENT, InkerServer, ServeError, ServerOptions,
+    UNKNOWN_AGENT, serve_pair, serve_stdio, serve_stream, tool_definitions,
 };

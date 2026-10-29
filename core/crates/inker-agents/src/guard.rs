@@ -2,8 +2,11 @@
 //!
 //! Reads the hook payload (Claude Code and Codex `PreToolUse`, Cursor
 //! `beforeReadFile` / `beforeShellExecution`) and denies any tool call that
-//! names the private folder. It is a guardrail, not a sandbox: a command can
-//! always reach the folder in ways no string match sees (variables, globs).
+//! names the private folder, and any shell command that runs `inker answer`
+//! (answering an attention-card question is the user's decision: "leave it"
+//! would show the agent the held value). It is a guardrail, not a sandbox: a
+//! command can always reach the folder in ways no string match sees
+//! (variables, globs).
 //! Malformed input is allowed, so a payload format change cannot brick the agent.
 
 use std::path::{Component, Path, PathBuf};
@@ -32,6 +35,9 @@ pub fn decide(input: &str, private: &Path, home: &Path) -> Decision {
     let Ok(v) = serde_json::from_str::<Value>(input) else {
         return Decision::Allow;
     };
+    if runs_inker_answer(&v) {
+        return Decision::Deny(ANSWER_REASON.to_string());
+    }
     let cwd = v.get("cwd").and_then(Value::as_str).map(PathBuf::from);
     let private = normalize(private);
     let mut forms = vec![private.to_string_lossy().into_owned()];
@@ -48,6 +54,44 @@ pub fn decide(input: &str, private: &Path, home: &Path) -> Decision {
     } else {
         Decision::Allow
     }
+}
+
+const ANSWER_REASON: &str = "INKER: `inker answer` decides whether a held value is inked or \
+     shown, and that is the user's call. Tell the user the document is waiting for review \
+     and let them answer it themselves.";
+
+/// True when any `command` in the payload (a string, or an argv array) runs
+/// `inker answer`: a word whose file name is `inker` (or `inker-cli`, as the
+/// app bundle ships it), then the word `answer`.
+fn runs_inker_answer(v: &Value) -> bool {
+    match v {
+        Value::Object(o) => o.iter().any(|(k, x)| {
+            let cmd = match x {
+                Value::String(s) if k == "command" => Some(s.clone()),
+                Value::Array(a) if k == "command" => Some(
+                    a.iter()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                ),
+                _ => None,
+            };
+            cmd.is_some_and(|c| names_inker_answer(&c)) || runs_inker_answer(x)
+        }),
+        Value::Array(a) => a.iter().any(runs_inker_answer),
+        _ => false,
+    }
+}
+
+fn names_inker_answer(cmd: &str) -> bool {
+    let words: Vec<&str> = cmd
+        .split(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')'))
+        .filter(|w| !w.is_empty())
+        .collect();
+    words.windows(2).any(|w| {
+        let name = w[0].rsplit('/').next().unwrap_or(w[0]);
+        matches!(name, "inker" | "inker-cli") && w[1] == "answer"
+    })
 }
 
 fn reason(private: &Path) -> String {
@@ -193,6 +237,37 @@ mod tests {
             d(json!({"tool_name": "Bash", "tool_input": {"command": "ls ~/PrivateStuff"}})),
             Decision::Allow
         );
+    }
+
+    #[test]
+    fn an_agent_may_not_answer_a_review_question() {
+        // `inker answer` releases or inks a held value: the user's decision.
+        for cmd in [
+            json!({"tool_name": "Bash", "tool_input": {"command": "inker answer 3 leave"}}),
+            json!({"tool_name": "Bash", "tool_input": {"command": "cd /tmp && /opt/inker/bin/inker  answer 3 ink"}}),
+            json!({"hook_event_name": "beforeShellExecution", "command": "inker answer 1 leave", "cwd": "/Users/u/proj"}),
+            json!({"tool_name": "shell", "tool_input": {"command": ["bash", "-lc", "inker answer 2 leave"]}}),
+            json!({"tool_name": "shell", "tool_input": {"command": ["inker", "answer", "2", "leave"]}}),
+            // The release ships the CLI inside the app as inker-cli.
+            json!({"tool_name": "Bash", "tool_input": {"command": "/Applications/INKER.app/Contents/MacOS/inker-cli answer 4 leave"}}),
+        ] {
+            let Decision::Deny(reason) = d(cmd.clone()) else {
+                panic!("allowed: {cmd}")
+            };
+            assert!(reason.contains("inker answer"), "{reason}");
+        }
+        for cmd in [
+            "inker review",
+            "inker list",
+            "echo the answer is inker",
+            "rg 'inker answer' docs/",
+        ] {
+            assert_eq!(
+                d(json!({"tool_name": "Bash", "tool_input": {"command": cmd}})),
+                Decision::Allow,
+                "{cmd}"
+            );
+        }
     }
 
     #[test]

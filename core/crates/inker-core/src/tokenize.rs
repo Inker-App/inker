@@ -229,6 +229,9 @@ fn check_span(text: &str, d: &Detection, what: &str) -> Result<()> {
 /// text under 4 characters, and numbers under 6, match too much by chance.
 const MIN_SWEEP_TEXT: usize = 4;
 const MIN_SWEEP_NUMBER: usize = 6;
+/// Shortest word of a minted name swept on its own: initials and two-letter
+/// particles match too much by chance.
+const MIN_NAME_WORD: usize = 3;
 
 /// Characters allowed between the digits of a swept number.
 fn is_number_separator(c: char) -> bool {
@@ -241,6 +244,9 @@ enum Matcher {
     Number(Vec<char>),
     /// Case-folded, any run of whitespace matching one space.
     Text(Vec<char>),
+    /// One word of a minted name, case-folded, matched only where the text
+    /// starts it with a capital ("Example", "EXAMPLE", not "example").
+    Word(Vec<char>),
 }
 
 impl Matcher {
@@ -273,9 +279,26 @@ impl Matcher {
         }
     }
 
+    /// The words of a Person value that the sweep also looks for alone:
+    /// runs of 3+ letters (apostrophes kept), each once.
+    fn name_words(value: &str) -> Vec<Self> {
+        let mut words: Vec<Vec<char>> = Vec::new();
+        for w in value.split(|c: char| !(c.is_alphabetic() || c == '\'' || c == '\u{2019}')) {
+            let w = w.trim_matches(|c: char| !c.is_alphabetic());
+            if w.chars().filter(|c| c.is_alphabetic()).count() < MIN_NAME_WORD {
+                continue;
+            }
+            let key: Vec<char> = w.chars().flat_map(char::to_lowercase).collect();
+            if !words.contains(&key) {
+                words.push(key);
+            }
+        }
+        words.into_iter().map(Matcher::Word).collect()
+    }
+
     fn len(&self) -> usize {
         match self {
-            Matcher::Number(k) | Matcher::Text(k) => k.len(),
+            Matcher::Number(k) | Matcher::Text(k) | Matcher::Word(k) => k.len(),
         }
     }
 
@@ -302,7 +325,10 @@ impl Matcher {
                         return Some(start + off + c.len_utf8());
                     }
                 }
-                Matcher::Text(key) => {
+                Matcher::Text(key) | Matcher::Word(key) => {
+                    if k == 0 && matches!(self, Matcher::Word(_)) && !c.is_uppercase() {
+                        return None;
+                    }
                     if c.is_whitespace() {
                         if in_ws {
                             continue;
@@ -433,7 +459,21 @@ impl Acc<'_> {
             .iter()
             .filter_map(|(k, v, t)| Matcher::for_value(k, v).map(|m| (m, k.clone(), t.to_string())))
             .collect();
-        // Longer values first, so a full name wins over a part of it.
+        // Each word of a minted name on its own, so a name split over
+        // columns or reordered ("Example, Jordan A") never leaves a part in
+        // the clear beside its token.
+        for (k, v, t) in &self.minted {
+            if *k == TokenKind::Person {
+                matchers.extend(
+                    Matcher::name_words(v)
+                        .into_iter()
+                        .map(|m| (m, k.clone(), t.to_string())),
+                );
+            }
+        }
+        // Longer values first, so a full name wins over a part of it. The
+        // sort is stable: a whole value is tried before a word of the same
+        // length.
         matchers.sort_by_key(|(m, _, _)| std::cmp::Reverse(m.len()));
         let mut out = text.to_string();
         for (m, kind, token) in matchers {
@@ -820,11 +860,67 @@ mod tests {
         assert_eq!(
             out.pages[0].text,
             "Employee [PERSON_1], SSN [SSN_1]. Signed: [PERSON_1] on file [SSN_1]; \
-             not Testy McFakenames or 1000123456."
+             not [PERSON_1] McFakenames or 1000123456."
         );
         assert_eq!(out.pages[1].text, "Page two: [PERSON_1], [SSN_1].");
         assert_eq!(out.fields[0].value, "[PERSON_1]");
-        assert_eq!(out.inked, 2 + 2 + 2 + 1);
+        // The lone "Testy" is a word of the minted name; "McFakenames" is
+        // not "McFakename" on a word boundary.
+        assert_eq!(out.inked, 2 + 2 + 2 + 1 + 1);
+    }
+
+    #[test]
+    fn a_minted_names_words_are_swept_when_capitalised() {
+        // A name minted whole in one place (here a fillable field) and
+        // printed split or reordered elsewhere on the same document: the
+        // sweep must still catch each capitalised word of 3+ letters, so a
+        // surname can never survive beside a token.
+        let (_d, v) = vault();
+        let text = "e Employee's first name and initial   Last name\n\
+                    [PERSON_1]    McFakename\n\
+                    MCFAKENAME, Testy Q. Dear Testy, the mcfakename file is ready. Tes.";
+        let e = Extracted {
+            pages: vec![page(1, text), page(2, "Signed, McFakename-Jones")],
+            fields: vec![FormField {
+                name: "f1_02".into(),
+                value: "Testy Q McFakename".into(),
+                page: Some(1),
+            }],
+        };
+        let mut d = det(
+            1,
+            "Testy Q McFakename",
+            "Testy Q McFakename",
+            TokenKind::Person,
+            template(),
+            Treatment::Tokenize,
+        );
+        d.field = Some("f1_02".into());
+        let out = tokenize(&v, &e, &[d]).unwrap();
+        assert_eq!(out.fields[0].value, "[PERSON_1]");
+        assert_eq!(
+            out.pages[0].text,
+            "e Employee's first name and initial   Last name\n\
+             [PERSON_1]    [PERSON_1]\n\
+             [PERSON_1], [PERSON_1] Q. Dear [PERSON_1], the mcfakename file is ready. Tes."
+        );
+        assert_eq!(out.pages[1].text, "Signed, [PERSON_1]-Jones");
+    }
+
+    #[test]
+    fn name_words_are_only_swept_from_person_values() {
+        let (_d, v) = vault();
+        let text = "Acme Widgets Inc paid. Widgets are fine.";
+        let d = det(
+            1,
+            text,
+            "Acme Widgets Inc",
+            TokenKind::Org,
+            template(),
+            Treatment::Tokenize,
+        );
+        let out = tokenize(&v, &one_page(text), &[d]).unwrap();
+        assert_eq!(out.pages[0].text, "[ORG_1] paid. Widgets are fine.");
     }
 
     #[test]

@@ -439,7 +439,38 @@ pub fn name_after(text: &str, pos: usize, window: usize) -> Option<NameRun> {
     None
 }
 
-/// Names after labels, and organisations ending in a suffix anywhere.
+/// Names heading a mailing block: a line that is, in full, a person-shaped
+/// capitalised run, directly above a street line ("48 Lantern Way Apt 3").
+/// Statements print the holder's name this way with no label.
+fn mailing_names(text: &str) -> Vec<(usize, usize)> {
+    let mut lines: Vec<(usize, &str)> = Vec::new();
+    let mut off = 0;
+    for l in text.split('\n') {
+        lines.push((off, l));
+        off += l.len() + 1;
+    }
+    let mut out = Vec::new();
+    for w in lines.windows(2) {
+        let [(start, line), (_, next)] = w else {
+            continue;
+        };
+        let lead = line.len() - line.trim_start().len();
+        let body = line.trim();
+        if body.is_empty() || !crate::address::is_street_line(next.trim()) {
+            continue;
+        }
+        let Some(r) = run_at(text, start + lead) else {
+            continue;
+        };
+        if !r.org && r.end - r.start == body.len() {
+            out.push((r.start, r.end));
+        }
+    }
+    out
+}
+
+/// Names after labels, names heading a mailing block, and organisations
+/// ending in a suffix anywhere.
 pub fn find(page: &PageText) -> Vec<Detection> {
     let text = page.text.as_str();
     let lower = text.to_ascii_lowercase();
@@ -478,6 +509,21 @@ pub fn find(page: &PageText) -> Vec<Detection> {
                 out.push(d);
             }
         }
+    }
+    for (start, end) in mailing_names(text) {
+        if overlaps(&taken, start, end) {
+            continue;
+        }
+        taken.push((start, end));
+        out.push(detection(
+            page.page,
+            start,
+            end,
+            TokenKind::Person,
+            rule("mailing_block"),
+            0.6,
+            Treatment::Tokenize,
+        ));
     }
     for m in ORG_RUN.find_iter(text) {
         // Drop leading stop words and the trailing non-letter the regex used as a boundary.

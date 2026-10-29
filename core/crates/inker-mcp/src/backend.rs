@@ -6,7 +6,10 @@
 //! it grows equivalents.
 
 use camino::Utf8PathBuf;
-use inker_core::{Description, Handle, ListEntry, ResolvedDocument, ResolvedFolder};
+use inker_core::{
+    Description, DocState, Handle, ListEntry, QuestionId, ResolvedDocument, ResolvedFolder,
+    ReviewAnswer, TokenKind,
+};
 use serde::{Deserialize, Serialize};
 
 /// What `resolve` returns from the core.
@@ -25,6 +28,29 @@ pub struct WriteReceipt {
     pub handle: Handle,
 }
 
+/// One open attention-card question, as the CLI shows it. Never holds the
+/// value: only where it is, its kind, the prompt and the words around it
+/// (digit runs already blanked by the core).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PendingReview {
+    pub id: QuestionId,
+    pub handle: Handle,
+    pub kind: TokenKind,
+    pub page: u32,
+    /// Pages in the document; 0 when unknown.
+    pub page_count: u32,
+    pub prompt: Option<String>,
+    pub context_before: String,
+    pub context_after: String,
+}
+
+/// What the running server is serving, for `inker doctor`. Holds paths, so
+/// it is served only to the INKER CLI, never to an agent.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ServerStatus {
+    pub private_folder: Utf8PathBuf,
+}
+
 /// Everything the MCP server needs from the core.
 ///
 /// Implementations must return tokenized content only. Errors map to agent
@@ -38,4 +64,11 @@ pub trait Backend: Send + Sync {
     fn write(&self, h: &Handle, name: &str, content: &str) -> inker_core::Result<WriteReceipt>;
     /// Record that `agent` read `h`, for the Ready board's last-read line.
     fn note_read(&self, agent: &str, h: &Handle);
+    /// Open review questions, oldest first. CLI only (`inker/review`).
+    fn pending_reviews(&self) -> inker_core::Result<Vec<PendingReview>>;
+    /// Answer one question; returns its document's state afterwards (Ready
+    /// once its last question is answered). CLI only (`inker/answer`).
+    fn answer_review(&self, id: QuestionId, answer: ReviewAnswer) -> inker_core::Result<DocState>;
+    /// What this server serves. CLI only (`inker/status`).
+    fn status(&self) -> inker_core::Result<ServerStatus>;
 }

@@ -223,3 +223,52 @@ fn a_held_document_is_pending_through_the_backend() {
     let err = host.backend().resolve(&handle).unwrap_err();
     assert!(matches!(err, Error::PendingReview(_)));
 }
+
+#[test]
+fn a_held_document_is_reviewed_and_answered_through_the_backend() {
+    let w = World::new();
+    let host = w.open();
+    let src = w.downloads.join("note.txt");
+    fs::write(
+        &src,
+        "Wire confirmation 00000000000 received\nAmount 1,250.00\n",
+    )
+    .unwrap();
+    let outcomes = host.ingest(&[src], IngestMode::Move).expect("ingest");
+    assert_eq!(outcomes[0].state, DocState::NeedsAttention);
+
+    let backend: &dyn Backend = host.backend();
+    let handle = backend.list().unwrap()[0].handle.clone();
+    let qs = backend.pending_reviews().expect("pending");
+    assert_eq!(qs.len(), 1);
+    let q = &qs[0];
+    assert_eq!(q.handle, handle);
+    assert_eq!(q.page, 1);
+    assert_eq!(q.page_count, 1);
+    let shown = format!("{q:?}");
+    assert!(
+        !shown.contains("00000000000"),
+        "value in the question: {shown}"
+    );
+    assert!(q.context_before.contains("Wire confirmation"), "{shown}");
+
+    let state = backend
+        .answer_review(q.id, inker_core::ReviewAnswer::InkIt)
+        .expect("answer");
+    assert_eq!(state, DocState::Ready);
+    assert!(backend.pending_reviews().unwrap().is_empty());
+    assert!(matches!(
+        backend.resolve(&handle).expect("ready"),
+        Resolved::Document(_)
+    ));
+}
+
+#[test]
+fn status_reports_the_private_folder_being_served() {
+    let w = World::new();
+    let host = w.open();
+    assert_eq!(
+        host.backend().status().unwrap().private_folder,
+        w.config.private_folder
+    );
+}

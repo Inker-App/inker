@@ -368,3 +368,113 @@ fn tool_descriptions_carry_the_handle_rule_for_clients_that_ignore_instructions(
         "{write}"
     );
 }
+
+/// The INKER-only tools the CLI uses. Never listed, and served only to a
+/// connection whose `initialize` named the client `inker-cli`.
+const HIDDEN: &[&str] = &["inker/review", "inker/answer", "inker/status"];
+
+#[tokio::test]
+async fn hidden_tools_are_never_listed_even_to_the_cli() {
+    for client in ["claude-code", inker_mcp::INKER_CLI_CLIENT] {
+        let (mut c, _) = ready(client).await;
+        let r = c.request("tools/list", json!({})).await;
+        let names: Vec<&str> = r["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| t["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["list", "resolve", "describe", "write"], "{client}");
+    }
+}
+
+#[tokio::test]
+async fn hidden_tools_refuse_any_client_but_the_cli() {
+    let (mut c, fake) = ready("claude-code").await;
+    for tool in HIDDEN {
+        let r = c
+            .call(tool, json!({"question": "1", "answer": "leave"}))
+            .await;
+        // The same refusal as a tool that does not exist.
+        let msg = r["error"]["message"].as_str().unwrap_or_default();
+        assert_eq!(msg, format!("unknown tool: {tool}"), "{r}");
+    }
+    assert_eq!(fake.pending_reviews().unwrap().len(), 1, "nothing answered");
+
+    // Stateless: client info only in a request's _meta is not enough.
+    let fake = Arc::new(FakeBackend::sample());
+    let mut c = start(fake, ServerOptions::default());
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientInfo": {"name": "inker-cli", "version": "1"},
+        "io.modelcontextprotocol/clientCapabilities": {}
+    });
+    let r = c
+        .request(
+            "tools/call",
+            json!({"_meta": meta, "name": "inker/review", "arguments": {}}),
+        )
+        .await;
+    assert!(r.get("error").is_some(), "{r}");
+}
+
+#[tokio::test]
+async fn the_cli_reviews_and_answers_without_seeing_the_value() {
+    let (mut c, fake) = ready(inker_mcp::INKER_CLI_CLIENT).await;
+    let r = c.call("inker/review", json!({})).await;
+    assert!(!is_error(&r), "{r}");
+    let qs = r["result"]["structuredContent"]["questions"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(qs.len(), 1);
+    let q = &qs[0];
+    assert_eq!(q["handle"], json!("🐙/1099-int-bank-2025"));
+    assert_eq!(q["kind"], json!("account"));
+    assert_eq!(q["page"], json!(1));
+    assert_eq!(q["page_count"], json!(2));
+    assert!(q["prompt"].as_str().unwrap().contains('?'));
+    assert!(q.get("context_before").is_some() && q.get("context_after").is_some());
+    let t = text(&r);
+    assert!(
+        t.contains("🐙/1099-int-bank-2025") && t.contains("page 1 of 2"),
+        "{t}"
+    );
+
+    let id = q["id"].clone();
+    let r = c
+        .call("inker/answer", json!({"question": id, "answer": "ink"}))
+        .await;
+    assert!(!is_error(&r), "{r}");
+    assert_eq!(r["result"]["structuredContent"]["state"], json!("ready"));
+    assert!(fake.pending_reviews().unwrap().is_empty());
+    let r = c
+        .call("resolve", json!({"handle": "🐙/1099-int-bank-2025"}))
+        .await;
+    assert!(
+        !is_error(&r),
+        "held document is ready after the answer: {r}"
+    );
+
+    // Answering again, or a question that never existed, is a tool error.
+    let r = c
+        .call("inker/answer", json!({"question": id, "answer": "leave"}))
+        .await;
+    assert!(is_error(&r), "{r}");
+    let r = c
+        .call("inker/answer", json!({"question": 1, "answer": "maybe"}))
+        .await;
+    assert!(r.get("error").is_some() || is_error(&r), "{r}");
+    assert_no_real_values(&c);
+}
+
+#[tokio::test]
+async fn the_cli_reads_the_servers_private_folder() {
+    let (mut c, _) = ready(inker_mcp::INKER_CLI_CLIENT).await;
+    let r = c.call("inker/status", json!({})).await;
+    assert!(!is_error(&r), "{r}");
+    assert_eq!(
+        r["result"]["structuredContent"]["private_folder"],
+        json!(inker_mcp::fake::FAKE_PRIVATE_FOLDER)
+    );
+}

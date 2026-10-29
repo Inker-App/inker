@@ -53,7 +53,7 @@ struct QueueViewModelTests {
     @Test func processingBoard() {
         let m = build([folder([
             doc("1", "w2-acme-2025", "W2.pdf", "W-2", .ready, inked: 6),
-            doc("2", "1099int-northwind-2025", "1099-INT_northwind.pdf", "1099-INT", .reading, note: "reading", loader: .read),
+            doc("2", "1099-int-northwind-2025", "1099-INT_northwind.pdf", "1099-INT", .reading, note: "reading", loader: .read),
             doc("3", "receipt-4471", "IMG_4471.heic", "scan", .reading, note: "reading the scan", loader: .ocr),
             doc("4", "closing-statement-2025", "closing-statement.pdf", "closing statement", .queued, note: "queued", loader: .queued),
         ])], lastDrop: "Moved 4 files from ~/Downloads")
@@ -76,7 +76,7 @@ struct QueueViewModelTests {
         let m = build([folder([
             doc("4", "closing-statement-2025", "closing-statement.pdf", "closing statement", .needsAttention, inked: 10, note: "page 3 of 11", question: question),
             doc("1", "w2-acme-2025", "W2.pdf", "W-2", .ready, inked: 6),
-            doc("2", "1099int-northwind-2025", "x.pdf", "1099-INT", .ready, inked: 4),
+            doc("2", "1099-int-northwind-2025", "x.pdf", "1099-INT", .ready, inked: 4),
             doc("3", "receipt-4471", "IMG.heic", "scan", .ready, inked: 2),
         ])])
         #expect(m.mode == .attention)
@@ -100,7 +100,7 @@ struct QueueViewModelTests {
         let read = ReadEvent(agent: "Claude Code", codename: "w2-acme-2025", at: now.addingTimeInterval(-120))
         let m = build([folder([
             doc("1", "w2-acme-2025", "W2.pdf", "W-2", .ready, inked: 6),
-            doc("2", "1099int-northwind-2025", "x.pdf", "1099-INT", .ready, inked: 4),
+            doc("2", "1099-int-northwind-2025", "x.pdf", "1099-INT", .ready, inked: 4),
             doc("3", "receipt-4471", "IMG.heic", "scan", .ready, inked: 2),
             doc("4", "closing-statement-2025", "c.pdf", "closing statement", .ready, inked: 11),
         ])], reads: [read])
