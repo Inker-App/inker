@@ -560,7 +560,7 @@ fn fixture(s: PreviewScenario) -> (Vec<Group>, Vec<ReadEvent>) {
                 closing(Ready, 11, "ready", Loader::Idle),
             ])],
             vec![ReadEvent {
-                agent: "Claude Code".into(),
+                agent: "Claude".into(),
                 codename: "w2-acme-2025".into(),
                 at: SystemTime::now() - Duration::from_secs(120),
             }],

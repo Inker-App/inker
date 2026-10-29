@@ -60,6 +60,6 @@ struct DropCollectorTests {
         #expect(DropDialogCopy.title(for: one) == "Move this file out of ~/Downloads?")
         let mixed = collect([url("/Users/test/Downloads/a.pdf"), url("/Users/test/Desktop/b.pdf")])
         #expect(DropDialogCopy.title(for: mixed) == "Move these 2 files?")
-        #expect(DropDialogCopy.body == "Agents can usually read Downloads. Moving leaves nothing behind for them to look at.")
+        #expect(DropDialogCopy.body == "Moving it leaves nothing in Downloads to drag into a chat by mistake.")
     }
 }

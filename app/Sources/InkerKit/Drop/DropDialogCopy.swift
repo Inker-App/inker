@@ -17,7 +17,7 @@ public enum DropDialogCopy {
         return "Move \(what)?"
     }
 
-    public static let body = "Agents can usually read Downloads. Moving leaves nothing behind for them to look at."
+    public static let body = "Moving it leaves nothing in Downloads to drag into a chat by mistake."
     public static let alwaysMove = "Always move, don't ask again"
     public static let copyInstead = "Copy instead"
     /// Not on the board: the card needs a way out now that it is not a window.
