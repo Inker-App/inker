@@ -1,5 +1,6 @@
 import AppKit
 import Combine
+import InkerKit
 import SwiftUI
 
 /// The menu bar item: the mark, the needs-you count, the drop target, and
@@ -24,6 +25,11 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
     /// A transient popover closes on the mouse-down that lands on our icon,
     /// before our own click handler runs; without this the click reopens it.
     private var lastClosed = Date.distantPast
+    /// Escape and outside clicks, watched while the popover is up. The
+    /// transient behavior alone misses both when the app is not active,
+    /// which a status bar app usually is not.
+    private var keyMonitor: Any?
+    private var globalMouseMonitor: Any?
 
     init(store: CoreStore, clock: RenderClock) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -117,17 +123,57 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
             clock.surfaceAppeared()
             store.refresh()
             store.popoverOpened()
+            installDismissalMonitors()
         }
     }
 
     nonisolated func popoverDidClose(_ notification: Notification) {
         MainActor.assumeIsolated {
+            removeDismissalMonitors()
             clock.surfaceDisappeared()
             lastClosed = Date()
             popover.behavior = .transient
             store.isDropTargeted = false
             store.popoverClosed()
         }
+    }
+
+    // MARK: Escape and outside clicks
+
+    private var isPinned: Bool { popover.behavior == .applicationDefined }
+
+    private func installDismissalMonitors() {
+        removeDismissalMonitors()
+        // Keys typed into the popover's own window. A row menu or the folder
+        // chooser has its own window and keeps its Escape.
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, event.window === popoverWindow,
+                  let kind = PopoverDismissal.Event(keyCode: event.keyCode) else { return event }
+            return dismiss(on: kind) ? nil : event
+        }
+        // Clicks in other apps. Our own windows (the status item, the popover,
+        // its menus) are not routed here; the transient behavior covers them.
+        let mouse: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouse) { [weak self] _ in
+            MainActor.assumeIsolated { _ = self?.dismiss(on: .mouseDown(insidePopover: false)) }
+        }
+    }
+
+    private var popoverWindow: NSWindow? { popover.contentViewController?.view.window }
+
+    private func removeDismissalMonitors() {
+        for monitor in [keyMonitor, globalMouseMonitor] {
+            if let monitor { NSEvent.removeMonitor(monitor) }
+        }
+        keyMonitor = nil
+        globalMouseMonitor = nil
+    }
+
+    /// True when the event closed the popover.
+    private func dismiss(on event: PopoverDismissal.Event) -> Bool {
+        guard popover.isShown, PopoverDismissal.closes(on: event, pinned: isPinned) else { return false }
+        popover.performClose(nil)
+        return true
     }
 
     // MARK: DropTargetHandler
