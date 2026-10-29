@@ -1,0 +1,32 @@
+name: site-rebuild
+
+# inker.sh counts the form templates per category by reading packs/*/pack.toml
+# from this repo when it builds. A static site only updates on a build, so ask
+# Vercel for one whenever a pack changes.
+#
+# Needs the repository secret VERCEL_DEPLOY_HOOK_URL: a Deploy Hook for the
+# inker-site project (Vercel > Project > Settings > Git > Deploy Hooks).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packs/**"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  rebuild:
+    name: ask Vercel to rebuild inker.sh
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger the deploy hook
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK_URL is not set; skipping."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$HOOK"
