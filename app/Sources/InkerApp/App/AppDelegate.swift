@@ -8,24 +8,25 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
     private var store: CoreStore?
     private var statusController: StatusItemController?
-    private var onboarding: OnboardingWindowController?
-    private var settingsWindow: SettingsWindowController?
-    /// Joins Cmd+Tab while a window is open; menu bar only otherwise.
-    private var presence = WindowPresence()
     private var clock: RenderClock { RenderClock.shared }
     private let log = Logger(subsystem: "sh.inker.app", category: "app")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         FontRegistry.registerBundledFonts()
-        let store = CoreStore(handle: makeHandle())
+        let env = ProcessInfo.processInfo.environment
+        let store = CoreStore(handle: makeHandle(), forceOnboarding: env["INKER_ONBOARDING"] == "1")
         store.presenter = self
         self.store = store
-        statusController = StatusItemController(store: store, clock: clock) { [weak self] in
-            self?.showSettingsMenu()
-        }
-        let env = ProcessInfo.processInfo.environment
-        if OnboardingState(store: UserDefaults.standard).needsOnboarding || env["INKER_ONBOARDING"] == "1" {
-            presentOnboarding()
+        let controller = StatusItemController(store: store, clock: clock)
+        statusController = controller
+        // Onboarding is a screen in the popover: open it by itself at first launch.
+        // VERIFY: the status item's button may not be placed in the menu bar
+        // until the next run-loop turn; showing on the next turn anchors the
+        // popover under it rather than at the screen corner.
+        if store.flow.needsAttentionAtLaunch {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { controller.showPopover() }
+            }
         }
     }
 
@@ -63,84 +64,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, CorePresenter {
         }
     }
 
-    // MARK: Settings menu (not on the boards; placeholder until Ben designs it)
-
-    private func showSettingsMenu() {
-        let menu = NSMenu()
-        let settings = NSMenuItem(title: "Settings…", action: #selector(openSettings(_:)), keyEquivalent: ",")
-        settings.target = self
-        menu.addItem(settings)
-        let setup = NSMenuItem(title: "Set up your chat…", action: #selector(openOnboarding(_:)), keyEquivalent: "")
-        setup.target = self
-        menu.addItem(setup)
-        menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit INKER", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        menu.addItem(quit)
-        _ = menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-    }
-
-    @objc private func openOnboarding(_ sender: Any?) {
-        presentOnboarding()
-    }
-
-    @objc private func openSettings(_ sender: Any?) {
-        presentSettings()
-    }
-
-    // MARK: Windows and Cmd+Tab
-
-    private func windowOpened(_ id: String) {
-        if let policy = presence.opened(id) { apply(policy) }
-    }
-
-    private func windowClosed(_ id: String) {
-        if let policy = presence.closed(id) { apply(policy) }
-    }
-
-    private func apply(_ policy: WindowPresence.Policy) {
-        // VERIFY: switching to .regular adds a Dock tile and a Cmd+Tab entry
-        // at once; switching back removes them once no window is key.
-        NSApp.setActivationPolicy(policy == .regular ? .regular : .accessory)
-        if policy == .regular { NSApp.activate() }
-    }
-
-    func presentSettings() {
-        guard let store else { return }
-        if let settingsWindow {
-            settingsWindow.show()
-            return
-        }
-        let controller = SettingsWindowController(store: store, clock: clock) { [weak self] in
-            self?.windowClosed("settings")
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.settingsWindow = nil } }
-        }
-        settingsWindow = controller
-        windowOpened("settings")
-        controller.show()
-    }
-
     // MARK: CorePresenter
 
     func presentPopover() {
         statusController?.showPopover()
     }
 
-    func presentOnboarding() {
-        guard let store else { return }
-        if let onboarding {
-            onboarding.show()
-            return
-        }
-        let controller = OnboardingWindowController(store: store, clock: clock, onFinish: {
-            var state = OnboardingState(store: UserDefaults.standard)
-            state.markComplete()
-        }, onClose: { [weak self] in
-            self?.windowClosed("onboarding")
-            // Release after the button action that got us here has unwound.
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.onboarding = nil } }
-        })
-        onboarding = controller
-        windowOpened("onboarding")
-        controller.show()
+    func setPopoverPinned(_ pinned: Bool) {
+        statusController?.setPinned(pinned)
     }
 }

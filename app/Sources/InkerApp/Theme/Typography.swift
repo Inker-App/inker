@@ -26,8 +26,10 @@ enum Typography {
     static let caption = archivo(11)
     /// "Drop files or folders", dialog titles: 15 / 600 / 112%.
     static let title = archivo(15, weight: 600, width: 112)
-    /// Onboarding headings: 22 / 400 / 112%, tracking 0.01em.
+    /// Onboarding headings on the boards: 22 / 400 / 112%, tracking 0.01em.
     static let heading = archivo(22, weight: 400, width: 112)
+    /// The same heading sized for the popover's 328-point column.
+    static let popoverHeading = archivo(18, weight: 400, width: 112)
 
     // VERIFY: CoreText variation axes keyed by the axis tag as an integer is
     // the documented form of kCTFontVariationAttribute; check that the width

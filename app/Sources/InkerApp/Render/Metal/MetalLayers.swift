@@ -2,8 +2,38 @@ import InkerKit
 import MetalKit
 import SwiftUI
 
+/// An eye scene drawn by EyeShader.metal. Under `INKER --snapshots` it draws
+/// nothing: ImageRenderer cannot capture a Metal view.
+struct EyeLayer: View {
+    let makeScene: () -> any EyeScene
+    var pointerBox: PointerBox?
+    @Environment(\.snapshotMode) private var snapshotMode
+
+    var body: some View {
+        if snapshotMode {
+            Color.clear
+        } else {
+            EyeMetalView(makeScene: makeScene, pointerBox: pointerBox)
+        }
+    }
+}
+
+/// The octopus (OctopusShader.metal). Blank under `INKER --snapshots`.
+struct OctopusLayer: View {
+    var placement: OctopusRenderer.Placement = .onboarding
+    @Environment(\.snapshotMode) private var snapshotMode
+
+    var body: some View {
+        if snapshotMode {
+            Color.clear
+        } else {
+            OctopusMetalView(placement: placement)
+        }
+    }
+}
+
 /// SwiftUI wrapper for an eye scene drawn by EyeShader.metal.
-struct EyeLayer: NSViewRepresentable {
+struct EyeMetalView: NSViewRepresentable {
     let makeScene: () -> any EyeScene
     var pointerBox: PointerBox?
     @EnvironmentObject private var clock: RenderClock
@@ -31,7 +61,7 @@ struct EyeLayer: NSViewRepresentable {
 }
 
 /// SwiftUI wrapper for the octopus.
-struct OctopusLayer: NSViewRepresentable {
+struct OctopusMetalView: NSViewRepresentable {
     var placement: OctopusRenderer.Placement = .onboarding
     @EnvironmentObject private var clock: RenderClock
 

@@ -7,7 +7,7 @@ struct AttentionBoard: View {
     @EnvironmentObject private var store: CoreStore
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
+        PopoverScroll {
             VStack(spacing: 0) {
                 ForEach(store.model.groups) { group in
                     GroupHeader(group: group)

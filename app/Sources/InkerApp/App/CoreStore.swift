@@ -6,12 +6,13 @@ import os
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Presents the windows the store needs (implemented by AppDelegate).
+/// Opens the popover when the store needs to be seen (implemented by AppDelegate).
 @MainActor
 protocol CorePresenter: AnyObject {
     /// Open the popover, e.g. so the move-or-copy card is seen.
     func presentPopover()
-    func presentOnboarding()
+    /// Keep the popover open while a system panel (the folder chooser) is up.
+    func setPopoverPinned(_ pinned: Bool)
 }
 
 /// The popover's model: owns the CoreHandle, listens for queue changes, and
@@ -24,6 +25,8 @@ final class CoreStore: ObservableObject {
     @Published var isDropTargeted = false
     /// A drop waiting for the move-or-copy answer; the popover shows the card.
     @Published private(set) var pendingDrop: DropBatch?
+    /// Which screen the popover shows: a board, an onboarding step, settings.
+    @Published private(set) var flow: ScreenFlow
 
     let handle: CoreHandle
     weak var presenter: CorePresenter?
@@ -34,13 +37,15 @@ final class CoreStore: ObservableObject {
     private let home: URL
     private let log = Logger(subsystem: "sh.inker.app", category: "store")
 
+    /// `forceOnboarding` is the `INKER_ONBOARDING=1` override.
     init(handle: CoreHandle, defaults: KeyValueStore = UserDefaults.standard,
-         home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+         home: URL = FileManager.default.homeDirectoryForCurrentUser, forceOnboarding: Bool = false) {
         let initialSettings = AppSettings(store: defaults)
         self.handle = handle
         self.home = home
         settings = initialSettings
         dropPreferences = DropPreferences(store: defaults)
+        flow = ScreenFlow(onboarding: OnboardingState(store: defaults), forceOnboarding: forceOnboarding)
         model = QueueViewModel.build(queue: [], status: handle.status(), reads: [], lastDrop: nil,
                                      style: initialSettings.handleStyle, now: Date())
         // Rust fires this on its own thread; hop to the main queue, then
@@ -55,9 +60,36 @@ final class CoreStore: ObservableObject {
         refresh()
     }
 
-    /// A store frozen in one of the four boards, for previews.
-    static func preview(_ scenario: PreviewScenario) -> CoreStore {
-        CoreStore(handle: CoreHandle.preview(scenario: scenario))
+    /// A store frozen in one of the four boards, for previews and snapshots.
+    static func preview(_ scenario: PreviewScenario, screen: PopoverScreen = .board) -> CoreStore {
+        let store = CoreStore(handle: CoreHandle.preview(scenario: scenario))
+        store.show(screen)
+        return store
+    }
+
+    // MARK: Screens
+
+    var screen: PopoverScreen { flow.screen }
+
+    /// The screen, or the drop card in front of it.
+    var surface: PopoverSurface { flow.visible(dropPending: pendingDrop != nil) }
+
+    func nextStep() { flow.next() }
+    func previousStep() { flow.back() }
+    func finishOnboarding() { flow.finishOnboarding() }
+    func toggleSettings() { flow.toggleSettings() }
+    func closeSettings() { flow.closeSettings() }
+    func runSetupAgain() { flow.runSetupAgain() }
+    func show(_ screen: PopoverScreen) { flow.show(screen) }
+
+    /// Keep the popover up while a system panel runs, then bring it back.
+    func withPopoverPinned<T>(_ body: () -> T) -> T {
+        presenter?.setPopoverPinned(true)
+        defer {
+            presenter?.setPopoverPinned(false)
+            presenter?.presentPopover()
+        }
+        return body()
     }
 
     var privateFolder: URL {
@@ -129,6 +161,11 @@ final class CoreStore: ObservableObject {
             pendingDrop = batch
             presenter?.presentPopover()
         }
+    }
+
+    /// Show the card for a batch without a drop (snapshots and previews).
+    func presentDropCard(_ batch: DropBatch) {
+        pendingDrop = batch
     }
 
     /// The card's answer. `nil` cancels the drop and leaves the files where they are.

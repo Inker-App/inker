@@ -12,9 +12,9 @@ struct DropDecisionCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             // The 392-wide dialog scene, scaled to the popover's inner width.
-            DialogScene(fileCount: batch.count, source: batch.sourceDisplay ?? "~/Downloads")
-                .scaleEffect(328.0 / 392.0, anchor: .topLeading)
-                .frame(width: 328, height: 76 * 328.0 / 392.0, alignment: .topLeading)
+            ScaledScene(size: CGSize(width: 392, height: 76)) {
+                DialogScene(fileCount: batch.count, source: batch.sourceDisplay ?? "~/Downloads")
+            }
             VStack(alignment: .leading, spacing: 4) {
                 Text(DropDialogCopy.title(for: batch)).font(Typography.title)
                 Text(DropDialogCopy.body).foregroundColor(Palette.muted).fixedSize(horizontal: false, vertical: true)
@@ -36,8 +36,8 @@ struct DropDecisionCard: View {
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(16)
-        .frame(width: 360, alignment: .topLeading)
+        .padding(PopoverLayout.gutter)
+        .frame(width: PopoverLayout.width, alignment: .topLeading)
     }
 }
 

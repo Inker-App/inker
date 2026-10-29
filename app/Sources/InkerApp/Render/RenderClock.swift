@@ -3,7 +3,7 @@ import Combine
 import Foundation
 
 /// One clock for every renderer. Runs only while something animated is on
-/// screen (the popover, onboarding, the drop dialog); Reduce Motion freezes
+/// screen (the popover, which holds every screen); Reduce Motion freezes
 /// everything at a still frame (`stillTime`).
 @MainActor
 final class RenderClock: ObservableObject {
@@ -19,11 +19,15 @@ final class RenderClock: ObservableObject {
 
     private var visibleSurfaces = 0
     private let alwaysRunning: Bool
+    /// Snapshots draw every scene at this one time.
+    private let frozenTime: Double?
     private var observers: [NSObjectProtocol] = []
 
     /// `alwaysRunning` is for SwiftUI previews, which have no popover delegate.
-    init(alwaysRunning: Bool = false) {
+    /// `frozenAt` pins `time(at:)` for `INKER --snapshots`.
+    init(alwaysRunning: Bool = false, frozenAt: Double? = nil) {
         self.alwaysRunning = alwaysRunning
+        frozenTime = frozenAt
         reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         // VERIFY: Apple documents this notification on NSWorkspace's own
         // notification center; observing the default center as well is harmless.
@@ -49,7 +53,8 @@ final class RenderClock: ObservableObject {
 
     /// Seconds since launch, or the still time under Reduce Motion.
     func time(at date: Date) -> Double {
-        reduceMotion ? RenderClock.stillTime : date.timeIntervalSince(epoch)
+        if let frozenTime { return frozenTime }
+        return reduceMotion ? RenderClock.stillTime : date.timeIntervalSince(epoch)
     }
 
     var now: Double { time(at: Date()) }

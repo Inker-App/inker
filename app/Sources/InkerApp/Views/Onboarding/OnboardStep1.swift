@@ -6,22 +6,21 @@ import SwiftUI
 /// AppOnboard1: pick a folder the chat can't see. (The coding-agent rows
 /// moved to Settings; this screen is for chat users.)
 struct OnboardStep1: View {
-    let onContinue: () -> Void
     @EnvironmentObject private var store: CoreStore
     @State private var folderText = ""
     @State private var warnings: [FolderWarning] = []
+    @Environment(\.snapshotMode) private var snapshotMode
     private let home = FileManager.default.homeDirectoryForCurrentUser
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
-            DownloadsScene()
+        OnboardPage(nav: OnboardNav(primary: "Continue", onPrimary: finish)) {
+            ScaledScene(size: DownloadsScene.size) { DownloadsScene() }
             // Copy is a placeholder for Ben.
             OnboardHeading(step: 1, title: "Pick a folder your chat can't see",
                            text: "Anything you drag into a chat window gets uploaded. Files you drop on INKER move into a private folder on this Mac instead.")
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
-                    TextField("Private folder", text: $folderText, onCommit: { check() })
-                        .textFieldStyle(.plain)
+                    folderField
                         .font(Typography.mono(13))
                         .padding(.horizontal, 12)
                         .frame(height: 36)
@@ -34,14 +33,27 @@ struct OnboardStep1: View {
                 ForEach(warnings, id: \.message) { w in
                     // Not on the board; copy and placement are Ben's call.
                     Text(w.message).font(Typography.small).foregroundColor(Palette.paper)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            Spacer(minLength: 0)
-            OnboardNav(primary: "Continue", onPrimary: finish)
         }
         .onAppear {
             folderText = PathDisplay.abbreviate(store.privateFolder, home: home)
             check()
+        }
+    }
+
+    /// ImageRenderer cannot draw a TextField; snapshots show the folder as text.
+    @ViewBuilder
+    private var folderField: some View {
+        if snapshotMode {
+            Text(PathDisplay.abbreviate(store.privateFolder, home: home))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            TextField("Private folder", text: $folderText, onCommit: { check() })
+                .textFieldStyle(.plain)
         }
     }
 
@@ -63,7 +75,10 @@ struct OnboardStep1: View {
         let folder = folderURL
         // Default to ~/Private (or its parent if it does not exist yet).
         panel.directoryURL = FileManager.default.fileExists(atPath: folder.path) ? folder : folder.deletingLastPathComponent()
-        if panel.runModal() == .OK, let url = panel.url {
+        // The panel is a system window; pin the popover so it is still
+        // there, on this step, when the panel closes.
+        let response = store.withPopoverPinned { panel.runModal() }
+        if response == .OK, let url = panel.url {
             folderText = PathDisplay.abbreviate(url, home: home)
             check()
         }
@@ -74,12 +89,15 @@ struct OnboardStep1: View {
         let url = folderURL
         try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         store.setPrivateFolder(url)
-        onContinue()
+        store.nextStep()
     }
 }
 
-/// Eyes crowding round a dotted ~/Downloads folder (480x120).
+/// Eyes crowding round a dotted ~/Downloads folder (480x120; ScaledScene
+/// fits it to the popover).
 struct DownloadsScene: View {
+    static let size = CGSize(width: 480, height: 120)
+
     var body: some View {
         ZStack {
             TimedCanvas(fps: 1) { context, _, _ in
@@ -109,7 +127,7 @@ struct DownloadsScene: View {
             }
             EyeLayer(makeScene: { StaringEyesScene.onboarding() })
         }
-        .frame(width: 480, height: 120)
+        .frame(width: DownloadsScene.size.width, height: DownloadsScene.size.height)
         .background(RoundedRectangle(cornerRadius: 8).fill(Palette.panel))
         .accessibilityElement()
         .accessibilityLabel("Halftone eyeballs crowding around a Downloads folder, staring at it")

@@ -2,7 +2,8 @@ import InkerCore
 import InkerKit
 import SwiftUI
 
-// SwiftUI previews for every board, driven by the Rust PreviewBackend through
+// SwiftUI previews for every popover screen (boards, drop card, onboarding
+// steps, settings), driven by the Rust PreviewBackend through
 // CoreHandle.preview(scenario:). They need the xcframework built
 // (scripts/build-rust.sh) like the app does.
 //
@@ -12,10 +13,10 @@ import SwiftUI
 
 #if DEBUG
 @MainActor
-private func popover(_ scenario: PreviewScenario) -> some View {
+private func popover(_ scenario: PreviewScenario, _ screen: PopoverScreen = .board) -> some View {
     FontRegistry.registerBundledFonts()
     return PopoverRootView()
-        .environmentObject(CoreStore.preview(scenario))
+        .environmentObject(CoreStore.preview(scenario, screen: screen))
         .environmentObject(RenderClock(alwaysRunning: true))
 }
 
@@ -35,22 +36,28 @@ private func popover(_ scenario: PreviewScenario) -> some View {
     popover(.ready)
 }
 
-#Preview("Drop card") {
+#Preview("Popover · Drop card") {
     FontRegistry.registerBundledFonts()
-    let batch = DropCollector.collect(
-        (1...4).map { URL(fileURLWithPath: "/Users/preview/Downloads/file-\($0).pdf") },
-        home: URL(fileURLWithPath: "/Users/preview"),
-        privateFolder: URL(fileURLWithPath: "/Users/preview/Private"),
-        exists: { _ in true })
-    return DropDecisionCard(batch: batch) { _, _ in }
-        .background(Palette.background)
+    let store = CoreStore.preview(.ready)
+    store.presentDropCard(Snapshots.sampleBatch())
+    return PopoverRootView()
+        .environmentObject(store)
         .environmentObject(RenderClock(alwaysRunning: true))
 }
 
-#Preview("Onboarding") {
-    FontRegistry.registerBundledFonts()
-    return OnboardingView(onDone: {})
-        .environmentObject(CoreStore.preview(.empty))
-        .environmentObject(RenderClock(alwaysRunning: true))
+#Preview("Onboarding · Step 1") {
+    popover(.empty, .onboarding(step: 1))
+}
+
+#Preview("Onboarding · Step 2") {
+    popover(.empty, .onboarding(step: 2))
+}
+
+#Preview("Onboarding · Step 3") {
+    popover(.empty, .onboarding(step: 3))
+}
+
+#Preview("Settings") {
+    popover(.ready, .settings)
 }
 #endif

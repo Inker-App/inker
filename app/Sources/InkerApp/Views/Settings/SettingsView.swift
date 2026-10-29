@@ -1,10 +1,14 @@
+import AppKit
 import InkerCore
 import InkerKit
 import os
 import SwiftUI
 
-/// Settings: handle style, and "Also use a coding agent?" (moved here from
-/// onboarding step 1, which is for chat users). Placeholder layout for Ben.
+/// Settings, a screen of the popover: handle style, "Also use a coding
+/// agent?" (moved here from onboarding step 1, which is for chat users), and
+/// running setup again. Done goes back to the board; Quit INKER lives here
+/// now that the gear opens this screen instead of a menu. Placeholder layout
+/// for Ben: there is no settings board yet.
 struct SettingsView: View {
     @EnvironmentObject private var store: CoreStore
     @State private var asciiHandles = false
@@ -12,49 +16,92 @@ struct SettingsView: View {
     private let log = Logger(subsystem: "sh.inker.app", category: "settings")
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 10) {
-                LabelText("Handles")
-                InkCheckbox(isOn: $asciiHandles,
-                            label: Text("Copy handles as ") + Text("ink/").font(Typography.mono(12)).foregroundColor(Palette.paper)
-                                + Text(" instead of ") + Text("🐙/").font(Typography.mono(12)).foregroundColor(Palette.paper),
-                            accessibilityLabel: "Copy handles as ink slash instead of the octopus emoji")
-                    .font(Typography.small)
-                    .foregroundColor(Palette.checkLabel)
-            }
-            VStack(alignment: .leading, spacing: 8) {
-                LabelText(CodingAgentRows.sectionTitle)
-                VStack(spacing: 0) {
-                    Hairline()
-                    ForEach(CodingAgentRows.keepOut) { row in
-                        HStack {
-                            (Text(row.title) + Text(" · \(row.detail)").font(Typography.caption).foregroundColor(Palette.muted))
-                            Spacer()
-                            if let result = results[row.id] {
-                                Text(result).font(Typography.small).foregroundColor(Palette.muted)
-                            } else {
-                                Button("Keep out") { keepOut(row) }
-                                    .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 28, horizontalPadding: 12))
-                                    .accessibilityLabel(row.accessibilityLabel)
-                            }
-                        }
-                        .frame(height: 40)
-                        Hairline()
-                    }
+        VStack(spacing: 0) {
+            PopoverScroll {
+                VStack(alignment: .leading, spacing: 20) {
+                    handles
+                    codingAgents
+                    setup
                 }
-                Text(CodingAgentRows.footnote).font(Typography.small).foregroundColor(Palette.muted)
+                .padding(.horizontal, PopoverLayout.gutter)
+                .padding(.top, 14)
+                .padding(.bottom, 8)
+                .frame(width: PopoverLayout.width, alignment: .topLeading)
             }
-            Spacer(minLength: 0)
+            .frame(maxHeight: .infinity)
+            HStack {
+                Button("Quit INKER") { NSApp.terminate(nil) }
+                    .buttonStyle(.plain)
+                    .font(Typography.small)
+                    .foregroundColor(Palette.muted)
+                    .frame(height: 36)
+                    .keyboardShortcut("q")
+                Spacer()
+                Button("Done") { store.closeSettings() }
+                    .buttonStyle(InkButtonStyle(kind: .primary, height: 36, horizontalPadding: 18, fontSize: 13))
+                    .keyboardShortcut(.defaultAction)
+            }
+            .frame(height: 36)
+            .padding(.horizontal, PopoverLayout.gutter)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
         }
-        .padding(.top, 32)
-        .padding(.horizontal, 40)
-        .padding(.bottom, 28)
-        .frame(width: 560, height: 400, alignment: .top)
-        .background(Palette.background)
-        .foregroundColor(Palette.paper)
-        .font(Typography.body)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onAppear { asciiHandles = store.settings.handleStyle == .ascii }
         .onChange(of: asciiHandles) { _, on in store.setHandleStyle(on ? .ascii : .octopus) }
+    }
+
+    private var handles: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LabelText("Handles")
+            InkCheckbox(isOn: $asciiHandles,
+                        label: Text("Copy handles as ") + Text("ink/").font(Typography.mono(12)).foregroundColor(Palette.paper)
+                            + Text(" instead of ") + Text("🐙/").font(Typography.mono(12)).foregroundColor(Palette.paper),
+                        accessibilityLabel: "Copy handles as ink slash instead of the octopus emoji")
+                .font(Typography.small)
+                .foregroundColor(Palette.checkLabel)
+        }
+    }
+
+    /// Title over detail, as on onboarding step 2: one line does not fit 328 points.
+    private var codingAgents: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabelText(CodingAgentRows.sectionTitle)
+            VStack(spacing: 0) {
+                Hairline()
+                ForEach(CodingAgentRows.keepOut) { row in
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title)
+                            Text(row.detail).font(Typography.caption).foregroundColor(Palette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 8)
+                        if let result = results[row.id] {
+                            Text(result).font(Typography.small).foregroundColor(Palette.muted)
+                        } else {
+                            Button("Keep out") { keepOut(row) }
+                                .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 28, horizontalPadding: 12))
+                                .accessibilityLabel(row.accessibilityLabel)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 40)
+                    Hairline()
+                }
+            }
+            Text(CodingAgentRows.footnote).font(Typography.small).foregroundColor(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Back to onboarding step 1, inside the popover. Copy is a placeholder for Ben.
+    private var setup: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabelText("Setup")
+            Button("Run setup again") { store.runSetupAgain() }
+                .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 28, horizontalPadding: 12))
+        }
     }
 
     private func keepOut(_ row: CodingAgentRow) {

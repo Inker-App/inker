@@ -51,14 +51,50 @@ make run    # make app, then open build/INKER.app
 
 `swift build` and `swift run INKER` work too; the app runs as a menu bar item either way.
 Open `Package.swift` in Xcode for SwiftUI previews (`Sources/InkerApp/Previews.swift`, one per
-board) and Instruments.
+popover screen) and Instruments.
+
+### One popover, no windows
+
+Everything INKER shows is a screen of the 360x500 popover: the four boards, onboarding steps
+1 to 3, settings, and the move-or-copy card. `ScreenFlow` (InkerKit, covered by
+`ScreenFlowTests`) decides which; `CoreStore.flow` publishes it and `PopoverRootView` draws it
+between the header and the footer.
+
+- First launch (onboarding not complete, or `INKER_ONBOARDING=1`) starts at step 1, and
+  `AppDelegate` opens the popover by itself.
+- Back and the primary button are pinned to the bottom of each step; the scene, heading and
+  controls scroll above them if they must. The boards' 480-wide scenes are drawn at their
+  board size and scaled to the 328-point column (`ScaledScene`); the heading is 18 pt.
+- Done marks onboarding complete and shows the board. The gear opens settings (and closes
+  them again); settings has Done, "Run setup again" (back to step 1) and "Quit INKER".
+- A pending drop draws the card in front of the current screen. The screen stays underneath,
+  so an onboarding step keeps what was typed into it, and it comes back once the card is
+  answered.
+- The folder chooser in step 1 is the system `NSOpenPanel`; the popover is pinned
+  (`.applicationDefined`) while it is up so it is still there afterwards.
+
+### Render check: `--snapshots`
+
+```sh
+build/INKER.app/Contents/MacOS/INKER --snapshots build/snapshots
+```
+
+renders each screen with SwiftUI's `ImageRenderer` at 2x into PNGs (`popover-empty`,
+`-processing`, `-attention`, `-ready`, `onboarding-1` to `-3`, `settings`, `drop-card`) and
+exits 0, without starting `NSApplication` or opening a window. The stores run on the Rust
+`PreviewBackend` (as `INKER_PREVIEW` does) with the clock frozen at `RenderClock.stillTime`.
+`ImageRenderer` cannot draw AppKit-backed views, so under the `snapshotMode` environment
+value scroll views are drawn clipped at rest, the folder field is plain text and the checkbox
+is an empty box. **The Metal eyes and octopus are blank in snapshots**; check them in the app.
+The release workflow runs this after `make app` and uploads the PNGs as the
+`snapshots-<version>` artifact. Code: `Sources/InkerApp/App/Snapshots.swift`.
 
 Useful environment variables (Xcode scheme, or `INKER_PREVIEW=attention swift run INKER`):
 
 | Variable | Effect |
 | --- | --- |
 | `INKER_PREVIEW=empty\|processing\|attention\|ready` | Freeze the popover in one board (Rust `PreviewBackend`). |
-| `INKER_ONBOARDING=1` | Show onboarding even after it was completed. |
+| `INKER_ONBOARDING=1` | Start at onboarding step 1, and open the popover, even after onboarding was completed. |
 
 To reset first-launch state: `defaults delete sh.inker.app`.
 
@@ -76,6 +112,8 @@ cover the pure logic in the `InkerKit` target, which has no AppKit dependency:
 - the octopus rig (`build(T)` and the rotation, golden values);
 - handles, drop collection and the drop dialog copy, folder-picker warnings, agent rows,
   preferences, relative time, copy feedback and the queue view-model;
+- the popover's screen flow (first launch, steps, Done, settings, run setup again, the drop
+  card in front of any screen);
 - the providers' pure logic (`ProviderText`, `VaultKey`).
 
 The tests were written before the code they cover, but they have **not been compiled or run
@@ -128,8 +166,8 @@ a Rust fake in place of Swift).
 - `CoreHandle.preview(scenario:)` still returns the Rust `PreviewBackend` for SwiftUI previews
   and `INKER_PREVIEW`.
 - `setup_agent` returns fixed plans and refuses non-dry runs; `doctor` returns fixed text.
-- The settings gear opens a small placeholder menu (handle style, set up agents, quit).
-  There is no settings design yet.
+- The settings gear opens the settings screen in the popover (handle style, coding agents,
+  run setup again, quit). There is no settings design yet; the layout is a placeholder.
 
 On Linux and in Rust tests, `CoreHandle::open_with_rust_providers(private, data)` opens the same
 core with the file key store (`<data dir>/vault.key`) and the pure-Rust extractor. It is

@@ -93,6 +93,22 @@ jobs:
           codesign -dvv build/INKER.app 2>&1 | grep -E "Identifier|Signature|Sealed"
           spctl --assess --type execute --verbose=4 build/INKER.app || echo "(expected: ad-hoc signature is not notarized)"
 
+      # Render check: every popover screen as a PNG (app/BUILD.md, "Render
+      # check"). Metal eyes and the octopus come out blank. A failure here
+      # does not block the release; look at the log and the artifact.
+      - name: Snapshots
+        continue-on-error: true
+        working-directory: app
+        run: |
+          build/INKER.app/Contents/MacOS/INKER --snapshots build/snapshots
+          ls -la build/snapshots
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-${{ steps.v.outputs.version }}
+          path: app/build/snapshots
+          if-no-files-found: warn
+
       - name: Claude Desktop bundle (.mcpb)
         run: |
           ./dist/out/inker bundle --out dist/out/inker.mcpb \

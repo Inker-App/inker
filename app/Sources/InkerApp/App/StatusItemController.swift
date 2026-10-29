@@ -4,7 +4,8 @@ import SwiftUI
 
 /// The menu bar item: the mark, the needs-you count, the drop target, and
 /// the popover. AppKit on purpose (stack-decision 3.7: MenuBarExtra cannot
-/// take drops).
+/// take drops). The popover is the whole app: boards, onboarding and
+/// settings are screens inside it (CoreStore.flow).
 @MainActor
 final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler {
     /// Which drop path to use. false: a StatusItemDropView over the button.
@@ -16,7 +17,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
     private let popover = NSPopover()
     private let store: CoreStore
     private let clock: RenderClock
-    private let onSettings: () -> Void
     private var dropView: StatusItemDropView?
     private var windowDropTarget: ButtonWindowDropTarget?
     private var cancellables = Set<AnyCancellable>()
@@ -25,11 +25,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
     /// before our own click handler runs; without this the click reopens it.
     private var lastClosed = Date.distantPast
 
-    init(store: CoreStore, clock: RenderClock, onSettings: @escaping () -> Void) {
+    init(store: CoreStore, clock: RenderClock) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.store = store
         self.clock = clock
-        self.onSettings = onSettings
         super.init()
         configureButton()
         configurePopover()
@@ -73,7 +72,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
         popover.animates = true
         popover.appearance = NSAppearance(named: .darkAqua)
         popover.delegate = self
-        let root = PopoverRootView(onSettings: { [weak self] in self?.onSettings() })
+        let root = PopoverRootView()
             .environmentObject(store)
             .environmentObject(clock)
         popover.contentViewController = NSHostingController(rootView: root)
@@ -102,6 +101,13 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
         guard let button = statusItem.button, !popover.isShown else { return }
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         NSApp.activate()
+    }
+
+    /// While pinned the popover ignores outside clicks, so the folder
+    /// chooser's panel does not close it.
+    func setPinned(_ pinned: Bool) {
+        revertBehavior?.cancel()
+        popover.behavior = pinned ? .applicationDefined : .transient
     }
 
     // MARK: NSPopoverDelegate

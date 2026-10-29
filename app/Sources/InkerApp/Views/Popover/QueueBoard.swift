@@ -8,7 +8,7 @@ struct QueueBoard: View {
     var body: some View {
         VStack(spacing: 0) {
             DropMoreStrip(highlighted: store.isDropTargeted)
-            ScrollView(.vertical, showsIndicators: false) {
+            PopoverScroll {
                 VStack(spacing: 0) {
                     ForEach(store.model.groups) { group in
                         GroupSection(group: group)
