@@ -51,7 +51,11 @@ struct AttentionCard: View {
                 Spacer(minLength: 8)
                 Text(card.location).font(Typography.small).foregroundColor(Palette.muted)
             }
-            PeekView(contextBefore: card.contextBefore, valueLength: card.valueLength)
+            if let snippet = store.snippets[card.questionID] {
+                PageSnippetView(snippet: snippet)
+            } else {
+                PeekView(contextBefore: card.contextBefore, valueLength: card.valueLength)
+            }
             Text(card.prompt).font(Typography.body)
             HStack(spacing: 8) {
                 Button("Ink it") { store.answer(questionID: card.questionID, .inkIt) }
@@ -66,5 +70,25 @@ struct AttentionCard: View {
         }
         .padding(12)
         .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Palette.cardBorder, lineWidth: 1))
+    }
+}
+
+/// The page around the held value, the value outlined in red (Ben, 2026-10-29:
+/// a tight crop with the span marked; the octopus only when there is no crop).
+struct PageSnippetView: View {
+    let snippet: PageSnippet.Rendered
+
+    var body: some View {
+        Image(decorative: snippet.image, scale: PageSnippet.scale)
+            .frame(width: PageCrop.box.width, height: PageCrop.box.height)
+            .overlay(alignment: .topLeading) {
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(Palette.red, lineWidth: 1.5)
+                    .frame(width: snippet.outline.width + 8, height: snippet.outline.height + 8)
+                    .offset(x: snippet.outline.minX - 4, y: snippet.outline.minY - 4)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .accessibilityElement()
+            .accessibilityLabel("The page around the value, with the value outlined")
     }
 }

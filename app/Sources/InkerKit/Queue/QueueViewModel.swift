@@ -59,7 +59,8 @@ public enum QueueViewModel {
                 attention = AttentionModel(docID: d.id, questionID: q.id, fileName: d.originalName, handle: pending,
                                            filePath: d.path, location: q.location,
                                            prompt: q.prompt, contextBefore: q.contextBefore, valueLength: Int(q.valueLength),
-                                           footnote: attentionFootnote)
+                                           footnote: attentionFootnote, pageIndex: Int(q.pageIndex),
+                                           span: q.span.map { Int($0.start)..<Int($0.end) })
                 continue
             }
             rows.append(row(d, mode: mode, style: style))

@@ -16,7 +16,7 @@ use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
 use crate::types::{
     Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary, Loader,
-    MatchField, QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status,
+    MatchField, QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TextSpan,
 };
 
 /// The four popover boards, plus the ready board at scale.
@@ -712,8 +712,13 @@ fn sample_question(doc_id: &str) -> ReviewQuestion {
         id: format!("q-{doc_id}"),
         prompt: "Looks like an account number, but the scan is rough. Ink it?".into(),
         location: "page 3 of 11".into(),
+        page_index: 2,
         context_before: "…wire to".into(),
         value_length: 9,
+        span: Some(TextSpan {
+            start: 120,
+            end: 129,
+        }),
     }
 }
 

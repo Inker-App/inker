@@ -761,8 +761,10 @@ impl Core {
                 .map(|t| peek::context(t, d.span))
                 .unwrap_or_default();
             let sealed = self.vault.seal(&serde_json::to_vec(&context)?)?;
+            // A form field's value has no place on the page to crop to.
+            let span = d.field.is_none().then_some(d.span);
             self.index
-                .set_question_peek(q, value_length, page_count, &sealed)?;
+                .set_question_peek(q, value_length, page_count, span, &sealed)?;
         }
         self.index.set_state(id, DocState::NeedsAttention, None)?;
         tracing::info!(doc = %id.0, questions = review.len(), "needs attention");
@@ -1189,6 +1191,7 @@ mod tests {
         assert_eq!(q.page, 2);
         assert_eq!(q.page_count, 2);
         assert_eq!(q.value_length, 11);
+        assert_eq!(q.span.map(|s| s.len()), Some(11), "the crop needs the span");
         assert!(
             q.context_before.ends_with("wire to "),
             "{:?}",

@@ -337,6 +337,22 @@ problem that `TypeYear` handles all look alike at 30 files. Built test-first, co
   The release workflow (macOS runner) is what compiles the Swift from here; 0.0.6 was its first
   run over this work and found two `#expect` forms the macro rejects.
 
+**The attention card's page crop (2026-10-29 evening, after 0.0.6).** Ben: the card's preview
+should be a picture of the document, cropped to the part in question, not the octopus and the
+elided snippet. His calls: a tight crop with the span outlined in red; the octopus and snippet
+stay only as the fallback when the span cannot be placed; the "…23 ... and ending..." line goes.
+How it works without a real value leaving the core: the core already knows the detection's
+byte span in the page's text, so a question now records it (schema 4, `review_questions.span_start`
+and `span_end`, `None` for a form field's value) and the FFI question carries `page_index` and
+`span`. On macOS the page text the core indexed came from PDFKit or Vision through the shell's
+own providers, so the shell can re-read the user's file and map the span back: a PDF with a text
+layer through `PDFPage.selection(for:)`, a scan through the same Vision recognizer with each
+line's box and the span placed along its line by proportion. `PageCrop` (InkerKit, tested) picks
+the zoom (the value about 16 pt tall, clamped 1.25x to 3x), centres the 302 by 84 box on the
+value and keeps it inside the page; `PageSnippet` (AppKit) renders it at 2x on a GCD thread,
+once per question. Rotated PDF pages keep the octopus until checked by eye (VERIFY in the code).
+Previews and snapshots have no file to read, so the attention board still shows the octopus.
+
 ## 9. Target clients (reframed 2026-10-28)
 
 INKER is for the chat window. Research on 2026-10-28 (search summaries only; vendor pages were unreachable from the dev box that day, so re-read primary sources before relying on a detail):

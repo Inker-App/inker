@@ -107,6 +107,40 @@ struct VisionOcrSource {
     }
 
     static func recognizeText(_ image: CGImage) throws -> [String] {
+        ProviderText.readingOrder(try textBoxes(image))
+    }
+
+    /// The lines `recognize` returns, each with its box, for the attention
+    /// card's page crop. Same recognizer per OS as `recognize`, so the line
+    /// texts match what the core indexed.
+    static func recognizeLines(_ image: CGImage) throws -> [PageSnippet.Line] {
+        if #available(macOS 26, *) {
+            return try recognizeDocumentLines(image)
+        }
+        return ProviderText.readingOrderRows(try textBoxes(image)).map { row in
+            let union = row.dropFirst().reduce(CGRect(x: row[0].minX, y: row[0].minY, width: row[0].maxX - row[0].minX,
+                                                      height: row[0].maxY - row[0].minY)) { acc, b in
+                acc.union(CGRect(x: b.minX, y: b.minY, width: b.maxX - b.minX, height: b.maxY - b.minY))
+            }
+            return PageSnippet.Line(text: ProviderText.lineText(row), box: union)
+        }
+    }
+
+    @available(macOS 26, *)
+    static func recognizeDocumentLines(_ image: CGImage) throws -> [PageSnippet.Line] {
+        try blocking {
+            let request = RecognizeDocumentsRequest()
+            let observations = try await request.perform(on: image)
+            guard let document = observations.first?.document else { return [] }
+            // VERIFY: a text line's region is `boundingRegion` (NormalizedRegion);
+            // its `boundingBox` is a NormalizedRect with `cgRect`, origin bottom left.
+            return document.text.lines.map {
+                PageSnippet.Line(text: $0.transcript, box: $0.boundingRegion.boundingBox.cgRect)
+            }
+        }
+    }
+
+    static func textBoxes(_ image: CGImage) throws -> [ProviderText.TextBox] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         // Language correction "fixes" account numbers and IDs into words.
@@ -117,13 +151,12 @@ struct VisionOcrSource {
         } catch {
             throw ProviderError.Failed(reason: "Vision text recognition failed: \((error as NSError).code)")
         }
-        let boxes: [ProviderText.TextBox] = (request.results ?? []).compactMap { observation in
+        return (request.results ?? []).compactMap { observation in
             guard let text = observation.topCandidates(1).first?.string else { return nil }
             let b = observation.boundingBox
             return ProviderText.TextBox(text: text, minX: Double(b.minX), minY: Double(b.minY),
                                         maxX: Double(b.maxX), maxY: Double(b.maxY))
         }
-        return ProviderText.readingOrder(boxes)
     }
 
     /// Run async work to completion from a synchronous caller. Only safe on a

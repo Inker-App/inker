@@ -35,7 +35,7 @@ pub use providers::{ExtractedFfi, ExtractedField, ExtractedPage, HostProviders, 
 pub use types::{
     Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary,
     HandleStyle, IngestMode, Loader, MatchField, QueueItem, ReadEvent, ReviewAnswer,
-    ReviewQuestion, Status, TagCount, YearGroup,
+    ReviewQuestion, Status, TagCount, TextSpan, YearGroup,
 };
 
 uniffi::setup_scaffolding!();

@@ -38,7 +38,8 @@ struct QueueViewModelTests {
 
     private var question: ReviewQuestion {
         ReviewQuestion(id: "q-4", prompt: "Looks like an account number, but the scan is rough. Ink it?",
-                       location: "page 3 of 11", contextBefore: "…wire to", valueLength: 9)
+                       location: "page 3 of 11", pageIndex: 2, contextBefore: "…wire to", valueLength: 9,
+                       span: TextSpan(start: 120, end: 129))
     }
 
     // MARK: modes
@@ -94,6 +95,7 @@ struct QueueViewModelTests {
         #expect(card.prompt == "Looks like an account number, but the scan is rough. Ink it?")
         #expect(card.questionID == "q-4")
         #expect(card.valueLength == 9)
+        #expect(card.pageIndex == 2 && card.span == 120..<129, "the page crop knows where to look")
         #expect(card.footnote == "Handle is held until you answer. Agents asking for it are told \"pending\".")
         #expect(g.rows.map(\.kind) == [.ready, .ready, .ready], "the held file is the card, not a row")
         #expect(g.rows.map(\.detail) == ["ready", "ready", "ready"], "compact rows on the attention board")

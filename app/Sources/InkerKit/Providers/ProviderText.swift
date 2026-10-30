@@ -95,6 +95,12 @@ public enum ProviderText {
     /// centres are within half a line of each other joined left to right with
     /// a space, so a form's label and its value land on one line.
     public static func readingOrder(_ boxes: [TextBox]) -> [String] {
+        readingOrderRows(boxes).map(lineText)
+    }
+
+    /// The rows behind `readingOrder`, each left to right, for callers that
+    /// need the boxes as well as the text (the attention card's page crop).
+    public static func readingOrderRows(_ boxes: [TextBox]) -> [[TextBox]] {
         var rows: [[TextBox]] = []
         for b in boxes.sorted(by: { $0.midY > $1.midY }) {
             if let anchor = rows.last?.first,
@@ -104,9 +110,12 @@ public enum ProviderText {
                 rows.append([b])
             }
         }
-        return rows.map { row in
-            row.sorted(by: { $0.minX < $1.minX }).map(\.text).joined(separator: " ")
-        }
+        return rows.map { $0.sorted(by: { $0.minX < $1.minX }) }
+    }
+
+    /// One row's text, exactly as `readingOrder` returns it.
+    public static func lineText(_ row: [TextBox]) -> String {
+        row.map(\.text).joined(separator: " ")
     }
 
     /// Pixel size for rendering a PDF page of the given size in points
@@ -118,7 +127,7 @@ public enum ProviderText {
                 max(1, Int((heightPoints * scale).rounded())))
     }
 
-    private static func trimTrailing(_ s: String) -> String {
+    public static func trimTrailing(_ s: String) -> String {
         var s = Substring(s)
         while let last = s.last, last.isWhitespace {
             s = s.dropLast()

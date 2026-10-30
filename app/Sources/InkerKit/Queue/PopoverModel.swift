@@ -71,6 +71,10 @@ public struct AttentionModel: Equatable, Sendable {
     public var contextBefore: String
     public var valueLength: Int
     public var footnote: String
+    /// The page (from 0) and the byte span in its text, for the page crop.
+    /// The crop needs the file; without a span the card keeps the octopus.
+    public var pageIndex: Int
+    public var span: Range<Int>?
 }
 
 public enum FooterLeft: Equatable, Sendable {

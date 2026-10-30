@@ -174,6 +174,9 @@ fn a_held_note_shows_its_question_without_the_value_and_answering_makes_it_ready
     // value.
     assert_eq!(question.context_before, "Wire confirmation");
     assert_eq!(question.value_length, 11);
+    // The page crop: a 0-based page and the byte span in that page's text.
+    assert_eq!(question.page_index, 0);
+    assert_eq!(question.span.clone().map(|s| s.end - s.start), Some(11));
     let n = counter(&h);
 
     h.answer(question.id.clone(), ReviewAnswer::InkIt).unwrap();

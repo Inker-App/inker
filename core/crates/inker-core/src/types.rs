@@ -677,6 +677,11 @@ pub struct ReviewQuestion {
     /// Pages in the document, for "page 3 of 11". 0 when unknown.
     #[serde(default)]
     pub page_count: u32,
+    /// Where the held value sits in its page's text (a byte range), so the
+    /// card can show a crop of the page around it. `None` when the value is
+    /// a form field's, which has no place on the page, or was never recorded.
+    #[serde(default)]
+    pub span: Option<Span>,
 }
 
 /// One audit-log row: an agent read a handle. Feeds the "Claude Code read
@@ -896,6 +901,7 @@ mod tests {
         assert_eq!(q.value_length, 0);
         assert_eq!(q.page_count, 0);
         assert!(q.context_before.is_empty() && q.context_after.is_empty());
+        assert_eq!(q.span, None);
     }
 
     #[test]

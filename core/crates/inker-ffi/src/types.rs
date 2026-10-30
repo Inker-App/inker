@@ -134,11 +134,25 @@ pub struct ReviewQuestion {
     pub prompt: String,
     /// "page 3 of 11"
     pub location: String,
+    /// The page the value is on, counted from 0, for the card's page crop.
+    pub page_index: u32,
     /// Words just before the value, already safe ("…wire to"). May be empty.
     pub context_before: String,
     /// How many characters the dotted outline stands in for. The value itself
     /// never leaves the core.
     pub value_length: u32,
+    /// Where the value sits in that page's text, so the shell can re-read the
+    /// file and show the page around it. `None` for a form field's value.
+    pub span: Option<TextSpan>,
+}
+
+/// A byte range into a page's text, as the core indexed it. On macOS that
+/// text came from PDFKit or Vision through the shell's own providers, so the
+/// shell can map it back onto the page.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct TextSpan {
+    pub start: u32,
+    pub end: u32,
 }
 
 /// One document row.

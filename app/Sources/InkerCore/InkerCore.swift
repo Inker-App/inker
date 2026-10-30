@@ -2180,6 +2180,10 @@ public struct ReviewQuestion: Equatable, Hashable {
      */
     public let location: String
     /**
+     * The page the value is on, counted from 0, for the card's page crop.
+     */
+    public let pageIndex: UInt32
+    /**
      * Words just before the value, already safe ("…wire to"). May be empty.
      */
     public let contextBefore: String
@@ -2188,6 +2192,11 @@ public struct ReviewQuestion: Equatable, Hashable {
      * never leaves the core.
      */
     public let valueLength: UInt32
+    /**
+     * Where the value sits in that page's text, so the shell can re-read the
+     * file and show the page around it. `None` for a form field's value.
+     */
+    public let span: TextSpan?
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -2202,17 +2211,26 @@ public struct ReviewQuestion: Equatable, Hashable {
          * "page 3 of 11"
          */location: String, 
         /**
+         * The page the value is on, counted from 0, for the card's page crop.
+         */pageIndex: UInt32, 
+        /**
          * Words just before the value, already safe ("…wire to"). May be empty.
          */contextBefore: String, 
         /**
          * How many characters the dotted outline stands in for. The value itself
          * never leaves the core.
-         */valueLength: UInt32) {
+         */valueLength: UInt32, 
+        /**
+         * Where the value sits in that page's text, so the shell can re-read the
+         * file and show the page around it. `None` for a form field's value.
+         */span: TextSpan?) {
         self.id = id
         self.prompt = prompt
         self.location = location
+        self.pageIndex = pageIndex
         self.contextBefore = contextBefore
         self.valueLength = valueLength
+        self.span = span
     }
 
     
@@ -2234,8 +2252,10 @@ public struct FfiConverterTypeReviewQuestion: FfiConverterRustBuffer {
                 id: FfiConverterString.read(from: &buf), 
                 prompt: FfiConverterString.read(from: &buf), 
                 location: FfiConverterString.read(from: &buf), 
+                pageIndex: FfiConverterUInt32.read(from: &buf), 
                 contextBefore: FfiConverterString.read(from: &buf), 
-                valueLength: FfiConverterUInt32.read(from: &buf)
+                valueLength: FfiConverterUInt32.read(from: &buf), 
+                span: FfiConverterOptionTypeTextSpan.read(from: &buf)
         )
     }
 
@@ -2243,8 +2263,10 @@ public struct FfiConverterTypeReviewQuestion: FfiConverterRustBuffer {
         FfiConverterString.write(value.id, into: &buf)
         FfiConverterString.write(value.prompt, into: &buf)
         FfiConverterString.write(value.location, into: &buf)
+        FfiConverterUInt32.write(value.pageIndex, into: &buf)
         FfiConverterString.write(value.contextBefore, into: &buf)
         FfiConverterUInt32.write(value.valueLength, into: &buf)
+        FfiConverterOptionTypeTextSpan.write(value.span, into: &buf)
     }
 }
 
@@ -2387,6 +2409,65 @@ public func FfiConverterTypeTagCount_lift(_ buf: RustBuffer) throws -> TagCount 
 #endif
 public func FfiConverterTypeTagCount_lower(_ value: TagCount) -> RustBuffer {
     return FfiConverterTypeTagCount.lower(value)
+}
+
+
+/**
+ * A byte range into a page's text, as the core indexed it. On macOS that
+ * text came from PDFKit or Vision through the shell's own providers, so the
+ * shell can map it back onto the page.
+ */
+public struct TextSpan: Equatable, Hashable {
+    public let start: UInt32
+    public let end: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(start: UInt32, end: UInt32) {
+        self.start = start
+        self.end = end
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TextSpan: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTextSpan: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TextSpan {
+        return
+            try TextSpan(
+                start: FfiConverterUInt32.read(from: &buf), 
+                end: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TextSpan, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.start, into: &buf)
+        FfiConverterUInt32.write(value.end, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTextSpan_lift(_ buf: RustBuffer) throws -> TextSpan {
+    return try FfiConverterTypeTextSpan.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTextSpan_lower(_ value: TextSpan) -> RustBuffer {
+    return FfiConverterTypeTextSpan.lower(value)
 }
 
 
@@ -3908,6 +3989,30 @@ fileprivate struct FfiConverterOptionTypeReviewQuestion: FfiConverterRustBuffer 
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeReviewQuestion.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeTextSpan: FfiConverterRustBuffer {
+    typealias SwiftType = TextSpan?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeTextSpan.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeTextSpan.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }

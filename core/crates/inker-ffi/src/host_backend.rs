@@ -36,7 +36,7 @@ use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
 use crate::types::{
     Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary, Loader,
-    QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TagCount, YearGroup,
+    QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TagCount, TextSpan, YearGroup,
 };
 
 /// How many agent reads the snapshot keeps for the footer.
@@ -748,9 +748,14 @@ fn review_question(q: &inker_core::ReviewQuestion) -> ReviewQuestion {
             .clone()
             .unwrap_or_else(|| DEFAULT_PROMPT.to_string()),
         location,
+        page_index: q.page.saturating_sub(1),
         // The peek draws its own gap before the outline.
         context_before: q.context_before.trim_end().to_string(),
         value_length: q.value_length,
+        span: q.span.map(|s| TextSpan {
+            start: u32::try_from(s.start).unwrap_or(u32::MAX),
+            end: u32::try_from(s.end).unwrap_or(u32::MAX),
+        }),
     }
 }
 

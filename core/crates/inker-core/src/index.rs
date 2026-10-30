@@ -23,11 +23,11 @@ use uuid::Uuid;
 use crate::{
     AgentRead, Codename, Detection, DocKind, DocState, DocumentId, DocumentRecord, Error, FolderId,
     FolderRecord, FolderSummary, FormField, Handle, KindTreatment, QuestionId, ResolvedPage,
-    Result, ReviewAnswer, ReviewQuestion, Token, TokenKind, TokenRole,
+    Result, ReviewAnswer, ReviewQuestion, Span, Token, TokenKind, TokenRole,
 };
 
 /// Current schema version.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 const MIGRATIONS: &[&str] = &[
     // 1
@@ -112,13 +112,19 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE documents ADD COLUMN tag TEXT;
     ALTER TABLE documents ADD COLUMN payer_token TEXT;
     "#,
+    // 4: the attention card's page crop. Where the held value sits in its
+    // page's text; a byte range, never the value.
+    r#"
+    ALTER TABLE review_questions ADD COLUMN span_start INTEGER;
+    ALTER TABLE review_questions ADD COLUMN span_end INTEGER;
+    "#,
 ];
 
 const DOC_COLS: &str = "id, codename, path, original_name, kind, year, state, inked, folder_id, ingest, \
                         created_at, updated_at, status_note, tag, payer_token";
 const FOLDER_COLS: &str = "id, codename, path, created_at";
-const Q_COLS: &str =
-    "id, doc_id, page, kind, prompt, answer, created_at, answered_at, value_length, page_count";
+const Q_COLS: &str = "id, doc_id, page, kind, prompt, answer, created_at, answered_at, value_length, \
+                      page_count, span_start, span_end";
 
 /// Treated form fields, role map and treatment counts for one document.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -182,6 +188,11 @@ fn codename(s: &str) -> Result<Codename> {
 /// Lift a core error into a rusqlite row-mapping error.
 fn conv(idx: usize, e: Error) -> rusqlite::Error {
     rusqlite::Error::FromSqlConversionFailure(idx, Type::Text, Box::new(e))
+}
+
+/// An integer column that does not fit the field it feeds.
+fn int_conv(idx: usize, e: std::num::TryFromIntError) -> rusqlite::Error {
+    rusqlite::Error::FromSqlConversionFailure(idx, Type::Integer, Box::new(e))
 }
 
 fn doc_from_row(row: &Row<'_>) -> rusqlite::Result<DocumentRecord> {
@@ -277,6 +288,16 @@ fn question_from_row(row: &Row<'_>) -> rusqlite::Result<ReviewQuestion> {
         context_before: String::new(),
         context_after: String::new(),
         page_count: row.get(9)?,
+        span: match (
+            row.get::<_, Option<i64>>(10)?,
+            row.get::<_, Option<i64>>(11)?,
+        ) {
+            (Some(start), Some(end)) => Some(Span {
+                start: usize::try_from(start).map_err(|e| int_conv(10, e))?,
+                end: usize::try_from(end).map_err(|e| int_conv(11, e))?,
+            }),
+            _ => None,
+        },
     })
 }
 
@@ -718,18 +739,23 @@ impl Index {
     }
 
     /// Record what the attention card shows around a question's held value:
-    /// its length, the document's page count, and the context, which the
-    /// caller has sealed.
+    /// its length, the document's page count, where it sits in the page's
+    /// text (`None` for a form field), and the context, which the caller
+    /// has sealed.
     pub fn set_question_peek(
         &self,
         id: QuestionId,
         value_length: u32,
         page_count: u32,
+        span: Option<Span>,
         sealed_context: &[u8],
     ) -> Result<()> {
+        let start = span.map(|s| i64::try_from(s.start).unwrap_or(i64::MAX));
+        let end = span.map(|s| i64::try_from(s.end).unwrap_or(i64::MAX));
         self.conn().execute(
-            "UPDATE review_questions SET value_length=?2, page_count=?3, context=?4 WHERE id=?1",
-            params![id.0, value_length, page_count, sealed_context],
+            "UPDATE review_questions SET value_length=?2, page_count=?3, span_start=?4, span_end=?5, \
+             context=?6 WHERE id=?1",
+            params![id.0, value_length, page_count, start, end, sealed_context],
         )?;
         Ok(())
     }
@@ -969,7 +995,7 @@ fn check_transition(from: DocState, to: DocState) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{DetectionSource, IngestMode, Span, Token, TokenKind, Treatment};
+    use crate::{DetectionSource, IngestMode, Token, TokenKind, Treatment};
     use chrono::Utc;
 
     fn doc(code: &str, folder: Option<FolderId>) -> DocumentRecord {
@@ -1044,7 +1070,7 @@ mod tests {
             .add_question(r.id, 0, 1, &TokenKind::Account, None)
             .unwrap();
         assert_eq!(ix.question(q).unwrap().unwrap().value_length, 0);
-        ix.set_question_peek(q, 9, 1, b"x").unwrap();
+        ix.set_question_peek(q, 9, 1, None, b"x").unwrap();
         assert_eq!(ix.question(q).unwrap().unwrap().value_length, 9);
     }
 
@@ -1239,9 +1265,17 @@ mod tests {
             .unwrap();
         assert_eq!(ix.questions(Some(r.id), false).unwrap().len(), 2);
         assert_eq!(ix.questions(None, false).unwrap().len(), 2);
-        ix.set_question_peek(q1, 11, 2, b"sealed").unwrap();
+        ix.set_question_peek(q1, 11, 2, Some(Span { start: 40, end: 51 }), b"sealed")
+            .unwrap();
         let q = ix.question(q1).unwrap().unwrap();
         assert_eq!((q.value_length, q.page_count), (11, 2));
+        // Where the value sits in its page's text, for the card's page crop.
+        assert_eq!(q.span, Some(Span { start: 40, end: 51 }));
+        assert_eq!(
+            ix.question(q2).unwrap().unwrap().span,
+            None,
+            "never recorded, or a form-field value with no place on the page"
+        );
         // The index only ever holds the context sealed.
         assert!(q.context_before.is_empty() && q.context_after.is_empty());
         assert_eq!(

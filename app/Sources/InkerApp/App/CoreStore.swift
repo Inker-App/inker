@@ -40,6 +40,9 @@ final class CoreStore: ObservableObject {
     @Published private(set) var pulse: (id: String, startedAt: Date)?
     /// Set when the popover opened with a held handle on the pasteboard.
     @Published private(set) var clipboardHandle: String?
+    /// The attention cards' page crops by question id, once rendered.
+    @Published private(set) var snippets: [String: PageSnippet.Rendered] = [:]
+    private var snippetAttempts: Set<String> = []
     /// The row whose menu panel is up.
     @Published private(set) var openMenuID: String?
     /// "Forget this file" clicked once; the panel asks "Are you sure?".
@@ -131,6 +134,34 @@ final class CoreStore: ObservableObject {
         model = QueueViewModel.build(queue: handle.queue(), status: handle.status(), reads: handle.recentReads(n: 1),
                                      lastDrop: lastDrop, style: settings.handleStyle, now: Date())
         rebuildBoard()
+        requestSnippets()
+    }
+
+    /// One render per attention card, off the main thread (Vision blocks
+    /// its thread, so a GCD thread rather than a Task). A card whose crop
+    /// cannot be made keeps the octopus; answered cards drop their crop.
+    private func requestSnippets() {
+        let cards = model.groups.compactMap(\.attention)
+        let live = Set(cards.map(\.questionID))
+        snippets = snippets.filter { live.contains($0.key) }
+        snippetAttempts.formIntersection(live)
+        for card in cards where !snippetAttempts.contains(card.questionID) {
+            guard let span = card.span else { continue }
+            snippetAttempts.insert(card.questionID)
+            let id = card.questionID
+            let path = card.filePath
+            let page = card.pageIndex
+            if worksSynchronously {
+                if let rendered = PageSnippet.render(path: path, pageIndex: page, span: span) { snippets[id] = rendered }
+                continue
+            }
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let rendered = PageSnippet.render(path: path, pageIndex: page, span: span) else { return }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { self?.snippets[id] = rendered }
+                }
+            }
+        }
     }
 
     // MARK: The ready board
