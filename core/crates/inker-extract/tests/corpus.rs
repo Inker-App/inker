@@ -285,7 +285,7 @@ fn fixture_ocr_every_corpus_sidecar_parses() {
             n += 1;
         }
     }
-    assert_eq!(n, 13);
+    assert_eq!(n, 14);
 }
 
 #[test]

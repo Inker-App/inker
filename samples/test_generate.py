@@ -38,6 +38,7 @@ STEMS = [
     "closing-statement-granite-2025",
     "receipt-cornerstone-2025-03-09",
     "1040-example-2023",
+    "8879-example-2023",
 ]
 BINARIES = [
     "w2-acme-2025.pdf",
@@ -45,6 +46,7 @@ BINARIES = [
     "w2-bluefin-2025-fillable.pdf",
     "w2-acme-2025-scan.pdf",
     "receipt-cornerstone-2025-03-09-photo.png",
+    "8879-example-2023-glyphs.pdf",
 ]
 SIDECARS_FOR_BINARIES = ["w2-acme-2025-scan.ocr.json", "receipt-cornerstone-2025-03-09-photo.ocr.json"]
 # Several pages: a form feed between them in the .txt, one entry per page in
@@ -226,6 +228,30 @@ class Corpus(unittest.TestCase):
         pdf = (self.out / "w9-bluefin-2025.pdf").read_bytes()
         self.assertIn(f"/Count {n}".encode(), pdf)
         self.assertIn(b"(Request for Taxpayer) Tj", pdf)
+    def test_8879_carries_both_signers_the_firm_and_every_pin(self):
+        f = self.read("8879-example-2023.txt")
+        for label in [
+            "IRS e-file Signature Authorization",
+            "Taxpayer's name",
+            "Spouse's social security number",
+            "Taxpayer's PIN: check one box only",
+            "Spouse's PIN: check one box only",
+            "ERO firm name",
+            "ERO's EFIN/PIN",
+            "Form 8879 (2023)",
+        ]:
+            self.assertIn(label, f)
+        for v in (gen.JORDAN["full"], gen.JORDAN["ssn"], gen.RILEY["full"], gen.RILEY["ssn"],
+                  gen.PREPARER["firm"], *gen.FORM_8879.values()):
+            self.assertIn(v, f)
+
+    def test_8879_pins_are_made_up(self):
+        f = gen.FORM_8879
+        for k in ("taxpayer_pin", "spouse_pin"):
+            self.assertRegex(f[k], r"^\d{5}$")
+            self.assertNotEqual(f[k], "00000")
+        # An EFIN of all zeros is never issued.
+        self.assertRegex(f["ero_efin_pin"], r"^000000\d{5}$")
 
     def test_same_ssn_on_w2_and_k1(self):
         ssn = gen.JORDAN["ssn"]
@@ -311,6 +337,17 @@ class PdfStructure(unittest.TestCase):
         self.assertIn(b"<FEFF", data)
         # values are not in the text layer
         self.assertNotIn(b"(96,400.00) Tj", data)
+
+    def test_glyph_pdf_shows_every_character_on_its_own(self):
+        # Tax software often places each glyph by itself; text extractors
+        # then return letter-spaced text ("9 0 0 - 1 2 - ...").
+        data = (self.out / "8879-example-2023-glyphs.pdf").read_bytes()
+        shows = re.findall(rb"\((\\.|[^\\)])\) Tj", data)
+        self.assertTrue(shows)
+        self.assertNotIn(b"(Form 8879", data)
+        text = gen.f8879_text()
+        self.assertEqual(len(shows), sum(1 for c in text if not c.isspace()))
+        self.assertEqual(data.count(b" Tj"), len(shows))
 
     def test_pdf_literal_escapes(self):
         self.assertEqual(gen.pdf_literal("a(b)c\\"), b"(a\\(b\\)c\\\\)")

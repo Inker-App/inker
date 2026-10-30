@@ -1,0 +1,97 @@
+# Form 8879, IRS e-file Signature Authorization (Form 1040 family).
+# Label text follows the IRS wording. Schema: see w2.toml.
+#
+# The names sit under their column heads (value = "below"); the SSNs are
+# read by shape after their labels. Each signer's self-selected PIN follows
+# "to enter or generate my PIN" on the line that names the ERO firm; the PIN
+# rule inks it, because a label for it here would make that whole line read
+# as label text and hide the firm's name. Part III holds the ERO's EFIN
+# followed by its own PIN, eleven digits in all.
+#
+# Whitespace inside anchors and identifying labels is optional: a text layer
+# placed glyph by glyph reads back with its word breaks lost.
+id = "8879"
+display = "8879"
+kind = "8879"
+anchors = ['\bForm\s*8879\b', 'IRS\s*e-file\s*Signature\s*Authorization']
+year = '(?s)Form\s*8879.{0,200}?\b(20\d{2})\b'
+
+[[fields]]
+id = "taxpayer_name"
+label = '''Taxpayer['’]s\s*name'''
+kind = "person"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "spouse_name"
+label = '''Spouse['’]s\s*name'''
+kind = "person"
+treatment = "tokenize"
+role = "spouse"
+value = "below"
+
+# Before the taxpayer's SSN: labels match without regard to case, so the
+# taxpayer's label also matches inside this one, and the first field to
+# claim a value names its role.
+[[fields]]
+id = "spouse_ssn"
+label = '''Spouse['’]s\s*social\s*security\s*number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "spouse"
+
+[[fields]]
+id = "taxpayer_ssn"
+label = '''\bSocial\s*security\s*number'''
+kind = "ssn"
+treatment = "tokenize"
+role = "taxpayer"
+
+# Part I amounts, whole dollars: the line number box, then the amount.
+[[fields]]
+id = "1"
+label = '''\b1 Adjusted gross income \(Form 1040[^\n]*?\s{2,}1(?:\s|$)'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "2"
+label = '''\b2 Total tax \(Form 1040[^\n]*?\s{2,}2(?:\s|$)'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "3"
+label = '''\b3 Federal income tax withheld from Form\(s\) W-2 and Form\(s\) 1099[^\n]*?\s{2,}3(?:\s|$)'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4"
+label = '''\b4 Amount you want refunded to you[^\n]*?\s{2,}4(?:\s|$)'''
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '''\b5 Amount you owe[^\n]*?\s{2,}5(?:\s|$)'''
+kind = "keep"
+treatment = "keep"
+
+# Part II. The firm's name follows "I authorize" in each signer's box.
+[[fields]]
+id = "ero_firm"
+label = '''\bI\s*authorize\b'''
+kind = "org"
+treatment = "tokenize"
+role = "preparer"
+
+# Part III.
+[[fields]]
+id = "ero_efin_pin"
+label = '''ERO['’]s\s*EFIN/PIN\.?(?:\s*Enter\s*your\s*six-digit\s*EFIN\s*followed\s*by\s*your\s*five-digit\s*self-selected\s*PIN\.)?'''
+kind = "pin"
+treatment = "tokenize"
+role = "preparer"

@@ -526,3 +526,65 @@ fn a_joint_1040_is_recognised_and_every_identifier_is_inked() {
         );
     }
 }
+
+/// What a reader of Form 8879 must never see: both signers, their SSNs and
+/// PINs, the ERO firm and the ERO's EFIN/PIN.
+const F8879_VALUES: &[&str] = &[
+    "Jordan",
+    "Example",
+    JORDAN_SSN,
+    "Riley",
+    "Sample",
+    "666-48-2210",
+    "Ledgerline",
+    "13579",
+    "24680",
+    "00000097531",
+];
+
+#[test]
+fn an_8879_is_recognised_and_its_signature_pins_are_inked() {
+    let w = World::new();
+    let view = ingest_and_view(&w, "8879-example-2023.txt");
+    for real in F8879_VALUES {
+        assert!(
+            !view.contains(real),
+            "{real:?} visible on the 8879:\n{view}"
+        );
+    }
+    for token in ["[SSN_", "[PERSON_", "[ORG_", "[PIN_"] {
+        assert!(view.contains(token), "no {token} token:\n{view}");
+    }
+    assert!(view.contains("103,140"), "AGI must be kept:\n{view}");
+}
+
+#[test]
+fn a_letter_spaced_8879_is_never_served_with_nothing_inked() {
+    // The reported leak: a text layer placed glyph by glyph reads back
+    // letter-spaced. Nothing was found, the file was filed as "doc-NNNN"
+    // with no year, and it was served Ready with 0 inked.
+    let w = World::new();
+    let src = w.download("8879-example-2023-glyphs.pdf");
+    let outcomes = w
+        .pipeline
+        .ingest(std::slice::from_ref(&src), IngestMode::Copy)
+        .expect("ingest");
+    let rec = w.pipeline.core().document(outcomes[0].id).expect("record");
+    assert!(rec.inked > 0, "nothing inked");
+    assert_eq!(rec.kind.as_str(), "8879");
+    assert!(
+        rec.codename.as_str().starts_with("8879-2023"),
+        "codename {}",
+        rec.codename
+    );
+    let view = ingest_and_view(&World::new(), "8879-example-2023-glyphs.pdf");
+    // Read the view the way an agent would: with the letter-spacing gone.
+    let closed: String = view.chars().filter(|c| *c != ' ').collect();
+    for real in F8879_VALUES {
+        let real: String = real.chars().filter(|c| *c != ' ').collect();
+        assert!(
+            !closed.contains(&real),
+            "{real:?} visible on the letter-spaced 8879:\n{view}"
+        );
+    }
+}

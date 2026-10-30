@@ -109,6 +109,14 @@ JORDAN_1040 = {
 }
 RILEY_1040 = {"occupation": "Data Analyst"}
 
+# Form 8879 only: the e-file signature PINs. Five digits each, made up; the
+# ERO's EFIN/PIN is an all-zero EFIN followed by a made-up PIN.
+FORM_8879 = {
+    "taxpayer_pin": "13579",
+    "spouse_pin": "24680",
+    "ero_efin_pin": "00000097531",
+}
+
 JORDAN_CHECKING = "00012345678"
 JORDAN_SAVINGS_INT_ACCT = "00098765432"
 RILEY_BROKERAGE = "NW-0000-5521"
@@ -877,6 +885,77 @@ Form W-9 (Rev. 3-2024)
 def w9_text() -> str:
     """The W-9's pages as one text file, a form feed between pages."""
     return "\f".join(w9_pages())
+def f8879_text() -> str:
+    """Form 8879 (2023), IRS e-file Signature Authorization, for the joint
+    1040: names and SSNs, Part I amounts in whole dollars, Part II with each
+    spouse's self-selected PIN after the ERO firm name, Part III with the
+    ERO's EFIN/PIN. Label text and order follow the IRS form."""
+    j, r, prep, f = JORDAN, RILEY, PREPARER, FORM_8879
+
+    def line(label: str, n: str, amount: str) -> str:
+        return row((0, label), (104, n), (108, amount))
+
+    def authorize(pin: str) -> list[str]:
+        return [
+            row((0, "[X] I authorize"), (18, prep["firm"]), (50, "to enter or generate my PIN"), (80, pin)),
+            row((18, "ERO firm name"), (80, "Enter five digits, but don't enter all zeros")),
+            "    as my signature on my tax year 2023 electronically filed income tax return.",
+            "[ ] As an Online Self-Preparer, I will enter my PIN as my signature on my tax year 2023 "
+            "electronically filed income tax return.",
+        ]
+
+    return "\n".join(
+        [
+            row((0, "Form 8879"), (14, "IRS e-file Signature Authorization"), (60, "OMB No. 1545-0074")),
+            row((0, "Department of the Treasury"), (30, "ERO must obtain and retain completed Form 8879."),
+                (84, "2023")),
+            row((0, "Internal Revenue Service"), (30, "Go to www.irs.gov/Form8879 for the latest information.")),
+            "Submission Identification Number (SID)",
+            row((0, "Taxpayer's name"), (60, "Social security number")),
+            row((2, j["full"]), (60, j["ssn"])),
+            row((0, "Spouse's name"), (60, "Spouse's social security number")),
+            row((2, r["full"]), (60, r["ssn"])),
+            "Part I   Tax Return Information - Tax Year Ending December 31, 2023 (Whole dollars only)",
+            line("1 Adjusted gross income (Form 1040, 1040-SR, or 1040-NR, line 11; Form 1040-SS, Part I, line 3)",
+                 "1", "103,140"),
+            line("2 Total tax (Form 1040, 1040-SR, or 1040-NR, line 24; Form 1040-SS, Part I, line 6)", "2", "9,242"),
+            line("3 Federal income tax withheld from Form(s) W-2 and Form(s) 1099 (Form 1040, 1040-SR, or 1040-NR,",
+                 "3", "11,912"),
+            "  line 25d; Form 1040-SS, Part I, line 8)",
+            line("4 Amount you want refunded to you (Form 1040, 1040-SR, or 1040-NR, line 35a; Form 1040-SS, Part I,",
+                 "4", "2,670"),
+            "  line 13a)",
+            line("5 Amount you owe (Form 1040, 1040-SR, or 1040-NR, line 37; Form 1040-SS, Part I, line 14)", "5", "0"),
+            "Part II   Taxpayer Declaration and Signature Authorization (Be sure you get and keep a copy of your return)",
+            "Under penalties of perjury, I declare that I have examined a copy of the income tax return (original or "
+            "amended) I am now authorizing, and to the best of my knowledge and belief, it is true, correct, and "
+            "complete. I further declare that the amounts in Part I above are the amounts from the income tax return "
+            "I am now authorizing. I consent to allow my intermediate service provider, transmitter, or electronic "
+            "return originator (ERO) to send my return to the IRS and to receive from the IRS (a) an acknowledgement "
+            "of receipt or reason for rejection of the transmission, (b) the reason for any delay in processing the "
+            "return or refund, and (c) the date of any refund.",
+            "Taxpayer's PIN: check one box only",
+            *authorize(f["taxpayer_pin"]),
+            row((0, "Your signature"), (60, "Date"), (67, "10/14/2024")),
+            "Spouse's PIN: check one box only",
+            *authorize(f["spouse_pin"]),
+            row((0, "Spouse's signature"), (60, "Date"), (67, "10/14/2024")),
+            "Practitioner PIN Method Returns Only - continue below",
+            "Part III   Certification and Authentication - Practitioner PIN Method Only",
+            row((0, "ERO's EFIN/PIN. Enter your six-digit EFIN followed by your five-digit self-selected PIN."),
+                (92, f["ero_efin_pin"])),
+            row((92, "Don't enter all zeros")),
+            "I certify that the above numeric entry is my PIN, which is my signature on the tax year 2023 "
+            "electronically filed income tax return for the taxpayer(s) indicated above. I confirm that I am "
+            "submitting this return in accordance with the requirements of the Practitioner PIN method and "
+            "Pub. 1345, Handbook for Authorized IRS e-file Providers of Individual Income Tax Returns.",
+            row((0, "ERO's signature"), (60, "Date"), (67, "10/14/2024")),
+            "ERO Must Retain This Form - See Instructions",
+            "Don't Submit This Form to the IRS Unless Requested To Do So",
+            row((0, "For Paperwork Reduction Act Notice, see your tax return instructions."), (72, "Cat. No. 32778X"),
+                (92, "Form 8879 (2023)")),
+        ]
+    ) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -987,6 +1066,31 @@ def text_pdf_pages(pages: list[str]) -> bytes:
         )
         objects.append(stream_obj(text_stream(text.rstrip("\n").split("\n"), size=7, top=770, leading=10)))
     objects.append(FONT)
+    return build_pdf(objects)
+
+
+def glyph_pdf(text: str, size: int = 9, advance: int = 6, leading: int = 14) -> bytes:
+    """One-page PDF that shows every character by itself at a fixed advance,
+    as some tax software prints. Extractors read such a page back
+    letter-spaced ("J o r d a n"). The page is as wide as the longest line."""
+    lines = text.rstrip("\n").split("\n")
+    width = 72 + advance * max(len(l) for l in lines)
+    height = 72 + leading * len(lines)
+    ops = [b"BT", f"/F1 {size} Tf".encode()]
+    for i, line in enumerate(lines):
+        y = height - 36 - leading * i
+        for j, c in enumerate(line):
+            if not c.isspace():
+                ops.append(f"1 0 0 1 {36 + advance * j} {y} Tm ".encode() + pdf_literal(c) + b" Tj")
+    ops.append(b"ET")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] ".encode()
+        + b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        FONT,
+        stream_obj(b"\n".join(ops) + b"\n"),
+    ]
     return build_pdf(objects)
 
 
@@ -1232,6 +1336,17 @@ def main(out: Path = OUT) -> None:
                 ],
             ),
         ),
+        "8879-example-2023": (
+            f8879_text(),
+            noisy(
+                f8879_text(),
+                [
+                    (JORDAN["ssn"], JORDAN["ssn"].replace("-", "")),
+                    ("103,140", "1O3,140"),
+                    (RILEY["ssn"], RILEY["ssn"].replace("-", " ")),
+                ],
+            ),
+        ),
         "receipt-cornerstone-2025-03-09": (
             receipt_text(),
             noisy(
@@ -1277,6 +1392,9 @@ def main(out: Path = OUT) -> None:
         "w2-acme-2025-scan.pdf": scan_pdf(),
         # A phone photo of the receipt. OCR output in the sidecar.
         "receipt-cornerstone-2025-03-09-photo.png": tiny_png(),
+        # The 8879 with every glyph placed by itself: its text layer reads
+        # back letter-spaced.
+        "8879-example-2023-glyphs.pdf": glyph_pdf(docs["8879-example-2023"][0]),
     }
     for name, data in binaries.items():
         p = out / name
