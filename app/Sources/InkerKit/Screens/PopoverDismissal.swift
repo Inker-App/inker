@@ -1,6 +1,7 @@
-/// When the popover closes on its own: Escape, or a mouse-down that lands
-/// outside it. StatusItemController watches the events; this decides. A
-/// pinned popover (folder chooser up, drag in flight) ignores both.
+/// When the popover closes on its own: Escape, and nothing else. A click
+/// elsewhere leaves it up (Ben, 2026-10-30: it should stay while you click
+/// around Finder and drag files in), so only the menu bar icon and Escape
+/// close it. A pinned popover (folder chooser up) ignores Escape too.
 public enum PopoverDismissal {
     public enum Event: Equatable {
         case escape
@@ -17,8 +18,7 @@ public enum PopoverDismissal {
         case nothing, closeMenu, closePopover
     }
 
-    /// With a row menu up, Escape closes the menu and leaves the popover;
-    /// a click outside closes both.
+    /// With a row menu up, Escape closes the menu and leaves the popover.
     public static func outcome(on event: Event, pinned: Bool, menuOpen: Bool) -> Outcome {
         guard closes(on: event, pinned: pinned) else { return .nothing }
         if menuOpen, event == .escape { return .closeMenu }
@@ -29,7 +29,7 @@ public enum PopoverDismissal {
         if pinned { return false }
         switch event {
         case .escape: return true
-        case .mouseDown(let inside): return !inside
+        case .mouseDown: return false
         }
     }
 }

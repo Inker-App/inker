@@ -1,30 +1,27 @@
 import Testing
 @testable import InkerKit
 
-/// Escape and a click outside the popover close it. A pinned popover (the
-/// folder chooser is up, or a drag is in flight) ignores both.
+/// Escape closes the popover; a click anywhere else leaves it up, so the
+/// user can click around Finder and drag files in. A pinned popover (the
+/// folder chooser is up) ignores Escape too.
 struct PopoverDismissalTests {
     @Test func escapeCloses() {
         #expect(PopoverDismissal.closes(on: .escape, pinned: false))
     }
 
-    @Test func aClickOutsideCloses() {
-        #expect(PopoverDismissal.closes(on: .mouseDown(insidePopover: false), pinned: false))
-    }
-
-    @Test func aClickInsideStays() {
+    @Test func aClickAnywhereLeavesItUp() {
+        #expect(!PopoverDismissal.closes(on: .mouseDown(insidePopover: false), pinned: false), "clicking around Finder")
         #expect(!PopoverDismissal.closes(on: .mouseDown(insidePopover: true), pinned: false))
     }
 
-    @Test func aPinnedPopoverIgnoresBoth() {
+    @Test func aPinnedPopoverIgnoresEscape() {
         #expect(!PopoverDismissal.closes(on: .escape, pinned: true))
-        #expect(!PopoverDismissal.closes(on: .mouseDown(insidePopover: false), pinned: true))
     }
 
     @Test func escapeClosesAnOpenRowMenuBeforeThePopover() {
         #expect(PopoverDismissal.outcome(on: .escape, pinned: false, menuOpen: true) == .closeMenu)
         #expect(PopoverDismissal.outcome(on: .escape, pinned: false, menuOpen: false) == .closePopover)
-        #expect(PopoverDismissal.outcome(on: .mouseDown(insidePopover: false), pinned: false, menuOpen: true) == .closePopover)
+        #expect(PopoverDismissal.outcome(on: .mouseDown(insidePopover: false), pinned: false, menuOpen: true) == .nothing)
         #expect(PopoverDismissal.outcome(on: .escape, pinned: true, menuOpen: true) == .nothing)
     }
 

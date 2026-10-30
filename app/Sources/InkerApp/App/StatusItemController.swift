@@ -21,15 +21,11 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
     private var dropView: StatusItemDropView?
     private var windowDropTarget: ButtonWindowDropTarget?
     private var cancellables = Set<AnyCancellable>()
-    private var revertBehavior: DispatchWorkItem?
     /// A transient popover closes on the mouse-down that lands on our icon,
     /// before our own click handler runs; without this the click reopens it.
     private var lastClosed = Date.distantPast
-    /// Escape and outside clicks, watched while the popover is up. The
-    /// transient behavior alone misses both when the app is not active,
-    /// which a status bar app usually is not.
+    /// Escape, watched while the popover is up.
     private var keyMonitor: Any?
-    private var globalMouseMonitor: Any?
 
     init(store: CoreStore, clock: RenderClock) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -74,7 +70,9 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
 
     private func configurePopover() {
         popover.contentSize = NSSize(width: 360, height: 500)
-        popover.behavior = .transient
+        // Never transient: the popover stays up while the user clicks around
+        // Finder and drags files in. The icon and Escape close it.
+        popover.behavior = .applicationDefined
         popover.animates = true
         popover.appearance = NSAppearance(named: .darkAqua)
         popover.delegate = self
@@ -109,11 +107,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
         NSApp.activate()
     }
 
-    /// While pinned the popover ignores outside clicks, so the folder
-    /// chooser's panel does not close it.
+    /// While pinned (the folder chooser's panel is up) Escape is the
+    /// panel's, not ours.
     func setPinned(_ pinned: Bool) {
-        revertBehavior?.cancel()
-        popover.behavior = pinned ? .applicationDefined : .transient
+        isPinned = pinned
     }
 
     // MARK: NSPopoverDelegate
@@ -132,7 +129,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
             removeDismissalMonitors()
             clock.surfaceDisappeared()
             lastClosed = Date()
-            popover.behavior = .transient
             store.isDropTargeted = false
             store.popoverClosed()
         }
@@ -140,7 +136,7 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
 
     // MARK: Escape and outside clicks
 
-    private var isPinned: Bool { popover.behavior == .applicationDefined }
+    private var isPinned = false
 
     private func installDismissalMonitors() {
         removeDismissalMonitors()
@@ -151,22 +147,13 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
                   let kind = PopoverDismissal.Event(keyCode: event.keyCode) else { return event }
             return dismiss(on: kind) ? nil : event
         }
-        // Clicks in other apps. Our own windows (the status item, the popover,
-        // its menus) are not routed here; the transient behavior covers them.
-        let mouse: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouse) { [weak self] _ in
-            MainActor.assumeIsolated { _ = self?.dismiss(on: .mouseDown(insidePopover: false)) }
-        }
     }
 
     private var popoverWindow: NSWindow? { popover.contentViewController?.view.window }
 
     private func removeDismissalMonitors() {
-        for monitor in [keyMonitor, globalMouseMonitor] {
-            if let monitor { NSEvent.removeMonitor(monitor) }
-        }
+        if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
         keyMonitor = nil
-        globalMouseMonitor = nil
     }
 
     /// True when the event closed the popover, or the row menu inside it.
@@ -187,10 +174,6 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
     // MARK: DropTargetHandler
 
     func dragEntered() -> NSDragOperation {
-        revertBehavior?.cancel()
-        // Stay open while the drag is in flight: transient popovers close when
-        // the click that ends a drag lands elsewhere.
-        popover.behavior = .applicationDefined
         store.isDropTargeted = true
         showPopover()
         return .copy
@@ -198,19 +181,10 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
 
     func dragExited() {
         store.isDropTargeted = false
-        // The drag may be heading into the popover itself; give it a moment
-        // before letting the popover close on outside clicks again.
-        let work = DispatchWorkItem { [weak self] in
-            MainActor.assumeIsolated { self?.popover.behavior = .transient }
-        }
-        revertBehavior = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: work)
     }
 
     func performDrop(urls: [URL]) -> Bool {
-        revertBehavior?.cancel()
         store.isDropTargeted = false
-        popover.behavior = .transient
         guard !urls.isEmpty else { return false }
         store.receive(urls: urls)
         return true
