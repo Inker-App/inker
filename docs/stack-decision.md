@@ -317,9 +317,16 @@ problem that `TypeYear` handles all look alike at 30 files. Built test-first, co
   "Show payer names in the list" and "Offer to find a handle from the clipboard", both on.
   The pasteboard is read in `popoverDidShow` only. Year open state is remembered in
   `UserDefaults`; folder open state is per session.
-- Ben's decisions: payer on with a toggle; clipboard chip on with a toggle; **Forget confirms by
-  flipping the menu item** to "Forget <name>" (the menu closes after the first click, the next
-  open shows the confirm wording; anything else or closing the popover resets it).
+- Ben's decisions: payer on with a toggle; clipboard chip on with a toggle; **Forget confirms
+  inside the menu**: the first click turns the item into a red "Are you sure?" and the menu
+  stays up; the next click forgets; a click elsewhere, Escape or closing the popover resets it.
+  (First shipped in 0.0.6 as a flip to "Forget <name>" with the native menu closing between
+  clicks; Ben asked for the clearer form on seeing it.) That needs the menu to be INKER's own
+  panel rather than an NSMenu, which closes on every click; the AppFindRow artboard draws it
+  as a 200-wide dark panel anyway. `RowMenu` (InkerKit) lists the items and picks below or
+  above the row; `RowMenuLayer` draws it over the board from an anchor preference, so it is not
+  clipped by the scroll view; `RightClickCatcher` is an NSView that only answers secondary
+  clicks and lets everything else through to SwiftUI. Escape closes the menu before the popover.
 - Calls made without an artboard, for Ben to check: a folder or tag match shows its folder name
   or tag as the row's third line (muted, not mono) so the underline has somewhere to land; a
   folder's Forget and Ink again apply to every child; the Settings "Private folder" block from the
@@ -327,6 +334,8 @@ problem that `TypeYear` handles all look alike at 30 files. Built test-first, co
   the Scale board shows it, though the Handle board drew it inside the folder.
 - Not run on this Linux box: `swift test`, `swift build`, the snapshots. The Rust workspace
   (tests, clippy, fmt) is green. Bindings were regenerated with `build-rust.sh --bindings-only`.
+  The release workflow (macOS runner) is what compiles the Swift from here; 0.0.6 was its first
+  run over this work and found two `#expect` forms the macro rejects.
 
 ## 9. Target clients (reframed 2026-10-28)
 

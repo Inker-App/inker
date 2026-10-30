@@ -78,7 +78,6 @@ struct BoardViewModelTests {
         #expect(row.menu.copyAscii == "Copy ink/w2-2025-2")
         #expect(row.menu.asciiHandle == "ink/w2-2025-2")
         #expect(row.menu.forget == "Forget this file")
-        #expect(row.menu.forgetConfirm == "Forget w2-bluefin.pdf")
         #expect(row.menu.inkAgain == "Ink again")
         #expect(row.menu.showInFinder == "Show in Finder")
     }
@@ -113,11 +112,19 @@ struct BoardViewModelTests {
         #expect(f.children.count == 9)
         #expect(f.children.allSatisfy { $0.indented })
         #expect(f.menu.forget == "Forget this folder")
-        #expect(f.menu.forgetConfirm == "Forget Taxes 2025")
         #expect(f.menu.copyOctopus == "Copy 🐙/folder-0412")
         let open = build(openFolders: ["f-1"])
         guard case .folder(let o) = open.groups[0].rows[5] else { Issue.record("a folder row"); return }
         #expect(o.isOpen)
+    }
+
+    @Test func theMenuTargetIsFoundOnTheBoardInsideFoldersAndInResults() {
+        let m = build()
+        #expect(m.menuTarget(for: "d-2")?.path == "/Users/test/Private/w2-bluefin.pdf")
+        #expect(m.menuTarget(for: "f-1")?.menu.forget == "Forget this folder")
+        #expect(m.menuTarget(for: "c-3")?.menu.copyOctopus == "Copy 🐙/w2-2025-5", "a folder's child")
+        #expect(m.menuTarget(for: "d-6")?.path == "/Users/test/Private/w2-acme-2024.pdf", "a collapsed year")
+        #expect(m.menuTarget(for: "nope") == nil)
     }
 
     @Test func chipsListAllThenEachTagWithItsCount() {

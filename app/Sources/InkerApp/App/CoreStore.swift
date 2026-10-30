@@ -40,7 +40,9 @@ final class CoreStore: ObservableObject {
     @Published private(set) var pulse: (id: String, startedAt: Date)?
     /// Set when the popover opened with a held handle on the pasteboard.
     @Published private(set) var clipboardHandle: String?
-    /// "Forget this file" clicked once; the next click on the same row forgets.
+    /// The row whose menu panel is up.
+    @Published private(set) var openMenuID: String?
+    /// "Forget this file" clicked once; the panel asks "Are you sure?".
     @Published private(set) var confirmingForgetID: String?
     /// The list scrolls to this row when it changes.
     @Published private(set) var scrollTarget: String?
@@ -282,6 +284,53 @@ final class CoreStore: ObservableObject {
 
     // MARK: The row menu
 
+    /// `···` or a right-click: the panel opens on this row, or closes if it
+    /// is already up there. Opening elsewhere drops a pending "Are you sure?".
+    func toggleMenu(id: String) {
+        if openMenuID == id { closeMenu() } else { openMenu(id: id) }
+    }
+
+    func openMenu(id: String) {
+        if openMenuID != id { confirmingForgetID = nil }
+        openMenuID = id
+    }
+
+    /// Previews and snapshots: the menu on the row a handle names.
+    func openMenu(handle text: String) {
+        guard let entry = handle.locate(handle: text) else { return }
+        openMenu(id: entry.entryID)
+    }
+
+    func closeMenu() {
+        openMenuID = nil
+        confirmingForgetID = nil
+    }
+
+    func menuTarget(for id: String) -> RowMenuTarget? {
+        results?.menuTarget(for: id) ?? board.menuTarget(for: id)
+    }
+
+    /// A click on a panel item. Everything closes the panel except the
+    /// first click on Forget, which turns it into "Are you sure?".
+    func perform(_ action: RowMenuItem.Action, id: String, target: RowMenuTarget) {
+        switch action {
+        case .copyOctopus:
+            copy(handle: target.menu.octopusHandle, id: id)
+            closeMenu()
+        case .copyAscii:
+            copy(handle: target.menu.asciiHandle, id: id)
+            closeMenu()
+        case .showInFinder:
+            reveal(path: target.path)
+            closeMenu()
+        case .inkAgain:
+            closeMenu()
+            inkAgain(id: id)
+        case .forget:
+            forget(id: id)
+        }
+    }
+
     /// "Ink again": the row goes back to queued with the same handle.
     func inkAgain(id: String) {
         do {
@@ -292,14 +341,14 @@ final class CoreStore: ObservableObject {
         refresh()
     }
 
-    /// "Forget this file" asks once: the item flips to "Forget <name>" and
-    /// the next click does it. Anything else, or closing the popover, resets.
+    /// "Forget this file" asks once: the item turns into a red "Are you
+    /// sure?" and the next click does it. Closing the panel resets.
     func forget(id: String) {
         guard confirmingForgetID == id else {
             confirmingForgetID = id
             return
         }
-        confirmingForgetID = nil
+        closeMenu()
         if expandedID == id {
             expandedID = nil
             expandedDetails = []
@@ -312,16 +361,12 @@ final class CoreStore: ObservableObject {
         refresh()
     }
 
-    func cancelForget() {
-        confirmingForgetID = nil
-    }
-
     // MARK: Popover lifetime
 
     /// The one moment the pasteboard is read: when the popover opens, and
     /// only if the setting allows. Anything but a held handle is ignored.
     func popoverOpened() {
-        confirmingForgetID = nil
+        closeMenu()
         guard settings.offersClipboardHandle else { return }
         let text = NSPasteboard.general.string(forType: .string)
         guard let candidate = ClipboardHandle.parse(text), handle.locate(handle: candidate) != nil else {
@@ -333,7 +378,7 @@ final class CoreStore: ObservableObject {
 
     func popoverClosed() {
         clipboardHandle = nil
-        confirmingForgetID = nil
+        closeMenu()
         pulse = nil
     }
 

@@ -21,6 +21,13 @@ struct PopoverDismissalTests {
         #expect(!PopoverDismissal.closes(on: .mouseDown(insidePopover: false), pinned: true))
     }
 
+    @Test func escapeClosesAnOpenRowMenuBeforeThePopover() {
+        #expect(PopoverDismissal.outcome(on: .escape, pinned: false, menuOpen: true) == .closeMenu)
+        #expect(PopoverDismissal.outcome(on: .escape, pinned: false, menuOpen: false) == .closePopover)
+        #expect(PopoverDismissal.outcome(on: .mouseDown(insidePopover: false), pinned: false, menuOpen: true) == .closePopover)
+        #expect(PopoverDismissal.outcome(on: .escape, pinned: true, menuOpen: true) == .nothing)
+    }
+
     @Test func otherKeysAreNotDismissals() {
         #expect(PopoverDismissal.Event(keyCode: 53) == .escape)
         #expect(PopoverDismissal.Event(keyCode: 36) == nil, "return")

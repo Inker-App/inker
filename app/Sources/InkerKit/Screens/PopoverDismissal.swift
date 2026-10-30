@@ -13,6 +13,18 @@ public enum PopoverDismissal {
         }
     }
 
+    public enum Outcome: Equatable, Sendable {
+        case nothing, closeMenu, closePopover
+    }
+
+    /// With a row menu up, Escape closes the menu and leaves the popover;
+    /// a click outside closes both.
+    public static func outcome(on event: Event, pinned: Bool, menuOpen: Bool) -> Outcome {
+        guard closes(on: event, pinned: pinned) else { return .nothing }
+        if menuOpen, event == .escape { return .closeMenu }
+        return .closePopover
+    }
+
     public static func closes(on event: Event, pinned: Bool) -> Bool {
         if pinned { return false }
         switch event {

@@ -169,11 +169,19 @@ final class StatusItemController: NSObject, NSPopoverDelegate, DropTargetHandler
         globalMouseMonitor = nil
     }
 
-    /// True when the event closed the popover.
+    /// True when the event closed the popover, or the row menu inside it.
     private func dismiss(on event: PopoverDismissal.Event) -> Bool {
-        guard popover.isShown, PopoverDismissal.closes(on: event, pinned: isPinned) else { return false }
-        popover.performClose(nil)
-        return true
+        guard popover.isShown else { return false }
+        switch PopoverDismissal.outcome(on: event, pinned: isPinned, menuOpen: store.openMenuID != nil) {
+        case .nothing:
+            return false
+        case .closeMenu:
+            store.closeMenu()
+            return true
+        case .closePopover:
+            popover.performClose(nil)
+            return true
+        }
     }
 
     // MARK: DropTargetHandler

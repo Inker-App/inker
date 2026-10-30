@@ -42,7 +42,7 @@ struct FindBoard: View {
             }
         }
         .padding(.horizontal, PopoverLayout.gutter)
-        .onTapGesture { store.cancelForget() }
+        .overlayPreferenceValue(RowAnchorKey.self) { RowMenuLayer(anchors: $0) }
     }
 }
 
@@ -206,10 +206,9 @@ struct FolderRow: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(row.name), \(row.countLine), \(row.isOpen ? "open" : "collapsed")")
                     Spacer(minLength: 8)
-                    RowActions(id: row.id, handle: row.handle, copyEnabled: row.copyEnabled, menu: row.menu, path: row.path, hovering: hovering)
+                    RowActions(id: row.id, handle: row.handle, copyEnabled: row.copyEnabled, hovering: hovering)
                 }
             }
-            .rowMenu(id: row.id, menu: row.menu, path: row.path)
             if row.isOpen {
                 ForEach(row.children) { child in
                     DocRow(row: child)
@@ -250,14 +249,13 @@ struct DocRow: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(row.name), \(row.handle)")
                     Spacer(minLength: 8)
-                    RowActions(id: row.id, handle: row.handle, copyEnabled: row.copyEnabled, menu: row.menu, path: row.path, hovering: hovering)
+                    RowActions(id: row.id, handle: row.handle, copyEnabled: row.copyEnabled, hovering: hovering)
                 }
                 if case .processing(let mode) = row.state {
                     InkLoaderView(mode: mode).padding(.top, 8)
                 }
             }
             .padding(.leading, row.indented ? 12 : 0)
-            .rowMenu(id: row.id, menu: row.menu, path: row.path)
             if store.expandedID == row.id {
                 DetailsPanel(lines: store.expandedDetails, path: row.path)
                     .padding(.leading, row.indented ? 12 : 0)
@@ -298,68 +296,38 @@ struct RowSurface<Content: View>: View {
                 VStack { Spacer(); Hairline(color: Palette.hairlineFaint) }
             }
         }
+        .overlay(RightClickCatcher { store.openMenu(id: id) })
+        .anchorPreference(key: RowAnchorKey.self, value: .bounds) { [id: $0] }
         .id(id)
         .onHover { hovering = $0 }
     }
 }
 
-/// Copy, and `···` while hovering.
+/// Copy, and `···` while hovering or while this row's menu is up.
 struct RowActions: View {
     let id: String
     let handle: String
     let copyEnabled: Bool
-    let menu: RowMenuModel
-    let path: String
     let hovering: Bool
     @EnvironmentObject private var store: CoreStore
 
     var body: some View {
         HStack(spacing: 6) {
             CopyButton(id: id, handle: handle, enabled: copyEnabled)
-            if hovering {
-                Menu {
-                    RowMenuItems(id: id, menu: menu, path: path)
-                } label: {
+            if hovering || store.openMenuID == id {
+                Button { store.toggleMenu(id: id) } label: {
                     Text("···")
                         .font(.system(size: 14))
                         .foregroundColor(Palette.paper)
                         .frame(width: 26, height: 26)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(store.openMenuID == id ? Palette.paper.opacity(0.08) : .clear))
                         .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Palette.outline, lineWidth: 1))
+                        .contentShape(Rectangle())
                 }
-                // VERIFY: `.button` with a plain button style draws only the
-                // label on macOS 15; if a bezel shows, try `.borderlessButton`.
-                .menuStyle(.button)
                 .buttonStyle(.plain)
-                .menuIndicator(.hidden)
-                .fixedSize()
                 .accessibilityLabel("More")
             }
         }
-    }
-}
-
-/// The six items, in the brief's order. "Forget" flips to "Forget <name>"
-/// after one click and forgets on the next.
-struct RowMenuItems: View {
-    let id: String
-    let menu: RowMenuModel
-    let path: String
-    @EnvironmentObject private var store: CoreStore
-
-    var body: some View {
-        Button(menu.copyOctopus) { store.copy(handle: menu.octopusHandle, id: id) }
-        Button(menu.copyAscii) { store.copy(handle: menu.asciiHandle, id: id) }
-        Button(menu.showInFinder) { store.reveal(path: path) }
-        Button(menu.inkAgain) { store.inkAgain(id: id) }
-        Divider()
-        Button(store.confirmingForgetID == id ? menu.forgetConfirm : menu.forget) { store.forget(id: id) }
-    }
-}
-
-extension View {
-    /// The same menu on a right-click anywhere on the row.
-    func rowMenu(id: String, menu: RowMenuModel, path: String) -> some View {
-        contextMenu { RowMenuItems(id: id, menu: menu, path: path) }
     }
 }
 
@@ -446,10 +414,9 @@ struct FindRow: View {
                     }
                     .buttonStyle(.plain)
                     Spacer(minLength: 8)
-                    RowActions(id: row.id, handle: row.handle, copyEnabled: row.copyEnabled, menu: row.menu, path: row.path, hovering: hovering)
+                    RowActions(id: row.id, handle: row.handle, copyEnabled: row.copyEnabled, hovering: hovering)
                 }
             }
-            .rowMenu(id: row.id, menu: row.menu, path: row.path)
             if store.expandedID == row.id {
                 DetailsPanel(lines: store.expandedDetails, path: row.path)
             }

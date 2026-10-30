@@ -15,16 +15,14 @@ public struct RowMenuModel: Equatable, Sendable {
     public static let inkAgain = "Ink again"
     public var showInFinder: String { RowMenuModel.showInFinder }
     public var inkAgain: String { RowMenuModel.inkAgain }
-    /// "Forget this file" or "Forget this folder".
+    /// "Forget this file" or "Forget this folder". After one click the
+    /// panel shows `RowMenu.areYouSure` in red instead.
     public var forget: String
-    /// The same item after one click: "Forget w2-bluefin.pdf".
-    public var forgetConfirm: String
 
-    public init(codename: String, isFolder: Bool, name: String) {
+    public init(codename: String, isFolder: Bool) {
         octopusHandle = HandleFormatter.render(codename: codename, style: .octopus) ?? codename
         asciiHandle = HandleFormatter.render(codename: codename, style: .ascii) ?? codename
         forget = isFolder ? "Forget this folder" : "Forget this file"
-        forgetConfirm = "Forget \(name)"
     }
 }
 
@@ -152,7 +150,7 @@ public enum BoardViewModel {
 
     public static func docRow(_ d: DocItem, style: HandleStyle, showPayer: Bool, indented: Bool) -> DocRowModel {
         let handle = HandleFormatter.render(codename: d.codename, style: style) ?? d.codename
-        let menu = RowMenuModel(codename: d.codename, isFolder: false, name: d.originalName)
+        let menu = RowMenuModel(codename: d.codename, isFolder: false)
         let state: RowState
         let detail: String
         switch d.state {
@@ -198,6 +196,6 @@ public enum BoardViewModel {
         return FolderRowModel(id: f.id, name: f.name, countLine: count, handle: handle,
                               summary: SummaryLine.folderDetail(f.summary), copyEnabled: f.summary.ready > 0,
                               isOpen: isOpen, children: children, path: f.path,
-                              menu: RowMenuModel(codename: f.codename, isFolder: true, name: f.name))
+                              menu: RowMenuModel(codename: f.codename, isFolder: true))
     }
 }

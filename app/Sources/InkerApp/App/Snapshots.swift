@@ -27,6 +27,10 @@ enum Snapshots {
         var query: String?
         /// Located (expanded, pulsing) before the shot.
         var locate: String?
+        /// The row menu open on the row this handle names.
+        var menu: String?
+        /// Forget clicked once, so the menu asks "Are you sure?".
+        var confirmForget = false
     }
 
     static let shots: [Shot] = [
@@ -37,6 +41,8 @@ enum Snapshots {
         Shot(name: "popover-scale", scenario: .scale, screen: .board),
         Shot(name: "popover-scale-search", scenario: .scale, screen: .board, query: "acme"),
         Shot(name: "popover-scale-handle", scenario: .scale, screen: .board, locate: "🐙/w2-2025-2"),
+        Shot(name: "popover-scale-menu", scenario: .scale, screen: .board, menu: "🐙/w2-2025-2"),
+        Shot(name: "popover-scale-menu-forget", scenario: .scale, screen: .board, menu: "🐙/w2-2025-2", confirmForget: true),
         Shot(name: "onboarding-1", scenario: .empty, screen: .onboarding(step: 1)),
         Shot(name: "onboarding-2", scenario: .empty, screen: .onboarding(step: 2)),
         Shot(name: "onboarding-3", scenario: .empty, screen: .onboarding(step: 3)),
@@ -70,6 +76,10 @@ enum Snapshots {
             if shot.dropCard { store.presentDropCard(sampleBatch()) }
             if let query = shot.query { store.setQuery(query) }
             if let handle = shot.locate { store.locate(handle: handle) }
+            if let handle = shot.menu {
+                store.openMenu(handle: handle)
+                if shot.confirmForget, let id = store.openMenuID { store.forget(id: id) }
+            }
             let view = PopoverRootView()
                 .environmentObject(store)
                 .environmentObject(clock)

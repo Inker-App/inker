@@ -58,6 +58,16 @@ private func popover(_ scenario: PreviewScenario, _ screen: PopoverScreen = .boa
         .environmentObject(RenderClock(alwaysRunning: true))
 }
 
+#Preview("Popover · Row menu") {
+    FontRegistry.registerBundledFonts()
+    let store = CoreStore.preview(.scale)
+    store.openMenu(handle: "🐙/w2-2025-2")
+    store.forget(id: store.openMenuID ?? "")
+    return PopoverRootView()
+        .environmentObject(store)
+        .environmentObject(RenderClock(alwaysRunning: true))
+}
+
 #Preview("Popover · Drop card") {
     FontRegistry.registerBundledFonts()
     let store = CoreStore.preview(.ready)
