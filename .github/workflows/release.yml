@@ -47,6 +47,45 @@ jobs:
         with:
           workspaces: core
 
+      # Developer ID signing when the repository has the certificate; ad-hoc
+      # otherwise, so a fork or a build-only run still works. Secrets:
+      # MACOS_CERT_P12 (base64 of the "Developer ID Application" .p12),
+      # MACOS_CERT_PASSWORD, and for notarization NOTARY_KEY_ID,
+      # NOTARY_ISSUER_ID, NOTARY_KEY_P8 (an App Store Connect API key).
+      # See app/BUILD.md, "Codesigning and notarization".
+      - name: Signing identity
+        id: sign
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          if [ -z "$MACOS_CERT_P12" ]; then
+            echo "no certificate secret: ad-hoc signing"
+            echo "identity=-" >> "$GITHUB_OUTPUT"
+            echo "real=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          KEYCHAIN="$RUNNER_TEMP/inker-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          rm -f "$RUNNER_TEMP/cert.p12"
+          IDENTITY="$(security find-identity -v -p codesigning "$KEYCHAIN" | grep 'Developer ID Application' | head -1 | awk '{print $2}')"
+          if [ -z "$IDENTITY" ]; then
+            echo "the certificate is not a Developer ID Application certificate" >&2
+            security find-identity -v -p codesigning "$KEYCHAIN"
+            exit 1
+          fi
+          echo "identity=$IDENTITY" >> "$GITHUB_OUTPUT"
+          echo "real=true" >> "$GITHUB_OUTPUT"
+          echo "keychain=$KEYCHAIN" >> "$GITHUB_OUTPUT"
+
       - name: Version
         id: v
         run: |
@@ -67,6 +106,13 @@ jobs:
             target/x86_64-apple-darwin/release/inker \
             -output ../dist/out/inker
           ../dist/out/inker --help >/dev/null
+          # The CLI ships on its own and inside the app and the .mcpb.
+          if [ "${{ steps.sign.outputs.real }}" = "true" ]; then
+            codesign --force --options runtime --timestamp --sign "${{ steps.sign.outputs.identity }}" ../dist/out/inker
+          else
+            codesign --force --sign - ../dist/out/inker
+          fi
+          codesign --verify --strict ../dist/out/inker
 
       - name: Rust FFI, bindings, xcframework
         working-directory: app
@@ -84,18 +130,53 @@ jobs:
         working-directory: app
         run: |
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.v.outputs.version }}" Resources/Info.plist
-          make app
+          make app SIGN_IDENTITY="${{ steps.sign.outputs.identity }}"
           # Ship the CLI/shim inside the app bundle so the Desktop config and
           # the .mcpb can point at one place. Named inker-cli: APFS is
           # case-insensitive, so "inker" would overwrite the app's "INKER".
           cp ../dist/out/inker build/INKER.app/Contents/MacOS/inker-cli
           # Re-sign now that the bundle has a second executable in it.
-          make sign
+          make sign SIGN_IDENTITY="${{ steps.sign.outputs.identity }}"
           ls -la build/INKER.app/Contents/MacOS
           test -s build/INKER.app/Contents/MacOS/INKER && test -s build/INKER.app/Contents/MacOS/inker-cli
           test -s build/INKER.app/Contents/Resources/AppIcon.icns
-          codesign -dvv build/INKER.app 2>&1 | grep -E "Identifier|Signature|Sealed"
-          spctl --assess --type execute --verbose=4 build/INKER.app || echo "(expected: ad-hoc signature is not notarized)"
+          codesign -dvv build/INKER.app 2>&1 | grep -E "Identifier|Signature|Sealed|Authority|Runtime"
+          spctl --assess --type execute --verbose=4 build/INKER.app || echo "(not notarized yet)"
+
+      # Notarize the app and the CLI, then staple the app so Gatekeeper
+      # passes it offline. A bare binary cannot be stapled; its ticket is
+      # looked up online.
+      - name: Notarize
+        if: steps.sign.outputs.real == 'true'
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          if [ -z "$NOTARY_KEY_P8" ] || [ -z "$NOTARY_KEY_ID" ] || [ -z "$NOTARY_ISSUER_ID" ]; then
+            echo "signed but not notarized: NOTARY_KEY_ID, NOTARY_ISSUER_ID and NOTARY_KEY_P8 are not all set" >&2
+            exit 1
+          fi
+          KEY="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$NOTARY_KEY_P8" > "$KEY"
+          notarize() {
+            xcrun notarytool submit "$1" --key "$KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" \
+              --wait --timeout 30m --output-format json | tee "$RUNNER_TEMP/notary.json"
+            STATUS="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["status"])' "$RUNNER_TEMP/notary.json")"
+            if [ "$STATUS" != "Accepted" ]; then
+              ID="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["id"])' "$RUNNER_TEMP/notary.json")"
+              xcrun notarytool log "$ID" --key "$KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID"
+              exit 1
+            fi
+          }
+          ditto -c -k --keepParent app/build/INKER.app "$RUNNER_TEMP/INKER-notarize.zip"
+          notarize "$RUNNER_TEMP/INKER-notarize.zip"
+          xcrun stapler staple app/build/INKER.app
+          xcrun stapler validate app/build/INKER.app
+          spctl --assess --type execute --verbose=4 app/build/INKER.app
+          ditto -c -k dist/out/inker "$RUNNER_TEMP/inker-cli-notarize.zip"
+          notarize "$RUNNER_TEMP/inker-cli-notarize.zip"
+          rm -f "$KEY"
 
       # Render check: every popover screen as a PNG (app/BUILD.md, "Render
       # check"). Metal eyes and the octopus come out blank. A failure here
@@ -141,8 +222,17 @@ jobs:
           if [ "${{ github.event_name }}" != "push" ]; then
             git tag -f "$TAG" && git push -f origin "$TAG"
           fi
+          if [ "${{ steps.sign.outputs.real }}" = "true" ]; then
+            NOTES="Signed with Developer ID and notarized: unzip and open INKER.app. See docs/stack-decision.md for what works and what does not."
+          else
+            NOTES="Ad-hoc signed, not notarized. After unzipping run \`xattr -dr com.apple.quarantine INKER.app\`, or open it once, then allow it under System Settings > Privacy & Security > Open Anyway. See docs/stack-decision.md for what works and what does not."
+          fi
           gh release create "$TAG" dist/out/* \
             --title "INKER $V" \
             --prerelease \
-            --notes "Ad-hoc signed, not notarized. After unzipping run \`xattr -dr com.apple.quarantine INKER.app\`, or open it once, then allow it under System Settings > Privacy & Security > Open Anyway. See docs/stack-decision.md for what works and what does not." \
+            --notes "$NOTES" \
             || gh release upload "$TAG" dist/out/* --clobber
+
+      - name: Remove the signing keychain
+        if: always() && steps.sign.outputs.keychain != ''
+        run: security delete-keychain "${{ steps.sign.outputs.keychain }}" || true

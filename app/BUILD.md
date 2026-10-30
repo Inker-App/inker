@@ -173,24 +173,34 @@ On Linux and in Rust tests, `CoreHandle::open_with_rust_providers(private, data)
 core with the file key store (`<data dir>/vault.key`) and the pure-Rust extractor. It is
 Rust-only and not in the Swift bindings.
 
-## Codesigning and notarization (later)
+## Codesigning and notarization
 
 `make app` ad-hoc signs the bundle (`SIGN_IDENTITY=-`), and `make sign` re-signs it after
 anything is added to `Contents/MacOS`. Ad-hoc is the floor: without any signature macOS
 reports a downloaded copy as "damaged" and offers only the Trash. With it, a quarantined
 copy gets the "unidentified developer" dialog and the Open Anyway switch in System Settings.
 
-The app must eventually be Developer ID signed and **not** sandboxed (stack-decision section 4: a stdio
-helper cannot inherit the sandbox). When there is a certificate, add to the `app` target in
-the Makefile, after the bundle is assembled:
+A real release is Developer ID signed with the hardened runtime, notarized and stapled, and
+**not** sandboxed (stack-decision section 4: a stdio helper cannot inherit the sandbox). The
+release workflow does all of it when the repository has these secrets, and falls back to
+ad-hoc when it does not, so a fork or a build-only run still works:
+
+| Secret | What |
+| --- | --- |
+| `MACOS_CERT_P12` | The "Developer ID Application" certificate with its private key, exported from Keychain Access as a `.p12`, base64 encoded (`base64 -i inker.p12`). |
+| `MACOS_CERT_PASSWORD` | The password given at export. |
+| `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`, `NOTARY_KEY_P8` | An App Store Connect API key (Users and Access > Integrations > App Store Connect API > Team Keys, access "Developer"): its Key ID, the Issuer ID shown above the table, and the contents of the downloaded `AuthKey_<id>.p8`. |
+
+Locally, with the certificate in the login keychain:
 
 ```sh
-codesign --force --options runtime --timestamp \
-  --sign "Developer ID Application: <name> (<team>)" build/INKER.app
+make app SIGN_IDENTITY="Developer ID Application: <name> (<team>)"   # hardened runtime, timestamped
 ditto -c -k --keepParent build/INKER.app build/INKER.zip
 xcrun notarytool submit build/INKER.zip --keychain-profile <profile> --wait
 xcrun stapler staple build/INKER.app
 ```
 
-Sign nested code first if any is added (the `inker` CLI helper, when it ships inside the app).
-Hardened runtime needs no extra entitlements for what the shell does today.
+Nested code is signed first (`inker-cli` inside the app), then the bundle. The CLI that ships
+on its own and inside the `.mcpb` is signed and notarized too; a bare binary cannot be
+stapled, so Gatekeeper looks its ticket up online. Hardened runtime needs no extra
+entitlements for what the shell does today.

@@ -368,6 +368,13 @@ every served connection joins; `initialize` names the session after the client's
 change sink so the footer updates while the popover is up. `Status.clients` carries the names;
 `agent_report` gives Settings the installed and registered bits from `doctor`.
 
+**Developer ID and notarization (2026-10-30).** Ben has the membership and asked how to stop
+the "damaged" dialog. The release workflow now signs with a Developer ID Application
+certificate (hardened runtime, timestamp), notarizes the app and the CLI with an App Store
+Connect API key, staples the app, and says so in the release notes, whenever the repository
+has the secrets listed in `app/BUILD.md`; without them it ad-hoc signs as before. The `.mcpb`
+carries the same signed, notarized CLI.
+
 ## 9. Target clients (reframed 2026-10-28)
 
 INKER is for the chat window. Research on 2026-10-28 (search summaries only; vendor pages were unreachable from the dev box that day, so re-read primary sources before relying on a detail):

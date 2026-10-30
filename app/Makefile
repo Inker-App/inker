@@ -13,6 +13,13 @@ ICONSET := build/AppIcon.iconset
 # signature Gatekeeper reports a downloaded copy as "damaged". Pass a
 # "Developer ID Application: ..." identity for a real release; see BUILD.md.
 SIGN_IDENTITY ?= -
+# A real identity gets the hardened runtime and a secure timestamp, which
+# notarization requires. Ad-hoc signatures cannot be timestamped.
+ifeq ($(SIGN_IDENTITY),-)
+CODESIGN_FLAGS ?=
+else
+CODESIGN_FLAGS ?= --options runtime --timestamp
+endif
 
 .PHONY: rust app icon sign run test clean
 
@@ -46,9 +53,9 @@ icon:
 # adding anything to Contents/MacOS (the release workflow copies inker-cli in).
 sign:
 	for f in $(APP)/Contents/MacOS/*; do \
-	  [ "$$f" = "$(APP)/Contents/MacOS/INKER" ] || codesign --force --sign "$(SIGN_IDENTITY)" "$$f"; \
+	  [ "$$f" = "$(APP)/Contents/MacOS/INKER" ] || codesign --force $(CODESIGN_FLAGS) --sign "$(SIGN_IDENTITY)" "$$f"; \
 	done
-	codesign --force --sign "$(SIGN_IDENTITY)" --identifier sh.inker.app $(APP)
+	codesign --force $(CODESIGN_FLAGS) --sign "$(SIGN_IDENTITY)" --identifier sh.inker.app $(APP)
 	codesign --verify --deep --strict --verbose=2 $(APP)
 
 run: app
