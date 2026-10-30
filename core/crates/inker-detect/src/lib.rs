@@ -13,6 +13,7 @@ pub mod model;
 pub mod names;
 pub mod rules;
 pub mod shape;
+pub mod spaced;
 pub mod template;
 pub mod unplaced;
 mod util;
@@ -48,8 +49,20 @@ impl<'a> Detector<'a> {
         self
     }
 
-    /// Run the pipeline over one extracted file.
+    /// Run the pipeline over one extracted file. Letter-spaced pages are
+    /// read through a closed-up view (see [`spaced`]); spans point into the
+    /// original text either way.
     pub fn detect(&self, extracted: &Extracted) -> Result<(Vec<Detection>, Classification)> {
+        let Some(view) = spaced::View::of(extracted) else {
+            return self.detect_text(extracted);
+        };
+        tracing::debug!("letter-spaced text closed up for detection");
+        let (mut out, class) = self.detect_text(&view.extracted)?;
+        view.restore(&mut out);
+        Ok((out, class))
+    }
+
+    fn detect_text(&self, extracted: &Extracted) -> Result<(Vec<Detection>, Classification)> {
         let matched = template::match_template(extracted, self.packs);
         let from_template = matched
             .as_ref()

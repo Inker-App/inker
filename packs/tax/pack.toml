@@ -3,10 +3,10 @@
 name = "tax"
 version = "0.1.0"
 category = "Taxes"
-description = "US federal tax forms: W-2, 1099 family, 1098, 1095, Schedule K-1, Form 1040"
+description = "US federal tax forms: W-2, 1099 family, 1098, 1095, Schedule K-1, Form 1040, Form 8879"
 
 # File stems under forms/. A template only loads if it is listed here.
-forms = ["w2", "1099-int", "1099-nec", "1099-div", "1099-b", "1099-k", "1099-misc", "1099-misc-2026", "1098", "1095-a", "1095-b", "1095-c", "k1-1065", "k1-1120s", "1040"]
+forms = ["w2", "1099-int", "1099-nec", "1099-div", "1099-b", "1099-k", "1099-misc", "1099-misc-2026", "1098", "1095-a", "1095-b", "1095-c", "k1-1065", "k1-1120s", "1040", "8879"]
 
 [codename]
 # First codename segment for a document kind with no entry below.
@@ -30,6 +30,7 @@ default = "doc"
 "k1-1065" = "k1-1065"
 "k1-1120s" = "k1-1120s"
 "1040" = "1040"
+"8879" = "8879"
 "bank-statement" = "bank-statement"
 "closing-statement" = "closing-statement"
 "receipt" = "receipt"
