@@ -118,6 +118,10 @@ From the model research. Ordered by precision; each stage sees what the previous
 5. **Fail closed.** Any leftover run of 9+ digits, or an unresolved proper name near a sensitive label, is masked and raised as a "needs attention" item. The attention card in the design is this stage talking.
 6. **Unplaced values on form pages** *(added 2026-10-28)*. On pages where a template matched, anything left that is a capitalised 2-4 word run, an alphanumeric code, or a 6+ digit run, and is not a label, boilerplate (`packs/tax/boilerplate.txt`), amount, date or form number, is tokenized when its shape is unambiguous (street line, state ID, labelled account code) and otherwise held with one question per distinct value. This closes the IRS "labels first, values after" layout without PDF coordinates, at a budget of at most 3 questions per form.
 
+7. **Same value everywhere** *(added 2026-10-30)*. Once a number is placed with confidence as an SSN, ITIN, EIN, routing or account number by a template or rule, every other occurrence of the same digits in any page or form field, with or without separators, gets the same kind and is never held. One value, one token, across the whole document.
+8. **Letter-spaced pages** *(added 2026-10-30)*. Some tax software places every glyph by itself, so the text layer reads back as `9 0 0 - 1 2 - 3 4 5 6`. Such pages are closed up before detection and the spans mapped back. Digit boxes (`0 0 0 1 2 3`, `0001 2345 6789`) are read as one value by the template, account and fail-closed rules.
+9. **Instruction pages and public contacts** *(added 2026-10-30)*. A template may mark its printed instruction pages (W-9); only identifier rules run there, never names, orgs or addresses. The pack's `[public]` table lists agency phone numbers and emails (IRS, SSA, TAS, FTC) that are never inked. Dates after a birth-date label are inked as `[DOB_n]`; PINs after a PIN label as `[PIN_n]` or `[IP_PIN_n]`.
+
 Three treatments per detection, from the brief: tokenize, generalize, keep. Treatment is decided by type and template, overridable per document by the user's answer on the attention card.
 
 ### 3.6 MCP surface
@@ -374,6 +378,38 @@ certificate (hardened runtime, timestamp), notarizes the app and the CLI with an
 Connect API key, staples the app, and says so in the release notes, whenever the repository
 has the secrets listed in `app/BUILD.md`; without them it ad-hoc signs as before. The `.mcpb`
 carries the same signed, notarized CLI.
+
+### 2026-10-30: the first real-folder leak report
+
+Ben ran INKER over his own tax folder and had Claude read the output. Claude reported raw values
+on five documents and over-inking on a sixth. Fixed test-first by five parallel agents, one
+branch each, merged as `detection-leaks` (673 workspace tests, up from 597). What each one was:
+
+- **Undashed SSN throughout a return.** Only the page-1 box was placed by the 1040 template; the
+  9-digit copies in page and schedule headers sat too far from any label, fell to the fail-closed
+  pass as "a long number I can't place", and a "Leave it" answer, which the chat agent can give
+  itself over MCP `inker/answer`, puts that copy in the clear. Closed by step 7 above. Open: should
+  an agent be able to answer review questions at all, and should "Leave it" ever apply to an
+  SSN-shaped value? Ben's call.
+- **Dates of birth** were never detected. New `dob` module.
+- **Routing and account numbers raw beside the `[ACCOUNT_1]` token.** Digit boxes: the template
+  took the first chunk of `0001 2345 6789` and left the rest. Closed by step 8.
+- **Form 8879 with nothing inked.** Reproduced with a letter-spaced text layer (every glyph
+  placed by itself); no rule can match `9 0 0 - 1 2 - 3 4 5 6`, and a document with zero
+  detections is served as Ready. Closed by step 8 plus a PIN rule and an 8879 template. Open: a
+  document that ends with nothing inked is still served; whether to hold it is Ben's call.
+- **Full name and street address raw.** The address patterns only matched title case, so an
+  all-caps mailing block lost its street line and, with it, the unlabelled name above. Fixed in
+  `address.rs` and `names.rs` (surname-first runs too).
+- **W-9 over-inked (55 values).** The instructions page matched the 1099-NEC template because it
+  names that form; prose after "TIN" or "name" was read as names ("IRS" became a person), "An LLC"
+  became an org, agency hotlines became phones. Closed by step 9 and a W-9 template; the synthetic
+  W-9 now inks 8 values, all on page 1. The ML model played no part: production runs `NoModel`.
+
+Still open from the same report: one 2023 return "failed to process" with no reason captured
+yet (the app log under subsystem `sh.inker.app` should say); a street line with no city line
+after it is still not an address on its own; a `pdf-extract` that keeps glyph positions would
+make the letter-spaced view unnecessary.
 
 ## 9. Target clients (reframed 2026-10-28)
 
