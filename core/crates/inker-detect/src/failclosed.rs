@@ -402,10 +402,14 @@ pub(crate) fn held(
 }
 
 /// Split a run at spaces unless every space-separated group has four
-/// characters (card style). Returns byte ranges relative to the run.
+/// characters (card style) or one (digit boxes, as Form 1040 prints routing
+/// and account numbers). Returns byte ranges relative to the run.
 fn pieces(run: &str) -> Vec<(usize, usize)> {
     let groups: Vec<&str> = run.split(' ').collect();
-    if groups.len() == 1 || groups.iter().all(|g| g.len() == 4) {
+    if groups.len() == 1
+        || groups.iter().all(|g| g.len() == 4)
+        || groups.iter().all(|g| g.len() == 1)
+    {
         return vec![(0, run.len())];
     }
     let mut out = Vec::new();
