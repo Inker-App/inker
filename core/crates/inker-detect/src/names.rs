@@ -225,7 +225,32 @@ const STOP_WORDS: &[&str] = &[
     "opening",
     "new",
     "old",
+    // Agencies the forms and their instructions name ("Internal Revenue
+    // Service", "Department of the Treasury" and "Social Security" are
+    // covered above). Never part of a person's name.
+    "irs",
+    "ssa",
+    "tigta",
+    "ftc",
+    "tas",
+    "fincen",
+    "taxpayer",
+    "advocate",
+    "administration",
+    "commission",
+    "inspector",
 ];
+
+/// Words that may open an organisation's run without being part of its name
+/// ("An LLC", "Each LLC"). Shed like stop words, so a suffix with only these
+/// before it is no organisation. Kept apart from the stop words because a
+/// person's run must not stop at the initial "A".
+const ORG_LEADS: &[&str] = &["a", "an", "any", "each", "every", "such", "another"];
+
+/// A word shed from the front of an organisation's run.
+fn is_org_lead(word: &str) -> bool {
+    (is_stop_word(word) || ORG_LEADS.contains(&normalise(word).as_str())) && !is_suffix(word)
+}
 
 const STATE_NAMES: &[&str] = &[
     "alabama",
@@ -357,16 +382,14 @@ pub fn run_at(text: &str, start: usize) -> Option<NameRun> {
             break;
         }
     }
-    // An org ends at its last suffix and only sheds leading stop words
-    // ("Your Statement Northwind Federal Credit Union"). A person run is cut
+    // An org ends at its last suffix and only sheds leading stop words and
+    // articles ("Your Statement Northwind Federal Credit Union", "An LLC");
+    // a suffix with no name left before it is no org. A person run is cut
     // at its first stop word and has no connectors.
     let org = match toks.iter().rposition(|(_, w)| is_suffix(w)) {
         Some(i) => {
             toks.truncate(i + 1);
-            let lead = toks
-                .iter()
-                .take_while(|(_, w)| is_stop_word(w) && !is_suffix(w))
-                .count();
+            let lead = toks.iter().take_while(|(_, w)| is_org_lead(w)).count();
             toks.drain(..lead);
             true
         }
@@ -533,7 +556,7 @@ pub fn find(page: &PageText) -> Vec<Detection> {
                 .len();
         let mut start = m.start();
         for w in text[m.start()..body_end].split(' ') {
-            if is_stop_word(w) && !is_suffix(w) {
+            if is_org_lead(w) {
                 start += w.len() + 1;
             } else {
                 break;

@@ -22,7 +22,7 @@ pub use util::detection;
 pub use classify::Classification;
 pub use model::{Model, NoModel};
 
-use inker_core::{Detection, DetectionSource, Extracted, PageText, Result, Treatment};
+use inker_core::{Detection, DetectionSource, Extracted, PageText, Result, TokenKind, Treatment};
 use inker_packs::PackSet;
 
 /// The detection pipeline: templates, rules, names, addresses, the model (if
@@ -61,11 +61,19 @@ impl<'a> Detector<'a> {
             "templates"
         );
 
+        // A form's printed instruction pages hold no typed value: the names
+        // and addresses there are examples and agencies. Only the identifier
+        // rules run on them.
+        let instructions: &[u32] = matched
+            .as_ref()
+            .map_or(&[], |m| m.instruction_pages.as_slice());
         let mut all = from_template.detections.clone();
         for page in &extracted.pages {
             all.extend(rules::find(page));
-            all.extend(names::find(page));
-            all.extend(address::find(page));
+            if !instructions.contains(&page.page) {
+                all.extend(names::find(page));
+                all.extend(address::find(page));
+            }
         }
         // Every form field value is scanned as a page of its own, whether or
         // not a template maps its name.
@@ -129,6 +137,15 @@ impl<'a> Detector<'a> {
         }
         merged.extend(held);
         let mut out = merge(merged);
+        out.retain(|d| {
+            let printed = d.field.is_none()
+                && instructions.contains(&d.page)
+                && matches!(
+                    d.kind,
+                    TokenKind::Person | TokenKind::Org | TokenKind::Address
+                );
+            !printed && !self.is_public_contact(extracted, &field_pages, d)
+        });
 
         // Roles from the template field a detection sits in.
         for d in out
@@ -154,6 +171,37 @@ impl<'a> Detector<'a> {
             "detected"
         );
         Ok((out, class))
+    }
+
+    /// A phone number or email address a pack lists as a public agency
+    /// contact (an IRS hotline, phishing@irs.gov).
+    fn is_public_contact(
+        &self,
+        extracted: &Extracted,
+        field_pages: &[(&str, PageText)],
+        d: &Detection,
+    ) -> bool {
+        if !matches!(d.kind, TokenKind::Phone | TokenKind::Email) {
+            return false;
+        }
+        let text = match d.field.as_deref() {
+            Some(name) => field_pages
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, p)| p.text.as_str()),
+            None => extracted
+                .pages
+                .iter()
+                .find(|p| p.page == d.page)
+                .map(|p| p.text.as_str()),
+        };
+        let Some(value) = text.and_then(|t| t.get(d.span.start..d.span.end)) else {
+            return false;
+        };
+        match d.kind {
+            TokenKind::Phone => self.packs.is_public_phone(value),
+            _ => self.packs.is_public_email(value),
+        }
     }
 }
 

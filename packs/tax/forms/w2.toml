@@ -3,6 +3,8 @@
 # Schema (shared by every file in forms/):
 #   id, display, kind     template id, display name, DocKind string
 #   anchors               regexes that must all match a page (case-insensitive)
+#   instructions          optional regexes marking the form's printed instruction
+#                         pages (a running head); only identifier rules run there
 #   year                  regex whose capture group 1 is the tax year
 #   [[fields]]
 #     id                  box id as printed ("a", "1", "12a") or a name

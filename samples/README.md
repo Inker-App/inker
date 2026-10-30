@@ -60,6 +60,7 @@ Plus:
 | `w2-bluefin-2025-fillable.pdf` | AcroForm reading: labels in the text layer, values only in form fields |
 | `w2-acme-2025-scan.pdf` + `.ocr.json` | A PDF with no text layer, so extraction falls back to OCR |
 | `receipt-cornerstone-2025-03-09-photo.png` + `.ocr.json` | An image, OCR only |
+| `w9-bluefin-2025.txt`, `.pdf`, `.ocr.json` | Form W-9 (Rev. March 2024), three pages: page 1 filled by Riley Sample for Bluefin Analytics LLC (requester Tidewater Partners LP), then two pages of the IRS's printed instructions. The `.txt` puts a form feed between pages; the PDF and the sidecar have one entry per page. The instructions print the agency phone numbers and email addresses the real form prints (SSA, TAS, IRS TTY, TIGTA, FTC): public lines, not anyone's details, and they must never be inked |
 
 The `.ocr.json` sidecars are what `inker_extract::FixtureOcr` reads on Linux
 in place of Apple Vision: for `dir/name.ext` it reads `dir/name.ocr.json`.

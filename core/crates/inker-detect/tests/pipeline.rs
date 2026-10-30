@@ -538,3 +538,23 @@ fn a_busy_statement_asks_one_question() {
     }
     untouched(&text, &dets, &["2,100.00", "-1,200.00", "812.00", "1042"]);
 }
+
+#[test]
+fn public_agency_contacts_are_never_inked() {
+    // The pack lists the agency lines the IRS prints; anyone else's number
+    // or address is inked as before.
+    let text = "Questions? Call the IRS at 1-800-829-1040 (TTY 800.829.4059) or\n\
+                Harbor Street Credit Union at (503) 555-0142.\n\
+                Forward phishing to phishing@irs.gov; reach us at help@harbor.example.\n";
+    let (dets, _) = detect(&one_page(text, TextOrigin::TextLayer), &packs()).unwrap();
+    untouched(
+        text,
+        &dets,
+        &["1-800-829-1040", "800.829.4059", "phishing@irs.gov"],
+    );
+    assert_eq!(find(text, &dets, "(503) 555-0142").kind, TokenKind::Phone);
+    assert_eq!(
+        find(text, &dets, "help@harbor.example").kind,
+        TokenKind::Email
+    );
+}

@@ -22,6 +22,9 @@ pub struct TemplateMatch<'a> {
     pub template: &'a FormTemplate,
     /// Pages where every anchor matched.
     pub pages: Vec<u32>,
+    /// The form's printed instruction pages: not form pages, but marked by
+    /// one of the template's `instructions` patterns.
+    pub instruction_pages: Vec<u32>,
     pub year: Option<u16>,
     /// The packs the template came from, for their boilerplate lines.
     pub packs: &'a PackSet,
@@ -99,12 +102,20 @@ pub fn match_template<'a>(extracted: &Extracted, packs: &'a PackSet) -> Option<T
                 let y = t.year.as_ref()?;
                 on_form().find_map(|p| first_year(y, &mask_revisions(&p.text)))
             });
+        let instruction_pages = extracted
+            .pages
+            .iter()
+            .filter(|p| !pages.contains(&p.page))
+            .filter(|p| t.instructions.iter().any(|r| r.is_match(&p.text)))
+            .map(|p| p.page)
+            .collect();
         best = Some((
             score.0,
             score.1,
             TemplateMatch {
                 template: t,
                 pages,
+                instruction_pages,
                 year,
                 packs,
             },
@@ -119,14 +130,22 @@ fn collapse(text: &str) -> String {
 }
 
 /// True when the first anchor matches as a title (not a prose mention such
-/// as "Form 1099-NEC, Nonemployee Compensation," or "Forms W-2 and W-3") and
-/// every other anchor matches within `TITLE_WINDOW` of it.
+/// as "Form 1099-NEC, Nonemployee Compensation,", "Forms W-2 and W-3" or
+/// "Form 1099-NEC (nonemployee compensation)") and every other anchor
+/// matches within `TITLE_WINDOW` of it.
 fn title_matches(anchors: &[Regex], text: &str) -> bool {
     let Some((first, rest)) = anchors.split_first() else {
         return false;
     };
     first.find_iter(text).any(|m| {
-        let prose = text[m.end()..].trim_start().starts_with(',')
+        let after = text[m.end()..].trim_start();
+        // "Form 1099-NEC (nonemployee compensation)" in a list of returns;
+        // a title's parenthesis holds a revision or a year: "(Rev. 4-2025)".
+        let glossed = after
+            .strip_prefix('(')
+            .is_some_and(|g| g.starts_with(|c: char| c.is_ascii_lowercase()));
+        let prose = after.starts_with(',')
+            || glossed
             || text[..m.start()]
                 .trim_end()
                 .to_ascii_lowercase()

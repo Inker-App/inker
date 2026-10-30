@@ -719,3 +719,21 @@ fn no_part_of_a_typed_name_is_visible_on_irs_layouts() {
     }
     assert!(leaks.is_empty(), "name parts visible: {leaks:?}");
 }
+
+#[test]
+fn a_list_of_information_returns_does_not_match_a_template() {
+    // Form W-9's instructions list the returns a requester files.
+    let e = pages(
+        "Examples of information returns include, but are not limited to, the following.\n\
+         - Form 1099-INT (interest earned or paid).\n\
+         - Form 1099-DIV (dividends, including those from stocks or mutual funds).\n\
+         - Form 1099-MISC (various types of income, prizes, awards, or gross proceeds).\n\
+         - Form 1099-NEC (nonemployee compensation).\n\
+         - Form 1099-B (stock or mutual fund sales and certain other transactions by brokers).\n\
+         - Form 1099-K (merchant card and third-party network transactions).\n\
+         - Form 1098 (home mortgage interest), 1098-E (student loan interest), and 1098-T (tuition).\n",
+    );
+    let set = packs();
+    let m = template::match_template(&e, &set);
+    assert!(m.is_none(), "{:?}", m.map(|m| m.template.id.clone()));
+}

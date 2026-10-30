@@ -212,3 +212,50 @@ fn a_name_heading_a_mailing_address_is_a_person() {
         );
     }
 }
+
+#[test]
+fn an_org_suffix_needs_a_name_before_it() {
+    // IRS instructions talk about LLCs; an article and a suffix is no name.
+    for t in [
+        "An LLC that is a disregarded entity should check the box",
+        "If the LLC is classified as a corporation",
+        "Each LLC must enter its classification",
+        "A Corporation. Enter the code",
+        "LLC\n",
+    ] {
+        assert!(found(t).is_empty(), "{t}: {:?}", found(t));
+    }
+    // A real name after an article is still found, without the article.
+    assert_eq!(
+        found("Paid to Bluefin Analytics LLC today"),
+        one(TokenKind::Org, "Bluefin Analytics LLC", None)
+    );
+    assert_eq!(
+        found("An Acme Robotics Inc invoice"),
+        one(TokenKind::Org, "Acme Robotics Inc", None)
+    );
+}
+
+#[test]
+fn agencies_are_never_people() {
+    for w in [
+        "IRS",
+        "SSA",
+        "TIGTA",
+        "FTC",
+        "Taxpayer",
+        "Advocate",
+        "Administration",
+    ] {
+        assert!(names::is_stop_word(w), "{w}");
+    }
+    for t in [
+        "Recipient's name: Internal Revenue Service",
+        "Recipient's name: IRS Office",
+        "Recipient's name: Social Security Administration",
+        "Recipient's name: Taxpayer Advocate Service",
+        "Employee's name: SSA Field Office",
+    ] {
+        assert!(found(t).is_empty(), "{t}: {:?}", found(t));
+    }
+}
