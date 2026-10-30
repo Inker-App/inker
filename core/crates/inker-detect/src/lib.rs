@@ -7,11 +7,13 @@
 
 pub mod address;
 pub mod classify;
+pub mod dob;
 pub mod failclosed;
 pub mod fields;
 pub mod model;
 pub mod names;
 pub mod rules;
+pub mod same_value;
 pub mod shape;
 pub mod template;
 pub mod unplaced;
@@ -25,8 +27,10 @@ pub use model::{Model, NoModel};
 use inker_core::{Detection, DetectionSource, Extracted, PageText, Result, Treatment};
 use inker_packs::PackSet;
 
-/// The detection pipeline: templates, rules, names, addresses, the model (if
-/// any), then fail-closed and, on form pages, unplaced values; overlaps merged, roles attached from template fields.
+/// The detection pipeline: templates, rules, names, addresses, dates of
+/// birth, the model (if any), then fail-closed and, on form pages, unplaced
+/// values; overlaps merged, repeats of a placed number given its kind, roles
+/// attached from template fields.
 #[derive(Debug)]
 pub struct Detector<'a> {
     packs: &'a PackSet,
@@ -66,6 +70,7 @@ impl<'a> Detector<'a> {
             all.extend(rules::find(page));
             all.extend(names::find(page));
             all.extend(address::find(page));
+            all.extend(dob::find(page));
         }
         // Every form field value is scanned as a page of its own, whether or
         // not a template maps its name.
@@ -78,7 +83,8 @@ impl<'a> Detector<'a> {
             let found = rules::find(p)
                 .into_iter()
                 .chain(names::find(p))
-                .chain(address::find(p));
+                .chain(address::find(p))
+                .chain(dob::find(p));
             all.extend(fields::tag(found, name));
         }
         all.extend(self.model.detect(&extracted.pages)?);
@@ -129,6 +135,13 @@ impl<'a> Detector<'a> {
         }
         merged.extend(held);
         let mut out = merge(merged);
+
+        // A number placed once is the same kind wherever it repeats.
+        let repeats = same_value::find(&extracted.pages, &field_pages, &out);
+        if !repeats.is_empty() {
+            out.extend(repeats);
+            out = merge(out);
+        }
 
         // Roles from the template field a detection sits in.
         for d in out
