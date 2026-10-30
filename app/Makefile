@@ -4,6 +4,7 @@
 #   make app     swift build -c release, then assemble build/INKER.app
 #   make run     make app, then open it
 #   make test    swift test (InkerAppTests)
+#   make dmg     build/INKER.dmg with the styled Finder window (needs dmgbuild)
 
 CONFIG ?= release
 APP := build/INKER.app
@@ -21,7 +22,7 @@ else
 CODESIGN_FLAGS ?= --options runtime --timestamp
 endif
 
-.PHONY: rust app icon sign run test clean
+.PHONY: rust app icon sign run test dmg clean
 
 rust:
 	scripts/build-rust.sh
@@ -48,6 +49,11 @@ icon:
 	  d=$$((s * 2)); sips -z $$d $$d Resources/AppIcon-1024.png --out $(ICONSET)/icon_$${s}x$${s}@2x.png >/dev/null; \
 	done
 	iconutil -c icns $(ICONSET) -o build/AppIcon.icns
+
+# The disk image: INKER.app beside an Applications link on the drawn
+# background (dmg/). pip install dmgbuild first; see BUILD.md.
+dmg: app
+	scripts/make-dmg.sh $(APP) build/INKER.dmg build/AppIcon.icns
 
 # Sign nested executables first, then the bundle, then verify. Re-run after
 # adding anything to Contents/MacOS (the release workflow copies inker-cli in).
