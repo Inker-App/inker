@@ -215,10 +215,12 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
     let mut resolve = Tool::new(
         "resolve",
         "Read a private document by its handle. Whenever the user's message contains a handle \
-         like 🐙/w2-2025 or ink/w2-2025, call this tool with it before answering; never guess \
-         what a handle refers to, and do not look for the file on disk. Returns the document's \
-         text with sensitive values replaced by stable tokens like [SSN_1] (the same token always \
-         means the same value), or a list of child handles for a folder.",
+         like 🐙/w2-2025, ink/w2-2025 or 🐙/folder-0412, call this tool with it before \
+         answering. A handle is not a path: there is no 🐙 folder on disk, so do not look for \
+         the file with other tools or ask where it lives, and never guess what a handle refers \
+         to. Returns the document's text with sensitive values replaced by stable tokens like \
+         [SSN_1] (the same token always means the same value), or a list of child handles for \
+         a folder handle.",
         schema::<HandleArgs>(),
     )
     .with_title("Resolve an INKER handle")
@@ -748,5 +750,32 @@ mod tests {
     fn unknown_clients_keep_their_own_name() {
         assert_eq!(display_agent_name("my-client"), "my-client");
         assert_eq!(display_agent_name("  "), super::UNKNOWN_AGENT);
+    }
+}
+
+#[cfg(test)]
+mod tool_definition_tests {
+    use super::*;
+
+    /// Chat clients weigh tool descriptions more than server instructions,
+    /// so the handle rule lives in both: a handle is not a path on disk.
+    #[test]
+    fn resolve_tells_the_model_a_handle_is_not_a_path() {
+        let tools = tool_definitions(ServerOptions::default());
+        let resolve = tools.iter().find(|t| t.name == "resolve").unwrap();
+        let text = resolve.description.as_deref().unwrap_or_default();
+        assert!(
+            text.contains("🐙/folder-0412"),
+            "a folder handle looks most like a path"
+        );
+        assert!(text.contains("A handle is not a path"));
+        assert!(text.contains("do not look for the file"));
+        let list = tools.iter().find(|t| t.name == "list").unwrap();
+        assert!(
+            list.description
+                .as_deref()
+                .unwrap_or_default()
+                .contains("🐙/")
+        );
     }
 }
