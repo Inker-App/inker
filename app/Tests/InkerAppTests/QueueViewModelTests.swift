@@ -5,7 +5,7 @@ import Testing
 
 /// Backend records to popover state, rows and copy.
 struct QueueViewModelTests {
-    private let listening = Status(mcpListening: true, privateFolderDisplay: "~/Private")
+    private let listening = Status(mcpListening: true, privateFolderDisplay: "~/Private", clients: ["Claude"])
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
     private func doc(_ id: String, _ codename: String, _ name: String, _ kind: String, _ state: DocState,
@@ -49,7 +49,8 @@ struct QueueViewModelTests {
         #expect(m.mode == .empty)
         #expect(m.badgeCount == 0)
         #expect(m.footer.left == .text("Nothing filed yet"))
-        #expect(m.footer.right == "MCP running")
+        #expect(m.footer.right == "Claude connected")
+        #expect(!m.footer.rightIsConnectLink)
     }
 
     @Test func processingBoard() {
@@ -73,7 +74,7 @@ struct QueueViewModelTests {
         #expect(!g.rows[1].copyEnabled)
         #expect(g.rows[3].detail == "closing statement · queued")
         #expect(m.footer.left == .text("Moved 4 files from ~/Downloads"))
-        #expect(m.footer.right == "4 files · MCP running")
+        #expect(m.footer.right == "4 files · Claude connected")
     }
 
     @Test func attentionBoard() {
@@ -161,7 +162,7 @@ struct QueueViewModelTests {
         #expect(!p.showsHeader, "a file still being read shows its name and loader, once")
         #expect(p.rows.count == 1)
         #expect(p.rows[0].title == "notes.pdf")
-        #expect(pm.footer.right == "1 file · MCP running")
+        #expect(pm.footer.right == "1 file · Claude connected")
 
         let folder = build([folder([doc("3", "a", "a.pdf", "W-2", .ready, inked: 2)])]).groups[0]
         #expect(folder.showsHeader)
@@ -191,13 +192,21 @@ struct QueueViewModelTests {
     }
 
     @Test func mcpNotListening() {
-        let m = QueueViewModel.build(queue: [], status: Status(mcpListening: false, privateFolderDisplay: "~/Private"),
+        let m = QueueViewModel.build(queue: [], status: Status(mcpListening: false, privateFolderDisplay: "~/Private", clients: []),
                                      reads: [], lastDrop: nil, style: .octopus, now: now)
         #expect(m.footer.right == "MCP not running")
+        #expect(!m.footer.rightIsConnectLink, "INKER's own socket is the problem, not Claude")
+    }
+
+    @Test func withoutALiveClaudeSessionTheFooterLinksToConnect() {
+        let m = QueueViewModel.build(queue: [], status: Status(mcpListening: true, privateFolderDisplay: "~/Private", clients: ["Claude Code"]),
+                                     reads: [], lastDrop: nil, style: .octopus, now: now)
+        #expect(m.footer.right == "Claude not connected")
+        #expect(m.footer.rightIsConnectLink)
     }
 
     @Test func emptyCopyNamesThePrivateFolder() {
-        let m = QueueViewModel.build(queue: [], status: Status(mcpListening: true, privateFolderDisplay: "~/Vault"),
+        let m = QueueViewModel.build(queue: [], status: Status(mcpListening: true, privateFolderDisplay: "~/Vault", clients: ["Claude"]),
                                      reads: [], lastDrop: nil, style: .octopus, now: now)
         #expect(m.emptySubtitlePrefix == "They move into ~/Vault. You get a ")
         #expect(m.handlePrefix == "🐙/")

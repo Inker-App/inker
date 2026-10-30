@@ -14,13 +14,14 @@
 //! name its harness sends. They still return no value, only prompts, kinds,
 //! pages and the core's blanked context words; `inker/status` returns a path.
 
+use std::future::Future;
 use std::sync::Arc;
 
 use inker_core::{DocState, Handle, ListEntry, QuestionId, ReviewAnswer};
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    ListToolsResult, MetaObject, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
-    ToolAnnotations,
+    InitializeRequestParams, InitializeResult, ListToolsResult, MetaObject, PaginatedRequestParams,
+    ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
@@ -33,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use crate::backend::{Backend, PendingReview, Resolved};
 use crate::handle::parse_handle_arg;
 use crate::instructions::instructions;
+use crate::sessions::Sessions;
 
 /// `_meta` key Claude Code reads to keep a tool out of deferred tool search.
 pub const ALWAYS_LOAD_META_KEY: &str = "anthropic/alwaysLoad";
@@ -195,6 +197,9 @@ impl From<&ListEntry> for EntryView {
 pub struct InkerServer {
     backend: Arc<dyn Backend>,
     options: ServerOptions,
+    /// The live-session registry and this connection's id in it, when the
+    /// host keeps one (the app does, for "Claude connected").
+    session: Option<(Arc<Sessions>, u64)>,
 }
 
 impl std::fmt::Debug for InkerServer {
@@ -383,7 +388,18 @@ pub fn display_agent_name(raw: &str) -> String {
 
 impl InkerServer {
     pub fn new(backend: Arc<dyn Backend>, options: ServerOptions) -> Self {
-        Self { backend, options }
+        Self {
+            backend,
+            options,
+            session: None,
+        }
+    }
+
+    /// Register this connection in `sessions` under `id`; `initialize`
+    /// names it there.
+    pub fn in_sessions(mut self, sessions: Arc<Sessions>, id: u64) -> Self {
+        self.session = Some((sessions, id));
+        self
     }
 
     async fn blocking<T, F>(&self, f: F) -> Result<T, McpError>
@@ -625,6 +641,20 @@ impl InkerServer {
 }
 
 impl ServerHandler for InkerServer {
+    /// The default, plus naming this session after the client for the
+    /// popover's "Claude connected".
+    fn initialize(
+        &self,
+        request: InitializeRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> impl Future<Output = Result<InitializeResult, McpError>> + Send + '_ {
+        context.peer.set_peer_info(request.clone());
+        if let Some((sessions, id)) = &self.session {
+            sessions.name(*id, display_agent_name(&request.client_info.name));
+        }
+        std::future::ready(self.negotiate_initialize(&request))
+    }
+
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(
@@ -689,6 +719,21 @@ where
     serve_pair(backend, r, w, options, ct).await
 }
 
+/// `serve_stream`, with the connection registered in `sessions`.
+pub async fn serve_stream_in<S>(
+    backend: Arc<dyn Backend>,
+    stream: S,
+    options: ServerOptions,
+    sessions: Arc<Sessions>,
+    ct: CancellationToken,
+) -> Result<(), ServeError>
+where
+    S: AsyncRead + AsyncWrite + Send + 'static,
+{
+    let (r, w) = tokio::io::split(stream);
+    serve_pair_in(backend, r, w, options, Some(sessions), ct).await
+}
+
 /// Serve over a separate reader and writer (stdio is one of these).
 pub async fn serve_pair<R, W>(
     backend: Arc<dyn Backend>,
@@ -701,7 +746,49 @@ where
     R: AsyncRead + Send + Unpin + 'static,
     W: AsyncWrite + Send + Unpin + 'static,
 {
-    let server = InkerServer::new(backend, options);
+    serve_pair_in(backend, reader, writer, options, None, ct).await
+}
+
+/// `serve_pair`, registering the connection in `sessions` when given one:
+/// opened before the handshake, named by `initialize`, closed when the
+/// connection ends however it ends.
+pub async fn serve_pair_in<R, W>(
+    backend: Arc<dyn Backend>,
+    reader: R,
+    writer: W,
+    options: ServerOptions,
+    sessions: Option<Arc<Sessions>>,
+    ct: CancellationToken,
+) -> Result<(), ServeError>
+where
+    R: AsyncRead + Send + Unpin + 'static,
+    W: AsyncWrite + Send + Unpin + 'static,
+{
+    let mut server = InkerServer::new(backend, options);
+    let registered = sessions.map(|s| {
+        let id = s.open();
+        (s, id)
+    });
+    if let Some((s, id)) = &registered {
+        server = server.in_sessions(s.clone(), *id);
+    }
+    let result = serve_server(server, reader, writer, ct).await;
+    if let Some((s, id)) = registered {
+        s.close(id);
+    }
+    result
+}
+
+async fn serve_server<R, W>(
+    server: InkerServer,
+    reader: R,
+    writer: W,
+    ct: CancellationToken,
+) -> Result<(), ServeError>
+where
+    R: AsyncRead + Send + Unpin + 'static,
+    W: AsyncWrite + Send + Unpin + 'static,
+{
     let running = match server.serve_with_ct((reader, writer), ct).await {
         Ok(r) => r,
         // A peer that connects and leaves before initializing is not an error.

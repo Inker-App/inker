@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use common::{RawClient, is_error, text};
 use inker_mcp::fake::FAKE_REAL_VALUES;
-use inker_mcp::{Backend, FakeBackend, ServerOptions, serve_stream};
+use inker_mcp::{Backend, FakeBackend, ServerOptions, Sessions, serve_stream, serve_stream_in};
 use serde_json::{Value, json};
 use tokio_util::sync::CancellationToken;
 
@@ -477,4 +477,35 @@ async fn the_cli_reads_the_servers_private_folder() {
         r["result"]["structuredContent"]["private_folder"],
         json!(inker_mcp::fake::FAKE_PRIVATE_FOLDER)
     );
+}
+
+/// The popover's "Claude connected": a session counts from the client's
+/// `initialize` (under its product name) until its connection ends.
+#[tokio::test]
+async fn a_connected_client_is_listed_by_product_name_until_it_leaves() {
+    let sessions = Sessions::new();
+    let (client_end, server_end) = tokio::io::duplex(1 << 16);
+    let backend: Arc<dyn Backend> = Arc::new(FakeBackend::sample());
+    let registry = sessions.clone();
+    let served = tokio::spawn(async move {
+        let _ = serve_stream_in(
+            backend,
+            server_end,
+            ServerOptions::default(),
+            registry,
+            CancellationToken::new(),
+        )
+        .await;
+    });
+    let (r, w) = tokio::io::split(client_end);
+    let mut c = RawClient::new(r, w);
+    assert!(
+        sessions.clients().is_empty(),
+        "connected, not yet initialized"
+    );
+    c.initialize("claude-ai").await;
+    assert_eq!(sessions.clients(), vec!["Claude"]);
+    drop(c);
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(5), served).await;
+    assert!(sessions.clients().is_empty(), "gone with its connection");
 }

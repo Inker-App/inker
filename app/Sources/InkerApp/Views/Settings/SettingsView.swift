@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var showsPayer = true
     @State private var clipboardChip = true
     @State private var results: [String: String] = [:]
+    @State private var copiedConfig = false
     private let log = Logger(subsystem: "sh.inker.app", category: "settings")
 
     var body: some View {
@@ -23,6 +24,7 @@ struct SettingsView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     handles
                     privateFolder
+                    chatApps
                     codingAgents
                     setup
                 }
@@ -95,6 +97,66 @@ struct SettingsView: View {
                     .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 28, horizontalPadding: 12))
                     .accessibilityLabel("Open the private folder in Finder")
             }
+        }
+    }
+
+    /// Onboarding step 2's rows again, with the Claude app's live state:
+    /// Connect, "Set up · restart Claude", or "Connected".
+    private var chatApps: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            LabelText(ChatRows.sectionTitle)
+            VStack(spacing: 0) {
+                Hairline()
+                ForEach(ChatRows.connect) { row in
+                    HStack(spacing: 8) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.title)
+                            Text(row.detail).font(Typography.caption).foregroundColor(Palette.muted)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Spacer(minLength: 8)
+                        chatTrailing(row)
+                    }
+                    .padding(.vertical, 6)
+                    .frame(minHeight: 40)
+                    Hairline()
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func chatTrailing(_ row: ChatRow) -> some View {
+        switch row.action {
+        case .connect(let agent):
+            if let result = results[row.id] {
+                Text(result).font(Typography.small).foregroundColor(Palette.muted)
+            } else if let label = ChatConnection.rowLabel(store.claudeConnection) {
+                Text(label).font(Typography.small).foregroundColor(Palette.muted)
+            } else {
+                Button("Connect") { connectChat(agent, row: row) }
+                    .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 28, horizontalPadding: 12))
+            }
+        case .comingSoon:
+            Text(ChatRows.comingSoonLabel).font(Typography.small).foregroundColor(Palette.muted)
+        case .copyConfig:
+            Button(copiedConfig ? "Copied" : "Copy config") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(AgentConfigSnippet.mcpServers(binary: store.cliPath), forType: .string)
+                copiedConfig = true
+            }
+            .buttonStyle(InkButtonStyle(kind: .link, height: 28, horizontalPadding: 12))
+        }
+    }
+
+    private func connectChat(_ agent: AgentKind, row: ChatRow) {
+        do {
+            _ = try store.setupAgent(agent)
+            results[row.id] = ChatRows.connectedLabel(for: agent)
+            store.refreshClaudeReport()
+        } catch {
+            results[row.id] = ChatRows.failedLabel
+            log.error("connect failed: \(String(describing: error), privacy: .public)")
         }
     }
 

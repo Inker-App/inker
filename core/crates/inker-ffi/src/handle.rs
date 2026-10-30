@@ -8,7 +8,7 @@ use inker_core::types::{Codename, Handle};
 use inker_extract::Extractor;
 use inker_host::{Host, HostConfig};
 
-use crate::agents::{self, AgentKind, DoctorReport, Plan};
+use crate::agents::{self, AgentKind, AgentReport, DoctorReport, Plan};
 use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
 use crate::host_backend::{HostBackend, core_error};
@@ -191,6 +191,18 @@ impl CoreHandle {
                 reason: "no private folder to set agents up for in a preview".into(),
             })?;
         agents::setup_agent(agent, dry_run, &inker_bin, &home, &private)
+    }
+
+    /// Whether an agent is installed and has INKER in its config. A preview
+    /// reports both true, so its Settings screen reads "Connected".
+    pub fn agent_report(&self, agent: AgentKind, inker_bin: String, home: String) -> AgentReport {
+        match self.backend.private_folder() {
+            Some(private) => agents::agent_report(agent, &inker_bin, &home, &private),
+            None => AgentReport {
+                installed: true,
+                registered: true,
+            },
+        }
     }
 
     /// Whether the MCP socket is live, the data dir and the private folder.

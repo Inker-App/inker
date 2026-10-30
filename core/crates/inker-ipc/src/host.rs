@@ -8,7 +8,7 @@ use std::os::unix::fs::{DirBuilderExt, FileTypeExt, PermissionsExt};
 use std::path::Path;
 use std::sync::Arc;
 
-use inker_mcp::{Backend, ServerOptions};
+use inker_mcp::{Backend, ServerOptions, Sessions};
 use tokio::net::UnixListener;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -61,8 +61,21 @@ pub async fn serve(
     options: ServerOptions,
     ct: CancellationToken,
 ) -> Result<(), HostError> {
+    serve_with(socket_path, backend, options, None, ct).await
+}
+
+/// `serve`, registering every connection in `sessions` when given one, so
+/// the app can show who is connected.
+pub async fn serve_with(
+    socket_path: &Path,
+    backend: Arc<dyn Backend>,
+    options: ServerOptions,
+    sessions: Option<Arc<Sessions>>,
+    ct: CancellationToken,
+) -> Result<(), HostError> {
     let listener = bind(socket_path).await?;
     tracing::info!("listening");
+    let sessions_registry = sessions;
     let mut sessions = JoinSet::new();
     let result = loop {
         tokio::select! {
@@ -70,8 +83,13 @@ pub async fn serve(
             accepted = listener.accept() => match accepted {
                 Ok((stream, _)) => {
                     let (backend, session_ct) = (backend.clone(), ct.child_token());
+                    let registry = sessions_registry.clone();
                     sessions.spawn(async move {
-                        if let Err(e) = inker_mcp::serve_stream(backend, stream, options, session_ct).await {
+                        let served = match registry {
+                            Some(r) => inker_mcp::serve_stream_in(backend, stream, options, r, session_ct).await,
+                            None => inker_mcp::serve_stream(backend, stream, options, session_ct).await,
+                        };
+                        if let Err(e) = served {
                             tracing::warn!(error = %e, "session ended with an error");
                         }
                     });

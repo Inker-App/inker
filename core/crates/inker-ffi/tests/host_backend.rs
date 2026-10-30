@@ -385,6 +385,11 @@ fn an_agent_over_the_socket_sees_tokens_only_and_its_read_reaches_the_footer() {
     let (listed, resolved) = rt.block_on(async {
         let stream = tokio::net::UnixStream::connect(w.socket()).await.unwrap();
         let mut c = McpClient::connect(stream, "inker-test").await.unwrap();
+        // The footer's "connected" state: the client is listed while its
+        // session is open, under its name.
+        wait_for("the session", || {
+            (h.status().clients == vec!["inker-test".to_string()]).then_some(())
+        });
         let listed = c.call_tool("list", json!({})).await.unwrap();
         let resolved = c
             .call_tool("resolve", json!({"handle": codename}))
@@ -400,6 +405,9 @@ fn an_agent_over_the_socket_sees_tokens_only_and_its_read_reaches_the_footer() {
         !resolved.text.contains(JORDAN_SSN),
         "a real value reached the agent"
     );
+    wait_for("the session to end", || {
+        h.status().clients.is_empty().then_some(())
+    });
     if let Some(v) = &resolved.structured {
         assert!(
             !v.to_string().contains(JORDAN_SSN),

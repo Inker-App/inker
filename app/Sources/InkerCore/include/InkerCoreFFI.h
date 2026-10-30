@@ -311,6 +311,11 @@ uint64_t uniffi_inker_ffi_fn_constructor_corehandle_open(RustBuffer private_fold
 uint64_t uniffi_inker_ffi_fn_constructor_corehandle_preview(RustBuffer scenario, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_AGENT_REPORT
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_AGENT_REPORT
+RustBuffer uniffi_inker_ffi_fn_method_corehandle_agent_report(uint64_t ptr, RustBuffer agent, RustBuffer inker_bin, RustBuffer home, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_ANSWER
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_ANSWER
 void uniffi_inker_ffi_fn_method_corehandle_answer(uint64_t ptr, RustBuffer question_id, RustBuffer answer, RustCallStatus *_Nonnull out_status
@@ -664,6 +669,12 @@ void ffi_inker_ffi_rust_future_free_void(uint64_t handle
 #ifndef UNIFFI_FFIDEF_FFI_INKER_FFI_RUST_FUTURE_COMPLETE_VOID
 #define UNIFFI_FFIDEF_FFI_INKER_FFI_RUST_FUTURE_COMPLETE_VOID
 void ffi_inker_ffi_rust_future_complete_void(uint64_t handle, RustCallStatus *_Nonnull out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_AGENT_REPORT
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_AGENT_REPORT
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_agent_report(void
+    
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_ANSWER

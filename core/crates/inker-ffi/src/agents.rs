@@ -60,6 +60,45 @@ pub struct DoctorReport {
     pub lines: Vec<String>,
 }
 
+/// One agent as `doctor` sees it, for the Settings "Chat apps" row.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct AgentReport {
+    /// The app or CLI is on this Mac.
+    pub installed: bool,
+    /// INKER is in its MCP config (it still has to be restarted to connect).
+    pub registered: bool,
+}
+
+pub fn agent_report(
+    agent: AgentKind,
+    inker_bin: &str,
+    home: &str,
+    private_folder: &str,
+) -> AgentReport {
+    let env = Env::detect(
+        Path::new(home),
+        Path::new(inker_bin),
+        Path::new(private_folder),
+    );
+    let want = match agent {
+        AgentKind::ClaudeDesktop => inker_agents::Agent::ClaudeDesktop,
+        AgentKind::ClaudeCode => inker_agents::Agent::ClaudeCode,
+        AgentKind::Codex => inker_agents::Agent::Codex,
+        AgentKind::Cursor => inker_agents::Agent::Cursor,
+    };
+    inker_agents::doctor::doctor(&env)
+        .into_iter()
+        .find(|s| s.agent == want)
+        .map(|s| AgentReport {
+            installed: s.installed,
+            registered: s.registered,
+        })
+        .unwrap_or(AgentReport {
+            installed: false,
+            registered: false,
+        })
+}
+
 fn tilde(path: &Path, home: &Path) -> String {
     match path.strip_prefix(home) {
         Ok(rel) => format!("~/{}", rel.display()),

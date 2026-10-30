@@ -636,6 +636,12 @@ fileprivate struct FfiConverterTimestamp: FfiConverterRustBuffer {
 
 public protocol CoreHandleProtocol: AnyObject, Sendable {
     
+    /**
+     * Whether an agent is installed and has INKER in its config. A preview
+     * reports both true, so its Settings screen reads "Connected".
+     */
+    func agentReport(agent: AgentKind, inkerBin: String, home: String)  -> AgentReport
+    
     func answer(questionId: String, answer: ReviewAnswer) throws 
     
     /**
@@ -797,6 +803,22 @@ public static func preview(scenario: PreviewScenario) -> CoreHandle  {
 }
     
 
+    
+    /**
+     * Whether an agent is installed and has INKER in its config. A preview
+     * reports both true, so its Settings screen reads "Connected".
+     */
+open func agentReport(agent: AgentKind, inkerBin: String, home: String) -> AgentReport  {
+    return try!  FfiConverterTypeAgentReport_lift(try! rustCall() {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_agent_report(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeAgentKind_lower(agent),
+        FfiConverterString.lower(inkerBin),
+        FfiConverterString.lower(home),uniffiCallStatus
+    )
+})
+}
     
 open func answer(questionId: String, answer: ReviewAnswer)throws   {try rustCallWithError(FfiConverterTypeFfiError_lift) {
         uniffiCallStatus in
@@ -1053,6 +1075,75 @@ public func FfiConverterTypeCoreHandle_lower(_ value: CoreHandle) -> UInt64 {
 }
 
 
+
+
+/**
+ * One agent as `doctor` sees it, for the Settings "Chat apps" row.
+ */
+public struct AgentReport: Equatable, Hashable {
+    /**
+     * The app or CLI is on this Mac.
+     */
+    public let installed: Bool
+    /**
+     * INKER is in its MCP config (it still has to be restarted to connect).
+     */
+    public let registered: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * The app or CLI is on this Mac.
+         */installed: Bool, 
+        /**
+         * INKER is in its MCP config (it still has to be restarted to connect).
+         */registered: Bool) {
+        self.installed = installed
+        self.registered = registered
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AgentReport: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAgentReport: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AgentReport {
+        return
+            try AgentReport(
+                installed: FfiConverterBool.read(from: &buf), 
+                registered: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AgentReport, into buf: inout [UInt8]) {
+        FfiConverterBool.write(value.installed, into: &buf)
+        FfiConverterBool.write(value.registered, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentReport_lift(_ buf: RustBuffer) throws -> AgentReport {
+    return try FfiConverterTypeAgentReport.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAgentReport_lower(_ value: AgentReport) -> RustBuffer {
+    return FfiConverterTypeAgentReport.lower(value)
+}
 
 
 /**
@@ -2298,6 +2389,12 @@ public struct Status: Equatable, Hashable {
      * The private folder as the user should read it, e.g. `~/Private`.
      */
     public let privateFolderDisplay: String
+    /**
+     * Product names of the chat apps and agents with a live MCP session
+     * right now ("Claude", "Claude Code"), each once, sorted. The footer
+     * says "Claude connected" when "Claude" is here.
+     */
+    public let clients: [String]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -2307,9 +2404,15 @@ public struct Status: Equatable, Hashable {
          */mcpListening: Bool, 
         /**
          * The private folder as the user should read it, e.g. `~/Private`.
-         */privateFolderDisplay: String) {
+         */privateFolderDisplay: String, 
+        /**
+         * Product names of the chat apps and agents with a live MCP session
+         * right now ("Claude", "Claude Code"), each once, sorted. The footer
+         * says "Claude connected" when "Claude" is here.
+         */clients: [String]) {
         self.mcpListening = mcpListening
         self.privateFolderDisplay = privateFolderDisplay
+        self.clients = clients
     }
 
     
@@ -2329,13 +2432,15 @@ public struct FfiConverterTypeStatus: FfiConverterRustBuffer {
         return
             try Status(
                 mcpListening: FfiConverterBool.read(from: &buf), 
-                privateFolderDisplay: FfiConverterString.read(from: &buf)
+                privateFolderDisplay: FfiConverterString.read(from: &buf), 
+                clients: FfiConverterSequenceString.read(from: &buf)
         )
     }
 
     public static func write(_ value: Status, into buf: inout [UInt8]) {
         FfiConverterBool.write(value.mcpListening, into: &buf)
         FfiConverterString.write(value.privateFolderDisplay, into: &buf)
+        FfiConverterSequenceString.write(value.clients, into: &buf)
     }
 }
 
@@ -4331,6 +4436,9 @@ private let initializationResult: InitializationResult = {
     let scaffolding_contract_version = ffi_inker_ffi_uniffi_contract_version()
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
+    }
+    if (uniffi_inker_ffi_checksum_method_corehandle_agent_report() != 32966) {
+        return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_answer() != 46053) {
         return InitializationResult.apiChecksumMismatch

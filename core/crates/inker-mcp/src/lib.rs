@@ -14,6 +14,7 @@ pub mod fake;
 pub mod handle;
 pub mod instructions;
 pub mod server;
+mod sessions;
 
 pub use backend::{Backend, PendingReview, Resolved, ServerStatus, WriteReceipt};
 pub use client::{ClientError, McpClient, ToolOutput};
@@ -22,5 +23,7 @@ pub use handle::parse_handle_arg;
 pub use instructions::instructions;
 pub use server::{
     ALWAYS_LOAD_META_KEY, CLI_TOOLS, INKER_CLI_CLIENT, InkerServer, ServeError, ServerOptions,
-    UNKNOWN_AGENT, serve_pair, serve_stdio, serve_stream, tool_definitions,
+    UNKNOWN_AGENT, serve_pair, serve_pair_in, serve_stdio, serve_stream, serve_stream_in,
+    tool_definitions,
 };
+pub use sessions::Sessions;

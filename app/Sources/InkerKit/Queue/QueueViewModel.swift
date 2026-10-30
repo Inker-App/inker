@@ -41,9 +41,11 @@ public enum QueueViewModel {
                 left = .text(lastDrop ?? "All ready")
             }
         }
-        let mcp = status.mcpListening ? "MCP running" : "MCP not running"
+        let claudeLive = status.clients.contains(ChatConnection.claude)
+        let mcp = status.mcpListening ? ChatConnection.footerText(clients: status.clients) : "MCP not running"
         let files = docs.count == 1 ? "1 file" : "\(docs.count) files"
-        let footer = FooterModel(left: left, right: docs.isEmpty ? mcp : "\(files) · \(mcp)", showsPeeker: peeker)
+        let footer = FooterModel(left: left, right: docs.isEmpty ? mcp : "\(files) · \(mcp)", showsPeeker: peeker,
+                                 rightIsConnectLink: status.mcpListening && !claudeLive)
         return PopoverModel(mode: mode, badgeCount: held, groups: groups, footer: footer,
                             emptySubtitlePrefix: "They move into \(status.privateFolderDisplay). You get a ",
                             handlePrefix: HandleFormatter.prefix(style))

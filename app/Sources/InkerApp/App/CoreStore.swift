@@ -40,6 +40,10 @@ final class CoreStore: ObservableObject {
     @Published private(set) var pulse: (id: String, startedAt: Date)?
     /// Set when the popover opened with a held handle on the pasteboard.
     @Published private(set) var clipboardHandle: String?
+    /// The core's status as of the last refresh: the socket and who is connected.
+    @Published private(set) var status = Status(mcpListening: false, privateFolderDisplay: "", clients: [])
+    /// Whether INKER is in the Claude app's config, read when Settings opens.
+    @Published private(set) var claudeReport: AgentReport?
     /// The attention cards' page crops by question id, once rendered.
     @Published private(set) var snippets: [String: PageSnippet.Rendered] = [:]
     private var snippetAttempts: Set<String> = []
@@ -107,7 +111,16 @@ final class CoreStore: ObservableObject {
     func nextStep() { flow.next() }
     func previousStep() { flow.back() }
     func finishOnboarding() { flow.finishOnboarding() }
-    func toggleSettings() { flow.toggleSettings() }
+    func toggleSettings() {
+        flow.toggleSettings()
+        if flow.screen == .settings { refreshClaudeReport() }
+    }
+
+    func openSettings() {
+        flow.openSettings()
+        refreshClaudeReport()
+    }
+
     func closeSettings() { flow.closeSettings() }
     func runSetupAgain() { flow.runSetupAgain() }
     func show(_ screen: PopoverScreen) { flow.show(screen) }
@@ -131,10 +144,20 @@ final class CoreStore: ObservableObject {
     }
 
     func refresh() {
-        model = QueueViewModel.build(queue: handle.queue(), status: handle.status(), reads: handle.recentReads(n: 1),
+        status = handle.status()
+        model = QueueViewModel.build(queue: handle.queue(), status: status, reads: handle.recentReads(n: 1),
                                      lastDrop: lastDrop, style: settings.handleStyle, now: Date())
         rebuildBoard()
         requestSnippets()
+    }
+
+    /// Settings' Chat apps row: live session first, then the config.
+    var claudeConnection: ChatConnection.State {
+        ChatConnection.state(registered: claudeReport?.registered ?? false, clients: status.clients)
+    }
+
+    func refreshClaudeReport() {
+        claudeReport = handle.agentReport(agent: .claudeDesktop, inkerBin: cliPath, home: home.path)
     }
 
     /// One render per attention card, off the main thread (Vision blocks

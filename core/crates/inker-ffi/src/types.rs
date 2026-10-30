@@ -505,4 +505,8 @@ pub struct Status {
     pub mcp_listening: bool,
     /// The private folder as the user should read it, e.g. `~/Private`.
     pub private_folder_display: String,
+    /// Product names of the chat apps and agents with a live MCP session
+    /// right now ("Claude", "Claude Code"), each once, sorted. The footer
+    /// says "Claude connected" when "Claude" is here.
+    pub clients: Vec<String>,
 }

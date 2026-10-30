@@ -65,6 +65,8 @@ struct Shared {
     snapshot: Mutex<Snapshot>,
     closing: AtomicBool,
     server_alive: AtomicBool,
+    /// Who has a live MCP session, for "Claude connected".
+    sessions: Arc<inker_mcp::Sessions>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -137,6 +139,7 @@ impl HostBackend {
         let data_dir = host.core().paths().data_dir.clone();
         let shared = Arc::new(Shared {
             sink: Mutex::new(ChangeSink::noop()),
+            sessions: inker_mcp::Sessions::new(),
             snapshot: Mutex::new(Snapshot::default()),
             closing: AtomicBool::new(false),
             server_alive: AtomicBool::new(false),
@@ -205,14 +208,19 @@ impl HostBackend {
         let token = CancellationToken::new();
         let shared = self.shared.clone();
         shared.server_alive.store(true, Ordering::SeqCst);
+        // A client arriving or leaving is a change the footer shows.
+        let sessions = shared.sessions.clone();
+        let notify = shared.clone();
+        sessions.set_on_change(move || lock(&notify.sink).clone().notify());
         let (path, t) = (socket_path.clone(), token.clone());
         let thread = thread::Builder::new()
             .name("inker-socket".into())
             .spawn(move || {
-                let served = runtime.block_on(inker_ipc::host::serve(
+                let served = runtime.block_on(inker_ipc::host::serve_with(
                     &path,
                     bridge,
                     ServerOptions::default(),
+                    Some(sessions),
                     t,
                 ));
                 if let Err(e) = served {
@@ -409,6 +417,7 @@ impl Backend for HostBackend {
         Status {
             mcp_listening: self.listening(),
             private_folder_display: self.private_folder_display.clone(),
+            clients: self.shared.sessions.clients(),
         }
     }
 

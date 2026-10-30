@@ -353,6 +353,21 @@ value and keeps it inside the page; `PageSnippet` (AppKit) renders it at 2x on a
 once per question. Rotated PDF pages keep the octopus until checked by eye (VERIFY in the code).
 Previews and snapshots have no file to read, so the attention board still shows the octopus.
 
+**Staying open, and "Claude connected" (2026-10-30, after 0.0.7).** Ben reversed the
+outside-click close: the popover should stay up while he clicks around Finder and drags files
+in. It is never transient now; the menu bar icon and Escape close it, and a pinned popover
+(folder chooser up) ignores Escape. He also asked for easier access to connecting Claude and an
+indicator of whether it is connected. His calls: "connected" means a live MCP session (the Claude
+app running with INKER loaded), not a config entry; the footer's right side says "Claude
+connected" or "Claude not connected" in place of "MCP running" ("MCP not running" still wins when
+INKER's own socket is down), the latter a link that opens Settings; Settings gains a "Chat apps"
+block above the coding agents, with onboarding step 2's rows and the Claude row's state: Connect,
+"Set up · restart Claude", or "Connected". How the app knows: `inker_mcp::Sessions` is a registry
+every served connection joins; `initialize` names the session after the client's product name
+(`display_agent_name`), the connection's end removes it, and each change fires the shell's
+change sink so the footer updates while the popover is up. `Status.clients` carries the names;
+`agent_report` gives Settings the installed and registered bits from `doctor`.
+
 ## 9. Target clients (reframed 2026-10-28)
 
 INKER is for the chat window. Research on 2026-10-28 (search summaries only; vendor pages were unreachable from the dev box that day, so re-read primary sources before relying on a detail):

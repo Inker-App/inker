@@ -372,6 +372,7 @@ impl Backend for PreviewBackend {
         Status {
             mcp_listening: true,
             private_folder_display: self.private_folder_display.clone(),
+            clients: vec!["Claude".into()],
         }
     }
 

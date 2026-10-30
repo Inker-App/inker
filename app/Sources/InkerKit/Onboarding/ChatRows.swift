@@ -22,6 +22,8 @@ public struct ChatRow: Equatable, Sendable, Identifiable {
 }
 
 public enum ChatRows {
+    /// The Settings block that repeats these rows, with Claude's live state.
+    public static let sectionTitle = "Chat apps"
     /// Chat apps first (stack-decision section 9). No coding agent here.
     public static let connect: [ChatRow] = [
         ChatRow(title: "Claude", detail: "the Claude app on this Mac", action: .connect(.claudeDesktop)),

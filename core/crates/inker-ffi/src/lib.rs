@@ -25,7 +25,7 @@ mod preview;
 mod providers;
 mod types;
 
-pub use agents::{AgentKind, DoctorReport, Plan, PlanStep};
+pub use agents::{AgentKind, AgentReport, DoctorReport, Plan, PlanStep};
 pub use backend::{Backend, ChangeSink};
 pub use error::FfiError;
 pub use handle::{CoreHandle, QueueListener};

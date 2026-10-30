@@ -85,8 +85,11 @@ public enum FooterLeft: Equatable, Sendable {
 
 public struct FooterModel: Equatable, Sendable {
     public var left: FooterLeft
-    /// "30 files · MCP running"; just "MCP running" with nothing filed.
+    /// "30 files · Claude connected"; just "Claude connected" with nothing
+    /// filed; "MCP not running" when INKER's own socket is down.
     public var right: String
     /// The 24x24 peeker eye on the Ready board.
     public var showsPeeker: Bool
+    /// "Claude not connected" is a link that opens Settings at Chat apps.
+    public var rightIsConnectLink = false
 }

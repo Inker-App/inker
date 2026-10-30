@@ -21,7 +21,7 @@ struct PopoverRootView: View {
             PopoverFooter(model: store.model.footer, onLocate: { handle in
                 store.show(.board)
                 store.locate(handle: handle)
-            })
+            }, onConnect: { store.openSettings() })
         }
         .frame(width: PopoverLayout.width, height: PopoverLayout.height)
         .background(Palette.background)

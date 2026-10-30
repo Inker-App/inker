@@ -6,6 +6,8 @@ import SwiftUI
 struct PopoverFooter: View {
     let model: FooterModel
     var onLocate: ((String) -> Void)?
+    /// "Claude not connected": opens Settings at Chat apps.
+    var onConnect: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -13,7 +15,7 @@ struct PopoverFooter: View {
             case .text(let text):
                 Text(text)
                 Spacer(minLength: 8)
-                Text(model.right)
+                right
             case .lastRead(let agent, let handle, let ago):
                 if model.showsPeeker {
                     EyeLayer(makeScene: { PeekerScene() })
@@ -33,12 +35,24 @@ struct PopoverFooter: View {
                 .accessibilityLabel("Find \(handle) in the list")
                 Text("· \(ago)")
                 Spacer(minLength: 8)
-                Text(model.right).lineLimit(1)
+                right
             }
         }
         .font(Typography.caption)
         .foregroundColor(Palette.muted)
         .padding(.horizontal, 16)
         .frame(height: model.showsPeeker ? 40 : 36)
+    }
+
+    @ViewBuilder private var right: some View {
+        if model.rightIsConnectLink {
+            Button { onConnect?() } label: {
+                Text(model.right).underline().lineLimit(1)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Claude is not connected. Open Settings to connect it")
+        } else {
+            Text(model.right).lineLimit(1)
+        }
     }
 }
