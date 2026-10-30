@@ -201,6 +201,35 @@ jobs:
             --binary dist/out/inker
           ls -la dist/out
 
+      # A disk image: open it and drag INKER.app to Applications, no unzip.
+      # The app inside is the already stapled one. When signing for real the
+      # image is signed and notarized too, so it opens offline.
+      - name: Disk image
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
+        run: |
+          DMG="dist/out/INKER-${{ steps.v.outputs.version }}-macos.dmg"
+          STAGE="$RUNNER_TEMP/dmg"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          ditto app/build/INKER.app "$STAGE/INKER.app"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname INKER -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
+          if [ "${{ steps.sign.outputs.real }}" = "true" ]; then
+            codesign --force --timestamp --sign "${{ steps.sign.outputs.identity }}" "$DMG"
+            if [ -n "$NOTARY_KEY_P8" ] && [ -n "$NOTARY_KEY_ID" ] && [ -n "$NOTARY_ISSUER_ID" ]; then
+              KEY="$RUNNER_TEMP/AuthKey-dmg.p8"
+              printf '%s' "$NOTARY_KEY_P8" > "$KEY"
+              xcrun notarytool submit "$DMG" --key "$KEY" --key-id "$NOTARY_KEY_ID" --issuer "$NOTARY_ISSUER_ID" --wait --timeout 30m
+              xcrun stapler staple "$DMG"
+              xcrun stapler validate "$DMG"
+              rm -f "$KEY"
+            fi
+          fi
+          hdiutil verify "$DMG"
+          ls -la dist/out
+
       - name: Package
         run: |
           cd app/build && ditto -c -k --keepParent INKER.app ../../dist/out/INKER-${{ steps.v.outputs.version }}-macos.zip && cd -
@@ -223,9 +252,9 @@ jobs:
             git tag -f "$TAG" && git push -f origin "$TAG"
           fi
           if [ "${{ steps.sign.outputs.real }}" = "true" ]; then
-            NOTES="Signed with Developer ID and notarized: unzip and open INKER.app. See docs/stack-decision.md for what works and what does not."
+            NOTES="Signed with Developer ID and notarized: open the .dmg and drag INKER.app to Applications (the .zip holds the same app). See docs/stack-decision.md for what works and what does not."
           else
-            NOTES="Ad-hoc signed, not notarized. After unzipping run \`xattr -dr com.apple.quarantine INKER.app\`, or open it once, then allow it under System Settings > Privacy & Security > Open Anyway. See docs/stack-decision.md for what works and what does not."
+            NOTES="Ad-hoc signed, not notarized. After copying INKER.app out of the .dmg (or unzipping) run \`xattr -dr com.apple.quarantine INKER.app\`, or open it once, then allow it under System Settings > Privacy & Security > Open Anyway. See docs/stack-decision.md for what works and what does not."
           fi
           # A re-run of an existing release replaces its assets and its notes.
           gh release create "$TAG" dist/out/* \
@@ -233,6 +262,20 @@ jobs:
             --prerelease \
             --notes "$NOTES" \
             || { gh release upload "$TAG" dist/out/* --clobber && gh release edit "$TAG" --notes "$NOTES"; }
+
+      # inker.sh names the newest release on its download button. Releases made
+      # with the workflow token do not trigger other workflows, so ask for the
+      # site build here. Skipped when the secret is not set.
+      - name: Rebuild inker.sh
+        if: github.event_name == 'push' || inputs.publish
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK_URL is not set; skipping."
+            exit 0
+          fi
+          curl --fail --silent --show-error -X POST "$HOOK"
 
       - name: Remove the signing keychain
         if: always() && steps.sign.outputs.keychain != ''
