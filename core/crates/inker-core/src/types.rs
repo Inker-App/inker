@@ -314,7 +314,7 @@ pub struct Detection {
     pub review_prompt: Option<String>,
     /// Role of this value in the document, for `describe`: "employee",
     /// "employer", "payer", "recipient", "lender", "borrower", "taxpayer",
-    /// "spouse", "dependent", "designee", "preparer".
+    /// "spouse", "dependent", "designee", "preparer", "requester".
     pub role: Option<String>,
     /// Replacement text for [`Treatment::Generalize`], e.g. "Brooklyn, NY".
     /// `None` for every other treatment.

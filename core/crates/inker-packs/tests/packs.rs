@@ -122,7 +122,15 @@ fn value_shapes_parse() {
 fn individual_return_roles_parse() {
     // Form 1040 names a taxpayer, a spouse, dependents, a third-party
     // designee and a paid preparer.
-    for role in ["taxpayer", "spouse", "dependent", "designee", "preparer"] {
+    // designee and a paid preparer; Form W-9 a requester.
+    for role in [
+        "taxpayer",
+        "spouse",
+        "dependent",
+        "designee",
+        "preparer",
+        "requester",
+    ] {
         let t = FormTemplate::parse(
             "d.toml",
             &DEMO.replacen("role = \"recipient\"", &format!("role = \"{role}\""), 1),
@@ -264,6 +272,7 @@ const TAX_FORMS: &[(&str, &str)] = &[
     ("k1-1065", "k1-1065"),
     ("k1-1120s", "k1-1120s"),
     ("1040", "1040"),
+    ("w9", "w9"),
 ];
 
 #[test]
@@ -433,6 +442,29 @@ fn tax_pack_ships_its_boilerplate() {
 }
 
 #[test]
+fn tax_pack_knows_the_w9_headings() {
+    // Form W-9's page 1 headings and checkbox captions, as their own lines
+    // or column segments. Instruction prose wraps anywhere, so it is not
+    // listed line by line: the template's `instructions` marks those pages.
+    let set = PackSet::builtin().unwrap();
+    for line in [
+        "Give form to the",
+        "requester. Do not",
+        "send to the IRS.",
+        "Print or type.",
+        "Part I Taxpayer Identification Number (TIN)",
+        "Part II Certification",
+        "Individual/sole proprietor",
+        "Trust/estate",
+        "General Instructions",
+        "What’s New",
+        "Purpose of Form",
+    ] {
+        assert!(set.is_boilerplate(line), "{line}");
+    }
+}
+
+#[test]
 fn manifest_category_is_optional() {
     let with = MANIFEST.replace(
         "version = \"0.0.1\"",
@@ -477,4 +509,76 @@ fn every_builtin_form_is_tagged_taxes() {
     for t in &set.packs[0].forms {
         assert_eq!(t.tag.as_deref(), Some("Taxes"), "{}", t.id);
     }
+}
+
+#[test]
+fn instruction_markers_parse() {
+    let t = FormTemplate::parse("demo.toml", DEMO).unwrap();
+    assert!(t.instructions.is_empty(), "instructions are optional");
+    let with = DEMO.replace(
+        "year = ",
+        "instructions = ['Demo Statement \\(Rev\\. \\d{4}\\) Page \\d+']\nyear = ",
+    );
+    let t = FormTemplate::parse("demo.toml", &with).unwrap();
+    assert_eq!(t.instructions.len(), 1);
+    assert!(t.instructions[0].is_match("demo statement (Rev. 2024)\n  Page 3"));
+    let bad = DEMO.replace("year = ", "instructions = ['(']\nyear = ");
+    assert!(matches!(
+        FormTemplate::parse("demo.toml", &bad),
+        Err(PackError::Regex { .. })
+    ));
+}
+
+#[test]
+fn public_contacts_match_any_spelling() {
+    let with = format!(
+        "{MANIFEST}\n[public]\nphones = [\"1-800-555-0100\"]\nemails = [\"help@agency.example\"]\n"
+    );
+    let set = PackSet {
+        packs: vec![Pack::from_sources(&with, &[("demo", DEMO)]).unwrap()],
+    };
+    for phone in [
+        "1-800-555-0100",
+        "(800) 555-0100",
+        "800.555.0100",
+        "+1 800 555 0100",
+    ] {
+        assert!(set.is_public_phone(phone), "{phone}");
+    }
+    for phone in ["800-555-0101", "555-0100", ""] {
+        assert!(!set.is_public_phone(phone), "{phone}");
+    }
+    assert!(set.is_public_email("Help@Agency.example"));
+    assert!(!set.is_public_email("someone@agency.example"));
+    // No [public] table: nothing is public.
+    let set = PackSet {
+        packs: vec![Pack::from_sources(MANIFEST, &[("demo", DEMO)]).unwrap()],
+    };
+    assert!(!set.is_public_phone("1-800-555-0100"));
+}
+
+#[test]
+fn tax_pack_lists_agency_contacts() {
+    // The lines the IRS prints in its own instructions (Form W-9 and others).
+    let set = PackSet::builtin().unwrap();
+    for phone in [
+        "1-800-829-1040",
+        "1-800-772-1213",
+        "1-877-777-4778",
+        "877-438-4338",
+    ] {
+        assert!(set.is_public_phone(phone), "{phone}");
+    }
+    assert!(set.is_public_email("phishing@irs.gov"));
+}
+
+#[test]
+fn w9_template_marks_its_instruction_pages() {
+    let set = PackSet::builtin().unwrap();
+    let w9 = set.forms().find(|f| f.id == "w9").unwrap();
+    assert!(
+        w9.instructions
+            .iter()
+            .any(|r| r.is_match("Form W-9 (Rev. 3-2024)   Page 2"))
+    );
 }

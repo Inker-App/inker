@@ -150,3 +150,32 @@ Firm’s name
 Firm’s address
 Firm’s EIN
 Go to www.irs.gov/Form1040 for instructions and the latest information.
+
+# Form W-9, page 1: the title block, headings and checkbox captions. Its
+# instruction pages are prose that wraps anywhere, so they are not listed
+# here: forms/w9.toml marks them with `instructions` instead.
+Request for Taxpayer
+Give form to the
+requester. Do not
+send to the IRS.
+Give form to the requester. Do not send to the IRS.
+Before you begin. For guidance related to the purpose of Form W-9, see Purpose of Form, below.
+Print or type.
+See Specific Instructions on page 3.
+Print or type. See Specific Instructions on page 3.
+Check only one of the following seven boxes.
+Individual/sole proprietor
+C corporation
+S corporation
+Partnership
+Trust/estate
+Other (see instructions)
+(Applies to accounts maintained outside the United States.)
+Part I Taxpayer Identification Number (TIN)
+Part II Certification
+Under penalties of perjury, I certify that:
+Sign Here
+General Instructions
+Specific Instructions
+What’s New
+Purpose of Form

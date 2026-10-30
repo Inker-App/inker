@@ -22,6 +22,7 @@ pub const ROLES: &[&str] = &[
     "dependent",
     "designee",
     "preparer",
+    "requester",
 ];
 
 /// The tax pack, embedded at build time from `packs/tax` at the repo root.
@@ -93,6 +94,34 @@ pub struct Manifest {
     pub forms: Vec<String>,
     #[serde(default)]
     pub codename: CodenameRules,
+    /// Public agency contacts the forms and their instructions print.
+    #[serde(default)]
+    pub public: PublicContacts,
+}
+
+/// Agency phone numbers and email addresses printed on forms and in their
+/// instructions (IRS hotlines, phishing@irs.gov). They are public, never a
+/// person's details, and are never inked.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PublicContacts {
+    /// Phone numbers in any spelling; compared by their ten digits.
+    #[serde(default)]
+    pub phones: Vec<String>,
+    /// Email addresses; compared ignoring case.
+    #[serde(default)]
+    pub emails: Vec<String>,
+}
+
+/// The ten digits of a North American phone number, without a leading
+/// country code 1; `None` for anything else.
+pub fn phone_digits(phone: &str) -> Option<String> {
+    let d: String = phone.chars().filter(char::is_ascii_digit).collect();
+    match d.len() {
+        11 if d.starts_with('1') => Some(d[1..].to_string()),
+        10 => Some(d),
+        _ => None,
+    }
 }
 
 /// Codename rules: the short form id used as the first codename segment.
@@ -174,6 +203,10 @@ pub struct FormTemplate {
     pub kind: String,
     /// Every anchor must match a page for the template to apply to it.
     pub anchors: Vec<Regex>,
+    /// Marks of the form's printed instruction pages ("Form W-9 (Rev.
+    /// 3-2024) Page 2"). A page of a matched document that is not a form
+    /// page and matches any of these holds no typed value.
+    pub instructions: Vec<Regex>,
     /// Capture group 1 is the tax year.
     pub year: Option<Regex>,
     pub fields: Vec<FieldSpec>,
@@ -285,6 +318,33 @@ impl PackSet {
         !n.is_empty() && self.packs.iter().any(|p| p.boilerplate.contains(&n))
     }
 
+    /// True when `phone` is an agency number some pack lists as public.
+    pub fn is_public_phone(&self, phone: &str) -> bool {
+        let Some(d) = phone_digits(phone) else {
+            return false;
+        };
+        self.packs.iter().any(|p| {
+            p.manifest
+                .public
+                .phones
+                .iter()
+                .any(|q| phone_digits(q).as_deref() == Some(d.as_str()))
+        })
+    }
+
+    /// True when `email` is an agency address some pack lists as public.
+    pub fn is_public_email(&self, email: &str) -> bool {
+        let e = email.trim();
+        !e.is_empty()
+            && self.packs.iter().any(|p| {
+                p.manifest
+                    .public
+                    .emails
+                    .iter()
+                    .any(|q| q.eq_ignore_ascii_case(e))
+            })
+    }
+
     /// Short codename segment for a document kind, e.g. `1099-int`.
     pub fn codename_short(&self, kind: &DocKind) -> Option<&str> {
         self.packs
@@ -344,6 +404,8 @@ struct RawTemplate {
     display: String,
     kind: String,
     anchors: Vec<String>,
+    #[serde(default)]
+    instructions: Vec<String>,
     #[serde(default)]
     year: Option<String>,
     #[serde(default)]
@@ -454,6 +516,11 @@ impl FormTemplate {
             .iter()
             .map(|a| compile(file, "anchors", a))
             .collect::<Result<Vec<_>>>()?;
+        let instructions = raw
+            .instructions
+            .iter()
+            .map(|a| compile(file, "instructions", a))
+            .collect::<Result<Vec<_>>>()?;
         let year = match &raw.year {
             Some(y) => {
                 let re = compile(file, "year", y)?;
@@ -532,6 +599,7 @@ impl FormTemplate {
             display: raw.display,
             kind: raw.kind,
             anchors,
+            instructions,
             year,
             fields,
             file: file.into(),

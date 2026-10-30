@@ -47,6 +47,9 @@ BINARIES = [
     "receipt-cornerstone-2025-03-09-photo.png",
 ]
 SIDECARS_FOR_BINARIES = ["w2-acme-2025-scan.ocr.json", "receipt-cornerstone-2025-03-09-photo.ocr.json"]
+# Several pages: a form feed between them in the .txt, one entry per page in
+# the sidecar, one PDF page each.
+MULTI_PAGE = {"w9-bluefin-2025": 3}
 
 UNISSUED_EIN_PREFIXES = {"00", "07", "08", "09", "17", "18", "19", "28", "29", "49", "69", "70", "78", "79", "89"}
 
@@ -86,6 +89,7 @@ class Corpus(unittest.TestCase):
     def test_every_expected_file_exists(self):
         expected = {f"{s}.txt" for s in STEMS} | {f"{s}.ocr.json" for s in STEMS}
         expected |= set(BINARIES) | set(SIDECARS_FOR_BINARIES)
+        expected |= {f"{s}{ext}" for s in MULTI_PAGE for ext in (".txt", ".ocr.json", ".pdf")}
         self.assertEqual(expected, {p.name for p in self.out.iterdir()})
 
     def test_corpus_under_two_megabytes(self):
@@ -184,6 +188,45 @@ class Corpus(unittest.TestCase):
             below = next(l for l in lines[i + 1 :] if l[col : col + 1].strip())
             self.assertEqual(below[col : col + len(value)], value, label)
 
+    def test_w9_is_filled_form_then_instructions(self):
+        pages = self.read("w9-bluefin-2025.txt").split("\f")
+        self.assertEqual(len(pages), MULTI_PAGE["w9-bluefin-2025"])
+        form, *instructions = pages
+        for label in [
+            "Request for Taxpayer",
+            "Identification Number and Certification",
+            "1 Name of entity/individual.",
+            "2 Business name/disregarded entity name, if different from above.",
+            "[X] Individual/sole proprietor",
+            "[ ] LLC. Enter the tax classification",
+            "5 Address (number, street, and apt. or suite no.). See instructions.",
+            "Requester's name and address (optional)",
+            "6 City, state, and ZIP code",
+            "Social security number",
+            "Employer identification number",
+            "Signature of U.S. person",
+        ]:
+            self.assertIn(label, form)
+        for v in (gen.RILEY["full"], gen.BLUEFIN["name"], gen.RILEY["street"], gen.RILEY["city"],
+                  gen.RILEY["ssn"], gen.TIDEWATER["name"]):
+            self.assertIn(v, form)
+        text = "\n".join(instructions)
+        for printed in ["Internal Revenue Service", "IRS", "Limited liability company (LLC)",
+                        "www.irs.gov", "1-800-772-1213", "phishing@irs.gov"]:
+            self.assertIn(printed, text)
+        # The instructions carry no typed value.
+        for v in (gen.RILEY["full"], gen.BLUEFIN["name"], gen.RILEY["ssn"]):
+            self.assertNotIn(v, text)
+
+    def test_w9_sidecar_and_pdf_have_every_page(self):
+        n = MULTI_PAGE["w9-bluefin-2025"]
+        data = json.loads(self.read("w9-bluefin-2025.ocr.json"))
+        self.assertEqual(list(range(1, n + 1)), [p["page"] for p in data["pages"]])
+        self.assertIn("Identiﬁcation Number", data["pages"][0]["text"])
+        pdf = (self.out / "w9-bluefin-2025.pdf").read_bytes()
+        self.assertIn(f"/Count {n}".encode(), pdf)
+        self.assertIn(b"(Request for Taxpayer) Tj", pdf)
+
     def test_same_ssn_on_w2_and_k1(self):
         ssn = gen.JORDAN["ssn"]
         self.assertIn(ssn, self.read("w2-acme-2025.txt"))
@@ -243,7 +286,7 @@ class PdfStructure(unittest.TestCase):
             self.assertEqual(data[m.end() + n : m.end() + n + 10], b"\nendstream")
 
     def test_all_pdfs_have_valid_xref_and_stream_lengths(self):
-        for name in BINARIES:
+        for name in [*BINARIES, *(f"{s}.pdf" for s in MULTI_PAGE)]:
             if name.endswith(".pdf"):
                 with self.subTest(name):
                     self.check_xref((self.out / name).read_bytes())

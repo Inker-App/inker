@@ -285,3 +285,19 @@ fn a_typed_name_after_a_label_is_still_held() {
         "{f:?}"
     );
 }
+
+#[test]
+fn a_sentence_break_is_not_inside_a_name() {
+    // Instructions prose: a label word, then the next sentence.
+    for t in [
+        "How to get a TIN. If you do not have a TIN, apply for one.",
+        "your TIN is your IRS ITIN. Enter it in the entry space",
+        "enter the name shown on your tax return. Individual. Generally, enter",
+    ] {
+        assert_eq!(found(t), vec![], "{t}");
+    }
+    // An initial with a dot is part of the name.
+    let f = found("Name: Jordan A. Example");
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert_eq!(f[0].1, "Jordan A. Example");
+}
