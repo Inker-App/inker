@@ -20,6 +20,17 @@ const SUFFIXES: &str = "Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Drive|Dr|Lan
     Place|Pl|Way|Terrace|Ter|Parkway|Pkwy|Highway|Hwy|Circle|Cir|Square|Sq|Trail|Trl|Loop|Row|\
     Plaza|Plz|Alley|Aly|Crescent|Pike|Run|Path|Walk";
 
+const UNIT_WORDS: &str = "Apt|Apartment|Unit|Suite|Ste|Fl|Floor|Rm|Room";
+
+const DIRECTIONS: &str = "North|South|East|West";
+
+/// `words` ("Street|St") as written and in capitals ("STREET|ST"). Mailing
+/// blocks on recipient copies and statements are printed in capitals; a
+/// street word in lower case is prose, so it is not accepted.
+fn either_case(words: &str) -> String {
+    format!("{words}|{}", words.to_ascii_uppercase())
+}
+
 fn city_line() -> String {
     format!(
         r"(?P<city>[A-Z][A-Za-z.'-]*(?:[ ][A-Z][A-Za-z.'-]*){{0,3}}),?[ \t]+(?P<st>{})[ \t]+(?P<zip>\d{{5}}(?:-\d{{4}})?)\b",
@@ -29,21 +40,32 @@ fn city_line() -> String {
 
 /// A street line: number, words, a street suffix; or a PO box.
 fn street() -> String {
+    let suffixes = either_case(SUFFIXES);
+    let directions = either_case(DIRECTIONS);
     format!(
-        r"(?:(?:P\.?[ ]?O\.?|Post[ ]Office)[ ]+Box[ ]+\d+|\d{{1,6}}[A-Z]?(?:[ ](?:North|South|East|West|NE|NW|SE|SW|[NSEW]\.?))?(?:[ ][A-Z0-9][A-Za-z0-9'-]*){{1,4}}?[ ](?:{SUFFIXES})\b\.?(?:[ ](?:NE|NW|SE|SW|[NSEW])\b)?)"
+        r"(?:(?:P\.?[ ]?O\.?|Post[ ]Office|POST[ ]OFFICE)[ ]+(?:Box|BOX)[ ]+\d+|\d{{1,6}}[A-Z]?(?:[ ](?:{directions}|NE|NW|SE|SW|[NSEW]\.?))?(?:[ ][A-Z0-9][A-Za-z0-9'-]*){{1,4}}?[ ](?:{suffixes})\b\.?(?:[ ](?:NE|NW|SE|SW|[NSEW])\b)?)"
     )
 }
 
-/// An apartment, unit, suite or floor after a street.
-const UNIT: &str =
-    r"(?:,?[ ](?:(?:Apt|Apartment|Unit|Suite|Ste|Fl|Floor|Rm|Room)\.?[ ]?#?|#)[ ]?[A-Za-z0-9-]+)?";
+/// An apartment, unit, suite or floor ("Apt 5", "UNIT 5B", "# 12").
+fn unit() -> String {
+    let words = either_case(UNIT_WORDS);
+    format!(r"(?:(?:{words})\.?[ ]?#?|#)[ ]?[A-Za-z0-9-]+")
+}
 
+/// A street, its unit on the same line or the next, then its city line.
 static FULL: LazyLock<Regex> = LazyLock::new(|| {
     let sep = r"(?:[ \t]*,[ \t]*|[ \t]*\r?\n[ \t]*|[ \t]+)";
-    re(&format!(r"\b{}{UNIT}{sep}{}", street(), city_line()))
+    let unit = unit();
+    re(&format!(
+        r"\b{}(?:,?[ ]{unit})?(?:[ \t]*\r?\n[ \t]*{unit})?{sep}{}",
+        street(),
+        city_line()
+    ))
 });
 
-static STREET_LINE: LazyLock<Regex> = LazyLock::new(|| re(&format!(r"^{}{UNIT}$", street())));
+static STREET_LINE: LazyLock<Regex> =
+    LazyLock::new(|| re(&format!(r"^{}(?:,?[ ]{})?$", street(), unit())));
 
 /// True when `s` is, in full, a street line with no city ("77 Oak Ave",
 /// "500 Harbor Blvd Suite 200"), as forms print it in a box of its own.

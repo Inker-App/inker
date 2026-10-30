@@ -1,0 +1,23 @@
+NORTHWIND INVESTMENT SERVICES
+PO BOX 9001
+SPRINGFIELD OR 97477
+
+2025 CONSOLIDATED FORM 1099
+Copy B for Recipient
+Document ID: NW-000417
+Account Number ****1234
+
+JORDAN A EXAMPLE
+1234 EXAMPLE BLVD APT 5
+HOUSTON TX 77002-1234
+
+RECIPIENT'S TIN: ***-**-3456
+PAYER'S TIN: 07-0000417
+
+FORM 1099-DIV DIVIDENDS AND DISTRIBUTIONS
+1a Total ordinary dividends                      412.18
+1b Qualified dividends                           390.02
+4 Federal income tax withheld                      0.00
+
+FORM 1099-INT INTEREST INCOME
+1 Interest income                                 18.44

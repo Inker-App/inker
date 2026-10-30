@@ -346,15 +346,35 @@ pub fn run_at(text: &str, start: usize) -> Option<NameRun> {
     }
     // Take capitalised words (and connectors) until something else.
     let mut toks: Vec<(usize, &str)> = Vec::new();
+    // The run is surname first ("EXAMPLE, JORDAN A").
+    let mut surname_first = false;
     for (i, &(pos, w)) in words.iter().enumerate() {
         let connector = matches!(w, "&" | "of" | "and");
         if !(is_capitalised(w) || (connector && !toks.is_empty())) {
             break;
         }
         toks.push((pos, w));
-        // A comma ends the run unless an org suffix follows.
-        if w.ends_with(',') && !words.get(i + 1).is_some_and(|(_, n)| is_suffix(n)) {
+        // A comma ends the run unless an org suffix follows, or it follows
+        // a lone surname and a given name comes next.
+        let next = words.get(i + 1).map(|&(_, n)| n);
+        if w.ends_with(',') && !next.is_some_and(is_suffix) {
+            if toks.len() == 1 && next.is_some_and(is_capitalised) {
+                surname_first = true;
+                continue;
+            }
             break;
+        }
+    }
+    // "Houston, TX" and "Austin, Texas" are a city and state, not a surname
+    // and a given name.
+    if surname_first
+        && let (Some(&(given, _)), Some(&(last_pos, last))) = (toks.get(1), toks.last())
+    {
+        let rest = &text[given..last_pos + last.len()];
+        if crate::address::STATES.contains(&rest)
+            || STATE_NAMES.contains(&rest.to_ascii_lowercase().as_str())
+        {
+            return None;
         }
     }
     // An org ends at its last suffix and only sheds leading stop words
