@@ -270,6 +270,7 @@ struct RowSurface<Content: View>: View {
     @Binding var hovering: Bool
     @ViewBuilder let content: () -> Content
     @EnvironmentObject private var store: CoreStore
+    @Environment(\.snapshotMode) private var snapshotMode
 
     var body: some View {
         let located = store.pulse?.id == id || store.expandedID == id
@@ -296,7 +297,10 @@ struct RowSurface<Content: View>: View {
                 VStack { Spacer(); Hairline(color: Palette.hairlineFaint) }
             }
         }
-        .overlay(RightClickCatcher { store.openMenu(id: id) })
+        .overlay {
+            // ImageRenderer cannot draw an NSView; snapshots have no right-clicks anyway.
+            if !snapshotMode { RightClickCatcher { store.openMenu(id: id) } }
+        }
         .anchorPreference(key: RowAnchorKey.self, value: .bounds) { [id: $0] }
         .id(id)
         .onHover { hovering = $0 }
