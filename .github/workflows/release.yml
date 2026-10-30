@@ -227,11 +227,12 @@ jobs:
           else
             NOTES="Ad-hoc signed, not notarized. After unzipping run \`xattr -dr com.apple.quarantine INKER.app\`, or open it once, then allow it under System Settings > Privacy & Security > Open Anyway. See docs/stack-decision.md for what works and what does not."
           fi
+          # A re-run of an existing release replaces its assets and its notes.
           gh release create "$TAG" dist/out/* \
             --title "INKER $V" \
             --prerelease \
             --notes "$NOTES" \
-            || gh release upload "$TAG" dist/out/* --clobber
+            || { gh release upload "$TAG" dist/out/* --clobber && gh release edit "$TAG" --notes "$NOTES"; }
 
       - name: Remove the signing keychain
         if: always() && steps.sign.outputs.keychain != ''
