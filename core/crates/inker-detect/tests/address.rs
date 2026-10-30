@@ -96,3 +96,71 @@ fn generalize_reads_the_city_line() {
     );
     assert_eq!(address::generalize("12 Main St"), None);
 }
+
+#[test]
+fn addresses_in_capitals() {
+    // Recipient copies and statements print the mailing block in capitals.
+    let cases = [
+        (
+            "1234 EXAMPLE BLVD APT 5\nHOUSTON TX 77002-1234",
+            "HOUSTON, TX",
+        ),
+        ("1234 EXAMPLE BLVD APT 5, HOUSTON, TX 77002", "HOUSTON, TX"),
+        ("PO BOX 4471\nHOUSTON TX 77002", "HOUSTON, TX"),
+        ("P.O. BOX 4471\nHOUSTON, TX 77002", "HOUSTON, TX"),
+        ("1234 SAMPLE STREET # 5\nHOUSTON TX 77002", "HOUSTON, TX"),
+    ];
+    for (text, city) in cases {
+        let f = found(&format!("Mail to:\n{text}\nThank you."));
+        assert_eq!(
+            f,
+            vec![(text.to_string(), Some(city.to_string()))],
+            "{text}"
+        );
+    }
+    for line in [
+        "1234 EXAMPLE BLVD APT 5",
+        "PO BOX 4471",
+        "1234 SAMPLE STREET",
+    ] {
+        assert!(address::is_street_line(line), "{line}");
+    }
+}
+
+#[test]
+fn unit_on_a_line_of_its_own() {
+    for (text, city) in [
+        (
+            "1234 Sample Street\nApt 5\nHouston, TX 77002",
+            "Houston, TX",
+        ),
+        (
+            "1234 SAMPLE STREET\nUNIT 5B\nHOUSTON TX 77002",
+            "HOUSTON, TX",
+        ),
+        (
+            "1234 Sample Street\nSuite 200\nHouston, TX 77002",
+            "Houston, TX",
+        ),
+    ] {
+        let f = found(&format!("Mail to:\n{text}\nThank you."));
+        assert_eq!(
+            f,
+            vec![(text.to_string(), Some(city.to_string()))],
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn street_words_are_title_case_or_capitals_only() {
+    // A suffix in lower case is prose, not a street.
+    for t in [
+        "12 ways to save",
+        "3 Example st",
+        "4 Federal income tax withheld box 12",
+        "Paid po box 12",
+    ] {
+        assert!(!address::is_street_line(t), "{t}");
+    }
+}
