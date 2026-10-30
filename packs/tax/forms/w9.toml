@@ -1,0 +1,119 @@
+# Form W-9, Request for Taxpayer Identification Number and Certification
+# (Rev. March 2024). Labels are the IRS wording. Schema: see w2.toml.
+#
+# Page 1 is the form. The pages after it are printed instructions: they name
+# the IRS, the SSA and LLCs and print agency phone numbers, but hold no typed
+# value. `instructions` marks them by their running head.
+id = "w9"
+display = "W-9"
+kind = "w9"
+anchors = [
+  'Request for Taxpayer Identification Number and Certification',
+  '\bW-9\b',
+  'Give form to the requester',
+]
+instructions = ['Form W-9 \(Rev\. [^)]*\) Page \d+']
+# A W-9 has no tax year; the year it was signed stands in.
+year = '(?s)Signature of U\.S\. person.{0,120}?\b\d{1,2}/\d{1,2}/(20\d{2})\b'
+
+[[fields]]
+id = "1"
+label = '''\b1 Name of entity/individual\.(?s:.{0,200}?)line 2\.\)'''
+kind = "person"
+treatment = "tokenize"
+role = "taxpayer"
+
+[[fields]]
+id = "2"
+label = '\b2 Business name/disregarded entity name, if different from above\.?'
+kind = "org"
+treatment = "tokenize"
+role = "taxpayer"
+
+[[fields]]
+id = "3a_llc"
+label = 'LLC\. Enter the tax classification \(C = C corporation, S = S corporation, P = Partnership\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4_payee"
+label = 'Exempt payee code \(if any\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "4_fatca"
+label = 'Exemption from Foreign Account Tax Compliance Act \(FATCA\) reporting code \(if any\)'
+kind = "keep"
+treatment = "keep"
+
+[[fields]]
+id = "5"
+label = '\b5 Address \(number, street, and apt\. or suite no\.\)\. See instructions\.'
+kind = "address"
+treatment = "tokenize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "6"
+label = '\b6 City, state, and ZIP code'
+kind = "address"
+treatment = "generalize"
+role = "taxpayer"
+value = "below"
+
+[[fields]]
+id = "requester_name"
+label = '''Requester['’]s name and address \(optional\)'''
+kind = "org"
+treatment = "tokenize"
+role = "requester"
+value = "below"
+
+[[fields]]
+id = "requester_street"
+label = '''Requester['’]s name and address \(optional\)'''
+kind = "address"
+treatment = "tokenize"
+role = "requester"
+value = "below"
+skip_lines = 1
+
+[[fields]]
+id = "requester_city"
+label = '''Requester['’]s name and address \(optional\)'''
+kind = "address"
+treatment = "generalize"
+role = "requester"
+value = "below"
+skip_lines = 2
+
+[[fields]]
+id = "7"
+label = '\b7 List account number\(s\) here \(optional\)'
+kind = "account"
+treatment = "tokenize"
+role = "taxpayer"
+
+[[fields]]
+id = "ssn"
+label = 'Social security number'
+kind = "ssn"
+treatment = "tokenize"
+role = "taxpayer"
+
+[[fields]]
+id = "ein"
+label = 'Employer identification number'
+kind = "ein"
+treatment = "tokenize"
+role = "taxpayer"
+
+[[fields]]
+id = "signature"
+label = 'Signature of U\.S\. person'
+kind = "person"
+treatment = "tokenize"
+role = "taxpayer"

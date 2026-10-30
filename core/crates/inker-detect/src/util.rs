@@ -86,6 +86,59 @@ pub(crate) fn isolated(text: &str, start: usize, end: usize) -> bool {
     before_ok && after_ok
 }
 
+/// Fewest digits a group needs to stand as a number of its own; shorter
+/// groups are chunks of a longer value printed from digit boxes.
+const MIN_ALONE: usize = 6;
+
+static DIGIT_GROUP: std::sync::LazyLock<regex::Regex> =
+    std::sync::LazyLock::new(|| re(r"\d[\d-]*"));
+
+/// End of the value that starts at `[start, end)` once the digit groups
+/// after it, each joined to the last by one space, are taken with it. Digit
+/// boxes (routing and account numbers on Form 1040) come out of text layers
+/// and OCR as "1 2 3 4 5 6 7 8 9" or "0001 2345 6789". A group joins when it
+/// or the group before it is too short to be a number on its own, so two
+/// whole numbers one space apart stay two values.
+fn box_run_end(text: &str, start: usize, end: usize) -> usize {
+    let b = text.as_bytes();
+    let mut last = digits(&text[start..end]).len();
+    let mut end = end;
+    while b.get(end) == Some(&b' ') && b.get(end + 1).is_some_and(u8::is_ascii_digit) {
+        let s = end + 1;
+        let len = text[s..]
+            .bytes()
+            .take_while(|c| c.is_ascii_digit() || *c == b'-')
+            .count();
+        let e = s + text[s..s + len].trim_end_matches('-').len();
+        let n = digits(&text[s..e]).len();
+        if !isolated(text, s, e) || (last >= MIN_ALONE && n >= MIN_ALONE) {
+            break;
+        }
+        end = e;
+        last = n;
+    }
+    end
+}
+
+/// Every value in `text` made of digit groups, with groups printed from
+/// digit boxes joined (see [`box_run_end`]). Groups glued to a word or part
+/// of an amount are not values.
+pub(crate) fn box_runs(text: &str) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut pos = 0;
+    for m in DIGIT_GROUP.find_iter(text) {
+        let s = m.start();
+        let e = s + m.as_str().trim_end_matches('-').len();
+        if s < pos || !isolated(text, s, e) {
+            continue;
+        }
+        let end = box_run_end(text, s, e);
+        out.push((s, end));
+        pos = end;
+    }
+    out
+}
+
 /// Compile a regex written in this crate. The patterns are literals covered
 /// by tests, so a failure is a programming error caught before release.
 #[allow(clippy::expect_used)]
@@ -202,5 +255,56 @@ impl Folded {
     pub fn span_from_orig(&self, start: usize, end: usize) -> (usize, usize) {
         let f = |o: usize| self.to_orig.partition_point(|&x| x < o);
         (f(start), f(end))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn runs(text: &str) -> Vec<&str> {
+        box_runs(text)
+            .into_iter()
+            .map(|(s, e)| &text[s..e])
+            .collect()
+    }
+
+    #[test]
+    fn one_digit_per_box_is_one_value() {
+        assert_eq!(
+            runs("Routing number    1 2 3 4 5 6 7 8 9   c Type"),
+            ["1 2 3 4 5 6 7 8 9"]
+        );
+    }
+
+    #[test]
+    fn chunks_shorter_than_a_number_join_their_neighbours() {
+        assert_eq!(runs("d 0001 2345 6789"), ["0001 2345 6789"]);
+        assert_eq!(runs("d 00012 3456789"), ["00012 3456789"]);
+    }
+
+    #[test]
+    fn two_whole_numbers_stay_apart() {
+        assert_eq!(
+            runs("123456789 000123456789"),
+            ["123456789", "000123456789"]
+        );
+        assert_eq!(
+            runs("1 2 3 4 5 6 7 8 9    0 0 0 1 2 3 4 5 6 7 8 9"),
+            ["1 2 3 4 5 6 7 8 9", "0 0 0 1 2 3 4 5 6 7 8 9"]
+        );
+    }
+
+    #[test]
+    fn amounts_and_words_end_a_run() {
+        assert_eq!(runs("12345678 5,000.00"), ["12345678"]);
+        assert_eq!(runs("1 2 3 4a"), ["1 2 3"]);
+    }
+
+    #[test]
+    fn run_end_extends_a_value_over_its_boxes() {
+        let t = "d 0001 2345 6789   36";
+        assert_eq!(box_run_end(t, 2, 6), 16);
+        assert_eq!(box_run_end("123456789 000123456789", 0, 9), 9);
     }
 }

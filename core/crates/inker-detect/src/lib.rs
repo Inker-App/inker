@@ -7,12 +7,15 @@
 
 pub mod address;
 pub mod classify;
+pub mod dob;
 pub mod failclosed;
 pub mod fields;
 pub mod model;
 pub mod names;
 pub mod rules;
+pub mod same_value;
 pub mod shape;
+pub mod spaced;
 pub mod template;
 pub mod unplaced;
 mod util;
@@ -22,11 +25,13 @@ pub use util::detection;
 pub use classify::Classification;
 pub use model::{Model, NoModel};
 
-use inker_core::{Detection, DetectionSource, Extracted, PageText, Result, Treatment};
+use inker_core::{Detection, DetectionSource, Extracted, PageText, Result, TokenKind, Treatment};
 use inker_packs::PackSet;
 
-/// The detection pipeline: templates, rules, names, addresses, the model (if
-/// any), then fail-closed and, on form pages, unplaced values; overlaps merged, roles attached from template fields.
+/// The detection pipeline: templates, rules, names, addresses, dates of
+/// birth, the model (if any), then fail-closed and, on form pages, unplaced
+/// values; overlaps merged, repeats of a placed number given its kind, roles
+/// attached from template fields.
 #[derive(Debug)]
 pub struct Detector<'a> {
     packs: &'a PackSet,
@@ -48,8 +53,20 @@ impl<'a> Detector<'a> {
         self
     }
 
-    /// Run the pipeline over one extracted file.
+    /// Run the pipeline over one extracted file. Letter-spaced pages are
+    /// read through a closed-up view (see [`spaced`]); spans point into the
+    /// original text either way.
     pub fn detect(&self, extracted: &Extracted) -> Result<(Vec<Detection>, Classification)> {
+        let Some(view) = spaced::View::of(extracted) else {
+            return self.detect_text(extracted);
+        };
+        tracing::debug!("letter-spaced text closed up for detection");
+        let (mut out, class) = self.detect_text(&view.extracted)?;
+        view.restore(&mut out);
+        Ok((out, class))
+    }
+
+    fn detect_text(&self, extracted: &Extracted) -> Result<(Vec<Detection>, Classification)> {
         let matched = template::match_template(extracted, self.packs);
         let from_template = matched
             .as_ref()
@@ -61,11 +78,20 @@ impl<'a> Detector<'a> {
             "templates"
         );
 
+        // A form's printed instruction pages hold no typed value: the names
+        // and addresses there are examples and agencies. Only the identifier
+        // rules run on them.
+        let instructions: &[u32] = matched
+            .as_ref()
+            .map_or(&[], |m| m.instruction_pages.as_slice());
         let mut all = from_template.detections.clone();
         for page in &extracted.pages {
             all.extend(rules::find(page));
-            all.extend(names::find(page));
-            all.extend(address::find(page));
+            if !instructions.contains(&page.page) {
+                all.extend(names::find(page));
+                all.extend(address::find(page));
+            }
+            all.extend(dob::find(page));
         }
         // Every form field value is scanned as a page of its own, whether or
         // not a template maps its name.
@@ -78,7 +104,8 @@ impl<'a> Detector<'a> {
             let found = rules::find(p)
                 .into_iter()
                 .chain(names::find(p))
-                .chain(address::find(p));
+                .chain(address::find(p))
+                .chain(dob::find(p));
             all.extend(fields::tag(found, name));
         }
         all.extend(self.model.detect(&extracted.pages)?);
@@ -129,6 +156,22 @@ impl<'a> Detector<'a> {
         }
         merged.extend(held);
         let mut out = merge(merged);
+        out.retain(|d| {
+            let printed = d.field.is_none()
+                && instructions.contains(&d.page)
+                && matches!(
+                    d.kind,
+                    TokenKind::Person | TokenKind::Org | TokenKind::Address
+                );
+            !printed && !self.is_public_contact(extracted, &field_pages, d)
+        });
+
+        // A number placed once is the same kind wherever it repeats.
+        let repeats = same_value::find(&extracted.pages, &field_pages, &out);
+        if !repeats.is_empty() {
+            out.extend(repeats);
+            out = merge(out);
+        }
 
         // Roles from the template field a detection sits in.
         for d in out
@@ -154,6 +197,37 @@ impl<'a> Detector<'a> {
             "detected"
         );
         Ok((out, class))
+    }
+
+    /// A phone number or email address a pack lists as a public agency
+    /// contact (an IRS hotline, phishing@irs.gov).
+    fn is_public_contact(
+        &self,
+        extracted: &Extracted,
+        field_pages: &[(&str, PageText)],
+        d: &Detection,
+    ) -> bool {
+        if !matches!(d.kind, TokenKind::Phone | TokenKind::Email) {
+            return false;
+        }
+        let text = match d.field.as_deref() {
+            Some(name) => field_pages
+                .iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, p)| p.text.as_str()),
+            None => extracted
+                .pages
+                .iter()
+                .find(|p| p.page == d.page)
+                .map(|p| p.text.as_str()),
+        };
+        let Some(value) = text.and_then(|t| t.get(d.span.start..d.span.end)) else {
+            return false;
+        };
+        match d.kind {
+            TokenKind::Phone => self.packs.is_public_phone(value),
+            _ => self.packs.is_public_email(value),
+        }
     }
 }
 

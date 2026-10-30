@@ -212,3 +212,104 @@ fn a_name_heading_a_mailing_address_is_a_person() {
         );
     }
 }
+
+#[test]
+fn surname_first_names() {
+    use TokenKind::Person;
+    for (t, v) in [
+        ("Account holder: EXAMPLE, JORDAN A", "EXAMPLE, JORDAN A"),
+        ("Recipient's name: Example, Jordan A", "Example, Jordan A"),
+        ("Borrower: SAMPLE, RILEY\n", "SAMPLE, RILEY"),
+    ] {
+        let f: Vec<_> = found(t)
+            .into_iter()
+            .filter(|(k, _, _)| *k == Person)
+            .collect();
+        assert_eq!(f.len(), 1, "{t}: {f:?}");
+        assert_eq!(f[0].1, v, "{t}");
+    }
+    let t = "x EXAMPLE, JORDAN A";
+    let r = names::run_at(t, 2).unwrap();
+    assert_eq!(&t[r.start..r.end], "EXAMPLE, JORDAN A");
+    // A city and state is not a surname and a given name.
+    for t in [
+        "Houston, TX",
+        "Austin, Texas",
+        "Springfield, New York",
+        "Total, Federal Tax",
+    ] {
+        assert!(names::run_at(t, 0).is_none(), "{t}");
+    }
+}
+
+#[test]
+fn a_name_in_capitals_heading_a_mailing_block() {
+    use TokenKind::Person;
+    for (text, name) in [
+        (
+            "JORDAN A EXAMPLE\n1234 EXAMPLE BLVD APT 5\nHOUSTON TX 77002\n",
+            "JORDAN A EXAMPLE",
+        ),
+        (
+            "JORDAN A EXAMPLE\nPO BOX 4471\nHOUSTON TX 77002\n",
+            "JORDAN A EXAMPLE",
+        ),
+        (
+            "EXAMPLE, JORDAN A\n1234 Example Blvd Apt 5\nHouston, TX 77002\n",
+            "EXAMPLE, JORDAN A",
+        ),
+    ] {
+        let people: Vec<_> = found(text)
+            .into_iter()
+            .filter(|(k, _, _)| *k == Person)
+            .collect();
+        assert_eq!(people, one(Person, name, None), "{text:?}");
+    }
+}
+
+#[test]
+fn an_org_suffix_needs_a_name_before_it() {
+    // IRS instructions talk about LLCs; an article and a suffix is no name.
+    for t in [
+        "An LLC that is a disregarded entity should check the box",
+        "If the LLC is classified as a corporation",
+        "Each LLC must enter its classification",
+        "A Corporation. Enter the code",
+        "LLC\n",
+    ] {
+        assert!(found(t).is_empty(), "{t}: {:?}", found(t));
+    }
+    // A real name after an article is still found, without the article.
+    assert_eq!(
+        found("Paid to Bluefin Analytics LLC today"),
+        one(TokenKind::Org, "Bluefin Analytics LLC", None)
+    );
+    assert_eq!(
+        found("An Acme Robotics Inc invoice"),
+        one(TokenKind::Org, "Acme Robotics Inc", None)
+    );
+}
+
+#[test]
+fn agencies_are_never_people() {
+    for w in [
+        "IRS",
+        "SSA",
+        "TIGTA",
+        "FTC",
+        "Taxpayer",
+        "Advocate",
+        "Administration",
+    ] {
+        assert!(names::is_stop_word(w), "{w}");
+    }
+    for t in [
+        "Recipient's name: Internal Revenue Service",
+        "Recipient's name: IRS Office",
+        "Recipient's name: Social Security Administration",
+        "Recipient's name: Taxpayer Advocate Service",
+        "Employee's name: SSA Field Office",
+    ] {
+        assert!(found(t).is_empty(), "{t}: {:?}", found(t));
+    }
+}

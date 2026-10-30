@@ -228,6 +228,17 @@ fn is_masked(run: &str) -> bool {
     letters.peek().is_some() && letters.all(|c| c == 'X' || c == 'x')
 }
 
+/// A word before the last ends a sentence ("TIN. If", "ITIN. Enter"): the
+/// run is prose, not a name. An initial ("Jordan A. Example") does not.
+fn spans_sentences(run: &str) -> bool {
+    let words: Vec<&str> = run.split_whitespace().collect();
+    words.split_last().is_some_and(|(_, before)| {
+        before
+            .iter()
+            .any(|w| w.ends_with('.') && w.chars().filter(char::is_ascii_alphabetic).count() > 1)
+    })
+}
+
 /// Every word of the run is fixed form wording.
 fn is_label_wording(run: &str) -> bool {
     run.split_whitespace().all(|w| {
@@ -402,10 +413,14 @@ pub(crate) fn held(
 }
 
 /// Split a run at spaces unless every space-separated group has four
-/// characters (card style). Returns byte ranges relative to the run.
+/// characters (card style) or one (digit boxes, as Form 1040 prints routing
+/// and account numbers). Returns byte ranges relative to the run.
 fn pieces(run: &str) -> Vec<(usize, usize)> {
     let groups: Vec<&str> = run.split(' ').collect();
-    if groups.len() == 1 || groups.iter().all(|g| g.len() == 4) {
+    if groups.len() == 1
+        || groups.iter().all(|g| g.len() == 4)
+        || groups.iter().all(|g| g.len() == 1)
+    {
         return vec![(0, run.len())];
     }
     let mut out = Vec::new();
@@ -524,7 +539,9 @@ fn find_folded(page: &PageText, covered: &[(usize, usize)]) -> Vec<Detection> {
                         && (j == 0 || !b[j - 1].is_ascii_alphanumeric())
                         && text.is_char_boundary(j)
                 })
-                .find_map(|j| names::run_at(text, j));
+                .find_map(|j| {
+                    names::run_at(text, j).filter(|r| !spans_sentences(&text[r.start..r.end]))
+                });
             let Some(r) = found else { continue };
             if overlaps(&taken, r.start, r.end) {
                 continue;

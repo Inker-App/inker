@@ -14,7 +14,7 @@ use regex::Regex;
 
 use crate::address;
 use crate::shape;
-use crate::util::{ceil_char, detection, floor_char, isolated, re};
+use crate::util::{box_runs, ceil_char, detection, floor_char, isolated, re};
 
 /// The template chosen for a document.
 #[derive(Debug, Clone)]
@@ -22,6 +22,9 @@ pub struct TemplateMatch<'a> {
     pub template: &'a FormTemplate,
     /// Pages where every anchor matched.
     pub pages: Vec<u32>,
+    /// The form's printed instruction pages: not form pages, but marked by
+    /// one of the template's `instructions` patterns.
+    pub instruction_pages: Vec<u32>,
     pub year: Option<u16>,
     /// The packs the template came from, for their boilerplate lines.
     pub packs: &'a PackSet,
@@ -55,7 +58,6 @@ static TIN: LazyLock<Regex> =
     LazyLock::new(|| re(r"\d{3}-?\d{2}-?\d{4}|\d{2}-\d{7}|[X*]{3}-?[X*]{2}-?\d{4}|[X*]{5}\d{4}"));
 static DATE: LazyLock<Regex> =
     LazyLock::new(|| re(r"\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{2}-\d{2}"));
-static ROUTING: LazyLock<Regex> = LazyLock::new(|| re(r"\d{9}"));
 static ACCOUNT: LazyLock<Regex> = LazyLock::new(|| re(r"[A-Za-z0-9*][A-Za-z0-9*-]{3,}"));
 
 /// How far either side of the title anchor the other anchors must match,
@@ -99,12 +101,20 @@ pub fn match_template<'a>(extracted: &Extracted, packs: &'a PackSet) -> Option<T
                 let y = t.year.as_ref()?;
                 on_form().find_map(|p| first_year(y, &mask_revisions(&p.text)))
             });
+        let instruction_pages = extracted
+            .pages
+            .iter()
+            .filter(|p| !pages.contains(&p.page))
+            .filter(|p| t.instructions.iter().any(|r| r.is_match(&p.text)))
+            .map(|p| p.page)
+            .collect();
         best = Some((
             score.0,
             score.1,
             TemplateMatch {
                 template: t,
                 pages,
+                instruction_pages,
                 year,
                 packs,
             },
@@ -119,14 +129,22 @@ fn collapse(text: &str) -> String {
 }
 
 /// True when the first anchor matches as a title (not a prose mention such
-/// as "Form 1099-NEC, Nonemployee Compensation," or "Forms W-2 and W-3") and
-/// every other anchor matches within `TITLE_WINDOW` of it.
+/// as "Form 1099-NEC, Nonemployee Compensation,", "Forms W-2 and W-3" or
+/// "Form 1099-NEC (nonemployee compensation)") and every other anchor
+/// matches within `TITLE_WINDOW` of it.
 fn title_matches(anchors: &[Regex], text: &str) -> bool {
     let Some((first, rest)) = anchors.split_first() else {
         return false;
     };
     first.find_iter(text).any(|m| {
-        let prose = text[m.end()..].trim_start().starts_with(',')
+        let after = text[m.end()..].trim_start();
+        // "Form 1099-NEC (nonemployee compensation)" in a list of returns;
+        // a title's parenthesis holds a revision or a year: "(Rev. 4-2025)".
+        let glossed = after
+            .strip_prefix('(')
+            .is_some_and(|g| g.starts_with(|c: char| c.is_ascii_lowercase()));
+        let prose = after.starts_with(',')
+            || glossed
             || text[..m.start()]
                 .trim_end()
                 .to_ascii_lowercase()
@@ -392,11 +410,20 @@ impl Page<'_> {
     fn value(&self, f: &FieldSpec, at: usize, from: usize) -> Option<(usize, usize)> {
         match f.value {
             ValueShape::Tin => self.first_in_window(&TIN, from, |_| true),
-            ValueShape::Routing => self.first_in_window(&ROUTING, from, |_| true),
+            ValueShape::Routing => self.first_box_run(from, |n| n == 9),
             ValueShape::Date => self.first_in_window(&DATE, from, |_| true),
-            ValueShape::Account => self.first_in_window(&ACCOUNT, from, |s| {
-                s.bytes().filter(u8::is_ascii_digit).count() >= 4
-            }),
+            ValueShape::Account => {
+                let word = self.first_in_window(&ACCOUNT, from, |s| {
+                    s.bytes().filter(u8::is_ascii_digit).count() >= 4
+                });
+                // Digit boxes ("0 0 0 1 ...", "0001 2345 6789") are one value:
+                // a run that starts no later than the word is taken whole.
+                let boxes = self.first_box_run(from, |n| n >= 4);
+                match (word, boxes) {
+                    (Some(w), Some(b)) if b.0 <= w.0 => Some(b),
+                    (w, b) => w.or(b),
+                }
+            }
             ValueShape::Line | ValueShape::Below => {
                 let (s, e) = if f.value == ValueShape::Below {
                     self.below(at, from, f.skip_lines)?
@@ -503,6 +530,19 @@ impl Page<'_> {
             pos = next;
         }
         None
+    }
+
+    /// The first run of digit groups (see [`box_runs`]) in the window after
+    /// a label whose digit count passes `ok`.
+    fn first_box_run(&self, from: usize, ok: impl Fn(usize) -> bool) -> Option<(usize, usize)> {
+        let end = self.window_end(from);
+        box_runs(&self.text[from..end])
+            .into_iter()
+            .map(|(s, e)| (from + s, from + e))
+            .find(|&(s, e)| {
+                isolated(self.text, s, e)
+                    && ok(self.text[s..e].bytes().filter(u8::is_ascii_digit).count())
+            })
     }
 
     fn first_in_window(

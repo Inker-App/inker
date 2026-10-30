@@ -285,7 +285,26 @@ fn fixture_ocr_every_corpus_sidecar_parses() {
             n += 1;
         }
     }
-    assert_eq!(n, 12);
+    assert_eq!(n, 14);
+}
+
+#[test]
+fn w9_pdf_and_sidecar_have_every_page() {
+    // Form W-9: the form, then two pages of instructions.
+    let pdf = PdfTextSource::new()
+        .extract(&sample("w9-bluefin-2025.pdf"))
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        pdf.pages.iter().map(|p| p.page).collect::<Vec<_>>(),
+        [1, 2, 3]
+    );
+    assert!(pdf.pages[0].text.contains("Request for Taxpayer"));
+    assert!(pdf.pages[2].text.contains("Secure Your Tax Records"));
+    let ocr = FixtureOcr::new()
+        .ocr(&sample("w9-bluefin-2025.pdf"))
+        .unwrap();
+    assert_eq!(ocr.pages.len(), 3);
 }
 
 #[test]

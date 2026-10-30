@@ -188,6 +188,20 @@ fn digit_groups_join_across_dots_dashes_and_breaks() {
 }
 
 #[test]
+fn one_digit_per_box_is_one_number() {
+    // Digit boxes (Form 1040 line 35b) print one digit per box.
+    let f = found("Routing number    1 2 3 4 5 6 7 8 9   Type");
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert_eq!(f[0].0, TokenKind::Routing);
+    assert_eq!(f[0].1, "1 2 3 4 5 6 7 8 9");
+    let f = ocr("note 0 0 0 1 2 3 4 5 6 7 8 9");
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert_eq!(f[0].1, "0 0 0 1 2 3 4 5 6 7 8 9");
+    // A few short numbers in a row are not boxes.
+    assert_eq!(found("Lines 1 2 3 4"), vec![]);
+}
+
+#[test]
 fn statement_references_are_inked_without_a_question() {
     let text = "PPD ID: 9111222333 TRACE 990000441234567 ORDER 112-3456789-1234567 \
                 SEQ 990123487 x\nCASHOUT 1037621994857263 PPD\nIN 20250310000123 IMAD\n\
@@ -270,4 +284,20 @@ fn a_typed_name_after_a_label_is_still_held() {
             .any(|(k, v, _)| *k == TokenKind::Org && v == "Northwind Federal Credit Union"),
         "{f:?}"
     );
+}
+
+#[test]
+fn a_sentence_break_is_not_inside_a_name() {
+    // Instructions prose: a label word, then the next sentence.
+    for t in [
+        "How to get a TIN. If you do not have a TIN, apply for one.",
+        "your TIN is your IRS ITIN. Enter it in the entry space",
+        "enter the name shown on your tax return. Individual. Generally, enter",
+    ] {
+        assert_eq!(found(t), vec![], "{t}");
+    }
+    // An initial with a dot is part of the name.
+    let f = found("Name: Jordan A. Example");
+    assert_eq!(f.len(), 1, "{f:?}");
+    assert_eq!(f[0].1, "Jordan A. Example");
 }

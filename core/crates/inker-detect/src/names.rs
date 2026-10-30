@@ -225,7 +225,32 @@ const STOP_WORDS: &[&str] = &[
     "opening",
     "new",
     "old",
+    // Agencies the forms and their instructions name ("Internal Revenue
+    // Service", "Department of the Treasury" and "Social Security" are
+    // covered above). Never part of a person's name.
+    "irs",
+    "ssa",
+    "tigta",
+    "ftc",
+    "tas",
+    "fincen",
+    "taxpayer",
+    "advocate",
+    "administration",
+    "commission",
+    "inspector",
 ];
+
+/// Words that may open an organisation's run without being part of its name
+/// ("An LLC", "Each LLC"). Shed like stop words, so a suffix with only these
+/// before it is no organisation. Kept apart from the stop words because a
+/// person's run must not stop at the initial "A".
+const ORG_LEADS: &[&str] = &["a", "an", "any", "each", "every", "such", "another"];
+
+/// A word shed from the front of an organisation's run.
+fn is_org_lead(word: &str) -> bool {
+    (is_stop_word(word) || ORG_LEADS.contains(&normalise(word).as_str())) && !is_suffix(word)
+}
 
 const STATE_NAMES: &[&str] = &[
     "alabama",
@@ -346,27 +371,45 @@ pub fn run_at(text: &str, start: usize) -> Option<NameRun> {
     }
     // Take capitalised words (and connectors) until something else.
     let mut toks: Vec<(usize, &str)> = Vec::new();
+    // The run is surname first ("EXAMPLE, JORDAN A").
+    let mut surname_first = false;
     for (i, &(pos, w)) in words.iter().enumerate() {
         let connector = matches!(w, "&" | "of" | "and");
         if !(is_capitalised(w) || (connector && !toks.is_empty())) {
             break;
         }
         toks.push((pos, w));
-        // A comma ends the run unless an org suffix follows.
-        if w.ends_with(',') && !words.get(i + 1).is_some_and(|(_, n)| is_suffix(n)) {
+        // A comma ends the run unless an org suffix follows, or it follows
+        // a lone surname and a given name comes next.
+        let next = words.get(i + 1).map(|&(_, n)| n);
+        if w.ends_with(',') && !next.is_some_and(is_suffix) {
+            if toks.len() == 1 && next.is_some_and(is_capitalised) {
+                surname_first = true;
+                continue;
+            }
             break;
         }
     }
-    // An org ends at its last suffix and only sheds leading stop words
-    // ("Your Statement Northwind Federal Credit Union"). A person run is cut
+    // "Houston, TX" and "Austin, Texas" are a city and state, not a surname
+    // and a given name.
+    if surname_first
+        && let (Some(&(given, _)), Some(&(last_pos, last))) = (toks.get(1), toks.last())
+    {
+        let rest = &text[given..last_pos + last.len()];
+        if crate::address::STATES.contains(&rest)
+            || STATE_NAMES.contains(&rest.to_ascii_lowercase().as_str())
+        {
+            return None;
+        }
+    }
+    // An org ends at its last suffix and only sheds leading stop words and
+    // articles ("Your Statement Northwind Federal Credit Union", "An LLC");
+    // a suffix with no name left before it is no org. A person run is cut
     // at its first stop word and has no connectors.
     let org = match toks.iter().rposition(|(_, w)| is_suffix(w)) {
         Some(i) => {
             toks.truncate(i + 1);
-            let lead = toks
-                .iter()
-                .take_while(|(_, w)| is_stop_word(w) && !is_suffix(w))
-                .count();
+            let lead = toks.iter().take_while(|(_, w)| is_org_lead(w)).count();
             toks.drain(..lead);
             true
         }
@@ -533,7 +576,7 @@ pub fn find(page: &PageText) -> Vec<Detection> {
                 .len();
         let mut start = m.start();
         for w in text[m.start()..body_end].split(' ') {
-            if is_stop_word(w) && !is_suffix(w) {
+            if is_org_lead(w) {
                 start += w.len() + 1;
             } else {
                 break;

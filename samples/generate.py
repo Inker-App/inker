@@ -109,6 +109,14 @@ JORDAN_1040 = {
 }
 RILEY_1040 = {"occupation": "Data Analyst"}
 
+# Form 8879 only: the e-file signature PINs. Five digits each, made up; the
+# ERO's EFIN/PIN is an all-zero EFIN followed by a made-up PIN.
+FORM_8879 = {
+    "taxpayer_pin": "13579",
+    "spouse_pin": "24680",
+    "ero_efin_pin": "00000097531",
+}
+
 JORDAN_CHECKING = "00012345678"
 JORDAN_SAVINGS_INT_ACCT = "00098765432"
 RILEY_BROKERAGE = "NW-0000-5521"
@@ -679,6 +687,277 @@ def f1040_text() -> str:
     return page1 + "\n\n" + page2 + "\n"
 
 
+# Form W-9 (Rev. March 2024), filled by Riley for Bluefin Analytics LLC, the
+# single-member LLC Riley owns (a disregarded entity, so Riley's name and SSN
+# go on line 1 and in Part I, the LLC's name on line 2). The requester is
+# Tidewater Partners LP. Page 1 is the form; the pages after it are the IRS's
+# printed instructions, abridged but in the IRS's wording: they name the IRS,
+# the SSA and LLCs throughout and print agency contacts. Those phone numbers
+# and email addresses are the public agency lines the real instructions print
+# (SSA, TAS, IRS TTY, TIGTA, FTC), not anyone's personal details.
+W9_REQUESTER = TIDEWATER
+W9_SIGNED = "02/03/2025"
+
+
+def w9_pages() -> list[str]:
+    r, b, q = RILEY, BLUEFIN, W9_REQUESTER
+    page1 = f"""\
+Form W-9
+(Rev. March 2024)
+Department of the Treasury
+Internal Revenue Service
+Request for Taxpayer
+Identification Number and Certification
+Go to www.irs.gov/FormW9 for instructions and the latest information.
+Give form to the
+requester. Do not
+send to the IRS.
+Before you begin. For guidance related to the purpose of Form W-9, see Purpose of Form, below.
+Print or type. See Specific Instructions on page 3.
+1 Name of entity/individual. An entry is required. (For a sole proprietor or disregarded entity, enter the owner's
+name on line 1, and enter the business/disregarded entity's name on line 2.)
+  {r["full"]}
+2 Business name/disregarded entity name, if different from above.
+  {b["name"]}
+3a Check the appropriate box for federal tax classification of the entity/individual whose name is entered on line 1.
+Check only one of the following seven boxes.
+[X] Individual/sole proprietor   [ ] C corporation   [ ] S corporation   [ ] Partnership   [ ] Trust/estate
+[ ] LLC. Enter the tax classification (C = C corporation, S = S corporation, P = Partnership) . . . .
+Note: Check the "LLC" box above and, in the entry space, enter the appropriate code (C, S, or P) for the tax
+classification of the LLC, unless it is a disregarded entity. A disregarded entity should instead check the appropriate
+box for the tax classification of its owner.
+[ ] Other (see instructions)
+3b If on line 3a you checked "Partnership" or "Trust/estate," or checked "LLC" and entered "P" as its tax classification,
+and you are providing this form to a partnership, trust, or estate in which you have an ownership interest, check
+this box if you have any foreign partners, owners, or beneficiaries. See instructions . . . . . [ ]
+4 Exemptions (codes apply only to certain entities, not individuals; see instructions on page 3):
+Exempt payee code (if any)
+Exemption from Foreign Account Tax Compliance Act (FATCA) reporting code (if any)
+(Applies to accounts maintained outside the United States.)
+5 Address (number, street, and apt. or suite no.). See instructions.   Requester's name and address (optional)
+  {r["street"]:<68}{q["name"]}
+6 City, state, and ZIP code                                           {q["street"]}
+  {r["city"]:<68}{q["city"]}
+7 List account number(s) here (optional)
+
+Part I Taxpayer Identification Number (TIN)
+Enter your TIN in the appropriate box. The TIN provided must match the name given on line 1 to avoid
+backup withholding. For individuals, this is generally your social security number (SSN). However, for a
+resident alien, sole proprietor, or disregarded entity, see the instructions for Part I, later. For other
+entities, it is your employer identification number (EIN). If you do not have a number, see How to get a
+TIN, later.
+Note: If the account is in more than one name, see the instructions for line 1. See also What Name and
+Number To Give the Requester for guidelines on whose number to enter.
+Social security number
+  {r["ssn"]}
+or
+Employer identification number
+  [ ][ ] - [ ][ ][ ][ ][ ][ ][ ]
+
+Part II Certification
+Under penalties of perjury, I certify that:
+1. The number shown on this form is my correct taxpayer identification number (or I am waiting for a number to be
+issued to me); and
+2. I am not subject to backup withholding because (a) I am exempt from backup withholding, or (b) I have not been
+notified by the Internal Revenue Service (IRS) that I am subject to backup withholding as a result of a failure to report
+all interest or dividends, or (c) the IRS has notified me that I am no longer subject to backup withholding; and
+3. I am a U.S. citizen or other U.S. person (defined below); and
+4. The FATCA code(s) entered on this form (if any) indicating that I am exempt from FATCA reporting is correct.
+Certification instructions. You must cross out item 2 above if you have been notified by the IRS that you are
+currently subject to backup withholding because you have failed to report all interest and dividends on your tax
+return. For real estate transactions, item 2 does not apply.
+Sign Here   Signature of U.S. person   {r["full"]}          Date   {W9_SIGNED}
+Cat. No. 10231X   Form W-9 (Rev. 3-2024)
+"""
+    page2 = """\
+Form W-9 (Rev. 3-2024)   Page 2
+General Instructions
+Section references are to the Internal Revenue Code unless otherwise noted.
+Future developments. For the latest information about developments related to Form W-9 and its
+instructions, such as legislation enacted after they were published, go to www.irs.gov/FormW9.
+What's New
+Line 3a has been modified to clarify how a disregarded entity completes this line. An LLC that is a
+disregarded entity should check the appropriate box for the tax classification of its owner. Otherwise, it
+should check the "LLC" box and enter its appropriate tax classification.
+New line 3b has been added to this form. A flow-through entity is required to complete this line to
+indicate that it has direct or indirect foreign partners, owners, or beneficiaries when it provides the Form
+W-9 to another flow-through entity in which it has an ownership interest.
+Purpose of Form
+An individual or entity (Form W-9 requester) who is required to file an information return with the IRS is
+giving you this form because they must obtain your correct taxpayer identification number (TIN), which
+may be your social security number (SSN), individual taxpayer identification number (ITIN), adoption
+taxpayer identification number (ATIN), or employer identification number (EIN), to report on an
+information return the amount paid to you, or other amount reportable on an information return.
+Examples of information returns include, but are not limited to, the following.
+- Form 1099-INT (interest earned or paid).
+- Form 1099-DIV (dividends, including those from stocks or mutual funds).
+- Form 1099-MISC (various types of income, prizes, awards, or gross proceeds).
+- Form 1099-NEC (nonemployee compensation).
+- Form 1099-B (stock or mutual fund sales and certain other transactions by brokers).
+- Form 1099-K (merchant card and third-party network transactions).
+- Form 1098 (home mortgage interest), 1098-E (student loan interest), and 1098-T (tuition).
+Use Form W-9 only if you are a U.S. person (including a resident alien), to provide your correct TIN.
+If you do not return Form W-9 to the requester with a TIN, you might be subject to backup withholding.
+Payments you receive will be subject to backup withholding if you do not furnish your TIN to the
+requester, or the Internal Revenue Service (IRS) tells the requester that you furnished an incorrect TIN.
+Penalties
+Failure to furnish TIN. If you fail to furnish your correct TIN to a requester, you are subject to a penalty
+of $50 for each such failure unless your failure is due to reasonable cause and not to willful neglect.
+Line 1
+You must enter one of the following on this line; do not leave this line blank. The name should match the
+name on your tax return.
+Individual. Generally, enter the name shown on your tax return. If you have changed your last name
+without informing the Social Security Administration (SSA) of the name change, enter your first name, the
+last name as shown on your social security card, and your new last name.
+Sole proprietor. Enter your individual name as shown on your Form 1040 on line 1. Enter your business,
+trade, or "doing business as" (DBA) name on line 2.
+Limited liability company (LLC). If you are a single-member LLC (including a foreign LLC with a domestic
+owner) that is disregarded as an entity separate from its owner under Treasury regulations section
+301.7701-3, enter the owner's name on line 1. The name of the owner entered on line 1 should never be a
+disregarded entity. The name on line 1 should be the name shown on the income tax return on which the
+income should be reported.
+Line 3a
+Check the appropriate box on line 3a for the U.S. federal tax classification of the person whose name is
+entered on line 1. Check only one box on line 3a.
+IF the entity/individual on line 1 is a(n) . . .        THEN check the box for . . .
+- Corporation                                           Corporation.
+- Individual or Sole proprietorship                     Individual/sole proprietor.
+- LLC classified as a partnership for U.S. federal tax purposes or
+- LLC that has filed Form 8832 or 2553 electing to be taxed as a corporation
+                                                        Limited liability company and enter the
+                                                        appropriate tax classification.
+- Partnership                                           Partnership.
+- Trust/estate                                          Trust/estate.
+Form W-9 (Rev. 3-2024)
+"""
+    page3 = """\
+Form W-9 (Rev. 3-2024)   Page 5
+Part I. Taxpayer Identification Number (TIN)
+Enter your TIN in the appropriate box. If you are a resident alien and you do not have, and are not
+eligible to get, an SSN, your TIN is your IRS ITIN. Enter it in the entry space for the Social security number.
+If you do not have an ITIN, see How to get a TIN below.
+If you are a sole proprietor and you have an EIN, you may enter either your SSN or EIN.
+If you are a single-member LLC that is disregarded as an entity separate from its owner, enter the owner's
+SSN (or EIN, if the owner has one). If the LLC is classified as a corporation or partnership, enter the
+entity's EIN.
+How to get a TIN. If you do not have a TIN, apply for one immediately. To apply for an SSN, get Form SS-5,
+Application for a Social Security Card, from your local SSA office or get this form online at www.SSA.gov.
+You may also get this form by calling 1-800-772-1213. Use Form W-7, Application for IRS Individual
+Taxpayer Identification Number, to apply for an ITIN, or Form SS-4, Application for Employer
+Identification Number, to apply for an EIN. You can apply for an EIN online by accessing the IRS website
+at www.irs.gov/EIN. Go to www.irs.gov/Forms to view, download, or print Form W-7 and/or Form SS-4.
+Or, you can go to www.irs.gov/OrderForms to place an order and have Form W-7 and/or SS-4 mailed to
+you within 15 business days.
+Secure Your Tax Records From Identity Theft
+Identity theft occurs when someone uses your personal information, such as your name, SSN, or other
+identifying information, without your permission to commit fraud or other crimes. An identity thief may
+use your SSN to get a job or may file a tax return using your SSN to receive a refund.
+If you are a victim of identity theft who is experiencing economic harm or a systemic problem, or is
+seeking help in resolving tax problems that have not been resolved through normal channels, you may be
+eligible for Taxpayer Advocate Service (TAS) assistance. You can reach TAS by calling the TAS toll-free
+case intake line at 1-877-777-4778 or TTY/TDD 1-800-829-4059.
+Protect yourself from suspicious emails or phishing schemes. Phishing is the creation and use of email
+and websites designed to mimic legitimate business emails and websites. The IRS does not initiate
+contacts with taxpayers via emails. Also, the IRS does not request personal detailed information through
+email or ask taxpayers for the PIN numbers, passwords, or similar secret access information for their
+credit card, bank, or other financial accounts.
+If you receive an unsolicited email claiming to be from the IRS, forward this message to phishing@irs.gov.
+You may also report misuse of the IRS name, logo, or other IRS property to the Treasury Inspector General
+for Tax Administration (TIGTA) at 1-800-366-4484. You can forward suspicious emails to the Federal Trade
+Commission at spam@uce.gov or report them at www.ftc.gov/complaint. You can contact the FTC at
+www.ftc.gov/idtheft or 877-IDTHEFT (877-438-4338). If you have been the victim of identity theft, see
+www.IdentityTheft.gov and Pub. 5027.
+Go to www.irs.gov/IdentityTheft to learn more about identity theft and how to reduce your risk.
+Privacy Act Notice
+Section 6109 of the Internal Revenue Code requires you to provide your correct TIN to persons (including
+federal agencies) who are required to file information returns with the IRS to report interest, dividends,
+or certain other income paid to you; mortgage interest you paid; the acquisition or abandonment of
+secured property; the cancellation of debt; or contributions you made to an IRA, Archer MSA, or HSA. The
+person collecting this form uses the information on the form to file information returns with the IRS,
+reporting the above information. Routine uses of this information include giving it to the Department of
+Justice for civil and criminal litigation and to cities, states, the District of Columbia, and U.S.
+commonwealths and possessions for use in administering their laws.
+Form W-9 (Rev. 3-2024)
+"""
+    return [page1, page2, page3]
+
+
+def w9_text() -> str:
+    """The W-9's pages as one text file, a form feed between pages."""
+    return "\f".join(w9_pages())
+def f8879_text() -> str:
+    """Form 8879 (2023), IRS e-file Signature Authorization, for the joint
+    1040: names and SSNs, Part I amounts in whole dollars, Part II with each
+    spouse's self-selected PIN after the ERO firm name, Part III with the
+    ERO's EFIN/PIN. Label text and order follow the IRS form."""
+    j, r, prep, f = JORDAN, RILEY, PREPARER, FORM_8879
+
+    def line(label: str, n: str, amount: str) -> str:
+        return row((0, label), (104, n), (108, amount))
+
+    def authorize(pin: str) -> list[str]:
+        return [
+            row((0, "[X] I authorize"), (18, prep["firm"]), (50, "to enter or generate my PIN"), (80, pin)),
+            row((18, "ERO firm name"), (80, "Enter five digits, but don't enter all zeros")),
+            "    as my signature on my tax year 2023 electronically filed income tax return.",
+            "[ ] As an Online Self-Preparer, I will enter my PIN as my signature on my tax year 2023 "
+            "electronically filed income tax return.",
+        ]
+
+    return "\n".join(
+        [
+            row((0, "Form 8879"), (14, "IRS e-file Signature Authorization"), (60, "OMB No. 1545-0074")),
+            row((0, "Department of the Treasury"), (30, "ERO must obtain and retain completed Form 8879."),
+                (84, "2023")),
+            row((0, "Internal Revenue Service"), (30, "Go to www.irs.gov/Form8879 for the latest information.")),
+            "Submission Identification Number (SID)",
+            row((0, "Taxpayer's name"), (60, "Social security number")),
+            row((2, j["full"]), (60, j["ssn"])),
+            row((0, "Spouse's name"), (60, "Spouse's social security number")),
+            row((2, r["full"]), (60, r["ssn"])),
+            "Part I   Tax Return Information - Tax Year Ending December 31, 2023 (Whole dollars only)",
+            line("1 Adjusted gross income (Form 1040, 1040-SR, or 1040-NR, line 11; Form 1040-SS, Part I, line 3)",
+                 "1", "103,140"),
+            line("2 Total tax (Form 1040, 1040-SR, or 1040-NR, line 24; Form 1040-SS, Part I, line 6)", "2", "9,242"),
+            line("3 Federal income tax withheld from Form(s) W-2 and Form(s) 1099 (Form 1040, 1040-SR, or 1040-NR,",
+                 "3", "11,912"),
+            "  line 25d; Form 1040-SS, Part I, line 8)",
+            line("4 Amount you want refunded to you (Form 1040, 1040-SR, or 1040-NR, line 35a; Form 1040-SS, Part I,",
+                 "4", "2,670"),
+            "  line 13a)",
+            line("5 Amount you owe (Form 1040, 1040-SR, or 1040-NR, line 37; Form 1040-SS, Part I, line 14)", "5", "0"),
+            "Part II   Taxpayer Declaration and Signature Authorization (Be sure you get and keep a copy of your return)",
+            "Under penalties of perjury, I declare that I have examined a copy of the income tax return (original or "
+            "amended) I am now authorizing, and to the best of my knowledge and belief, it is true, correct, and "
+            "complete. I further declare that the amounts in Part I above are the amounts from the income tax return "
+            "I am now authorizing. I consent to allow my intermediate service provider, transmitter, or electronic "
+            "return originator (ERO) to send my return to the IRS and to receive from the IRS (a) an acknowledgement "
+            "of receipt or reason for rejection of the transmission, (b) the reason for any delay in processing the "
+            "return or refund, and (c) the date of any refund.",
+            "Taxpayer's PIN: check one box only",
+            *authorize(f["taxpayer_pin"]),
+            row((0, "Your signature"), (60, "Date"), (67, "10/14/2024")),
+            "Spouse's PIN: check one box only",
+            *authorize(f["spouse_pin"]),
+            row((0, "Spouse's signature"), (60, "Date"), (67, "10/14/2024")),
+            "Practitioner PIN Method Returns Only - continue below",
+            "Part III   Certification and Authentication - Practitioner PIN Method Only",
+            row((0, "ERO's EFIN/PIN. Enter your six-digit EFIN followed by your five-digit self-selected PIN."),
+                (92, f["ero_efin_pin"])),
+            row((92, "Don't enter all zeros")),
+            "I certify that the above numeric entry is my PIN, which is my signature on the tax year 2023 "
+            "electronically filed income tax return for the taxpayer(s) indicated above. I confirm that I am "
+            "submitting this return in accordance with the requirements of the Practitioner PIN method and "
+            "Pub. 1345, Handbook for Authorized IRS e-file Providers of Individual Income Tax Returns.",
+            row((0, "ERO's signature"), (60, "Date"), (67, "10/14/2024")),
+            "ERO Must Retain This Form - See Instructions",
+            "Don't Submit This Form to the IRS Unless Requested To Do So",
+            row((0, "For Paperwork Reduction Act Notice, see your tax return instructions."), (72, "Cat. No. 32778X"),
+                (92, "Form 8879 (2023)")),
+        ]
+    ) + "\n"
+
+
 # ---------------------------------------------------------------------------
 # OCR noise. Each function takes the clean text and returns what a mediocre
 # scan through OCR would plausibly yield. The changes are fixed, not random,
@@ -767,6 +1046,50 @@ def text_pdf(text: str) -> bytes:
         b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
         FONT,
         stream_obj(text_stream(lines, size=8, leading=10)),
+    ]
+    return build_pdf(objects)
+
+
+def text_pdf_pages(pages: list[str]) -> bytes:
+    """A PDF with one page per text, each page's text layer line by line."""
+    n = len(pages)
+    kids = " ".join(f"{3 + 2 * i} 0 R" for i in range(n))
+    font = 3 + 2 * n
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {n} >>".encode(),
+    ]
+    for i, text in enumerate(pages):
+        objects.append(
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            + f"/Resources << /Font << /F1 {font} 0 R >> >> /Contents {4 + 2 * i} 0 R >>".encode()
+        )
+        objects.append(stream_obj(text_stream(text.rstrip("\n").split("\n"), size=7, top=770, leading=10)))
+    objects.append(FONT)
+    return build_pdf(objects)
+
+
+def glyph_pdf(text: str, size: int = 9, advance: int = 6, leading: int = 14) -> bytes:
+    """One-page PDF that shows every character by itself at a fixed advance,
+    as some tax software prints. Extractors read such a page back
+    letter-spaced ("J o r d a n"). The page is as wide as the longest line."""
+    lines = text.rstrip("\n").split("\n")
+    width = 72 + advance * max(len(l) for l in lines)
+    height = 72 + leading * len(lines)
+    ops = [b"BT", f"/F1 {size} Tf".encode()]
+    for i, line in enumerate(lines):
+        y = height - 36 - leading * i
+        for j, c in enumerate(line):
+            if not c.isspace():
+                ops.append(f"1 0 0 1 {36 + advance * j} {y} Tm ".encode() + pdf_literal(c) + b" Tj")
+    ops.append(b"ET")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {width} {height}] ".encode()
+        + b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
+        FONT,
+        stream_obj(b"\n".join(ops) + b"\n"),
     ]
     return build_pdf(objects)
 
@@ -878,6 +1201,11 @@ def tiny_png(width: int = 16, height: int = 24) -> bytes:
 
 def ocr_json(text: str) -> str:
     return json.dumps({"pages": [{"page": 1, "text": text}]}, indent=2, ensure_ascii=False) + "\n"
+
+
+def ocr_json_pages(texts: list[str]) -> str:
+    pages = [{"page": i, "text": t} for i, t in enumerate(texts, start=1)]
+    return json.dumps({"pages": pages}, indent=2, ensure_ascii=False) + "\n"
 
 
 def main(out: Path = OUT) -> None:
@@ -1008,6 +1336,17 @@ def main(out: Path = OUT) -> None:
                 ],
             ),
         ),
+        "8879-example-2023": (
+            f8879_text(),
+            noisy(
+                f8879_text(),
+                [
+                    (JORDAN["ssn"], JORDAN["ssn"].replace("-", "")),
+                    ("103,140", "1O3,140"),
+                    (RILEY["ssn"], RILEY["ssn"].replace("-", " ")),
+                ],
+            ),
+        ),
         "receipt-cornerstone-2025-03-09": (
             receipt_text(),
             noisy(
@@ -1022,6 +1361,17 @@ def main(out: Path = OUT) -> None:
     }
 
     written: list[Path] = []
+    # The W-9 has several pages: its .txt puts a form feed between them, and
+    # its sidecar lists each page.
+    w9 = "w9-bluefin-2025"
+    (out / f"{w9}.txt").write_text(w9_text(), encoding="utf-8")
+    written.append(out / f"{w9}.txt")
+    w9_ocr = [
+        noisy(w9_pages()[0], [("Identification Number and Certification", "Identiﬁcation Number and Certiﬁcation")]),
+        *(ocr_generic(page) for page in w9_pages()[1:]),
+    ]
+    (out / f"{w9}.ocr.json").write_text(ocr_json_pages(w9_ocr), encoding="utf-8")
+    written.append(out / f"{w9}.ocr.json")
     for stem, (clean, ocr) in docs.items():
         p = out / f"{stem}.txt"
         p.write_text(clean, encoding="utf-8")
@@ -1034,12 +1384,17 @@ def main(out: Path = OUT) -> None:
         # Text-layer PDFs of the same documents as the .txt files.
         "w2-acme-2025.pdf": text_pdf(docs["w2-acme-2025"][0]),
         "1099-int-harbor-2025.pdf": text_pdf(docs["1099-int-harbor-2025"][0]),
+        # The W-9, one PDF page per page of text.
+        "w9-bluefin-2025.pdf": text_pdf_pages(w9_pages()),
         # Fillable W-2 with AcroForm fields (values only in the fields).
         "w2-bluefin-2025-fillable.pdf": fillable_w2_pdf(),
         # A scan: no text layer. Its OCR output is the .ocr.json beside it.
         "w2-acme-2025-scan.pdf": scan_pdf(),
         # A phone photo of the receipt. OCR output in the sidecar.
         "receipt-cornerstone-2025-03-09-photo.png": tiny_png(),
+        # The 8879 with every glyph placed by itself: its text layer reads
+        # back letter-spaced.
+        "8879-example-2023-glyphs.pdf": glyph_pdf(docs["8879-example-2023"][0]),
     }
     for name, data in binaries.items():
         p = out / name

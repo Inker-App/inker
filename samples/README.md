@@ -23,16 +23,16 @@ corpus differs from what the generator writes.
 | --- | --- | --- |
 | SSNs | `900-12-3456` (Jordan A Example), `666-48-2210` (Riley Sample), `900-12-7788` (Casey Example, their dependent on the 1040) | Areas 9xx and 666 are never issued |
 | EINs | `07-…` Acme Robotics Inc, `89-…` Bluefin Analytics LLC, `19-…` Harbor Street Credit Union, `78-…` Tidewater Partners LP, `70-…` Northwind Index Fund, `79-…` Ledgerline Tax Services LLC (the 1040's paid preparer) | Prefixes the IRS does not assign |
-| PTIN, PINs | `P00000000`; designee PIN `40917`; IP PIN `000417` | All zeros or made up |
+| PTIN, PINs | `P00000000`; designee PIN `40917`; IP PIN `000417`; 8879 signature PINs `13579` (Jordan) and `24680` (Riley); ERO EFIN/PIN `00000097531` (an all-zero EFIN) | All zeros or made up |
 | Phones | `(503) 555-01xx`, `(541) 555-0190` | 555-0100 to 555-0199 are reserved for fiction |
 | Routing numbers | `123456789`, `987654321` | Fail the ABA 3-7-1 checksum |
 | Card | `************4242` | Masked, as on a real receipt |
 | People, companies, addresses | invented | |
 
 Jordan's SSN appears on the W-2, the K-1, the 1099-INT, the 1098, the
-closing statement and the 1040, so tests can check that one value maps to one
+closing statement, the 1040 and the 8879, so tests can check that one value maps to one
 token across documents. Riley's appears on the 1099-NEC, the 1099-DIV, the
-closing statement, the fillable W-2 and the 1040.
+closing statement, the fillable W-2, the 1040 and the 8879.
 
 `1040-example-2023` is a 2023 Form 1040 (pages 1 and 2) filed jointly by
 Jordan and Riley, with one dependent, a direct-deposit refund to Jordan's
@@ -40,10 +40,15 @@ checking account, a third-party designee and a paid preparer. Its rows of
 column heads carry the typed values in the columns under them, as on the
 printed form.
 
+`8879-example-2023` is the Form 8879 (IRS e-file Signature Authorization)
+for that return: both signers' names and SSNs, the Part I amounts, each
+signer's self-selected PIN after Ledgerline Tax Services LLC as the ERO
+firm, and the ERO's EFIN/PIN in Part III.
+
 ## Files
 
 For each of W-2, 1099-INT, 1099-NEC, 1099-DIV, 1098, Schedule K-1 (Form
-1065), Form 1040, a bank statement, a closing statement and a receipt:
+1065), Form 1040, Form 8879, a bank statement, a closing statement and a receipt:
 
 - `<name>.txt`: clean text rendition with the IRS box labels and layout.
 - `<name>.ocr.json`: what OCR of a scan of the same document might return,
@@ -60,6 +65,8 @@ Plus:
 | `w2-bluefin-2025-fillable.pdf` | AcroForm reading: labels in the text layer, values only in form fields |
 | `w2-acme-2025-scan.pdf` + `.ocr.json` | A PDF with no text layer, so extraction falls back to OCR |
 | `receipt-cornerstone-2025-03-09-photo.png` + `.ocr.json` | An image, OCR only |
+| `w9-bluefin-2025.txt`, `.pdf`, `.ocr.json` | Form W-9 (Rev. March 2024), three pages: page 1 filled by Riley Sample for Bluefin Analytics LLC (requester Tidewater Partners LP), then two pages of the IRS's printed instructions. The `.txt` puts a form feed between pages; the PDF and the sidecar have one entry per page. The instructions print the agency phone numbers and email addresses the real form prints (SSA, TAS, IRS TTY, TIGTA, FTC): public lines, not anyone's details, and they must never be inked |
+| `8879-example-2023-glyphs.pdf` | The 8879 with every glyph placed by itself, as some tax software prints: its text layer reads back letter-spaced (`9 0 0 - 1 2 - …`) |
 
 The `.ocr.json` sidecars are what `inker_extract::FixtureOcr` reads on Linux
 in place of Apple Vision: for `dir/name.ext` it reads `dir/name.ocr.json`.

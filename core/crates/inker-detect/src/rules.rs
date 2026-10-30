@@ -9,7 +9,9 @@ use std::sync::LazyLock;
 use inker_core::{Detection, PageText, TokenKind, Treatment};
 use regex::Regex;
 
-use crate::util::{Folded, detection, digits, isolated, label_before, overlaps, re, rule};
+use crate::util::{
+    Folded, box_runs, detection, digits, isolated, label_before, overlaps, re, rule,
+};
 
 /// The outcome of checking nine digits as an SSN.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -330,6 +332,18 @@ pub const ACCOUNT_LABELS: &[&str] = &[
     "account number",
 ];
 
+/// Labels that make a 5-, 6- or 11-digit run a PIN: the e-file self-select
+/// PIN and the third-party designee's PIN (five digits), an EFIN (six) and
+/// the ERO's EFIN followed by its PIN (eleven).
+pub const PIN_LABELS: &[&str] = &["pin", "efin", "personal identification number"];
+/// Labels that make the run an Identity Protection PIN (six digits).
+pub const IP_PIN_LABELS: &[&str] = &["identity protection pin", "ip pin"];
+/// Digit counts a PIN comes in.
+const PIN_LENGTHS: &[usize] = &[5, 6, 11];
+/// How far after a PIN label its value may start: the rest of the label's
+/// line, or the line below (a column head over its value).
+const PIN_WINDOW: usize = 80;
+
 static EMAIL: LazyLock<Regex> =
     LazyLock::new(|| re(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}"));
 static CARD: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:[ -]?\d){12,18}"));
@@ -343,7 +357,7 @@ static PHONE: LazyLock<Regex> =
 /// A bare ten-digit North American number: area and exchange start 2-9.
 static PHONE_BARE: LazyLock<Regex> = LazyLock::new(|| re(r"[2-9]\d{2}[2-9]\d{6}"));
 static NINE: LazyLock<Regex> = LazyLock::new(|| re(r"\d{9}"));
-static ACCOUNT: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:-?\d){5,16}"));
+static DIGIT_RUN: LazyLock<Regex> = LazyLock::new(|| re(r"\d+"));
 static DATE: LazyLock<Regex> = LazyLock::new(|| re(r"^\d{4}-\d{2}-\d{2}$|^\d{2}-\d{2}-\d{4}$"));
 
 /// Context window, in bytes before a value, for the label rules.
@@ -465,13 +479,43 @@ fn find_folded(page: &PageText) -> Vec<Detection> {
         }
     }
 
-    // Account numbers: 6-17 digits after an account label.
-    for m in ACCOUNT.find_iter(text) {
+    // PINs: a whole 5-, 6- or 11-digit run after a PIN label on the same
+    // line or the line above.
+    for m in DIGIT_RUN.find_iter(text) {
         let (s, e) = (m.start(), m.end());
-        if !sink.free(text, s, e) || DATE.is_match(m.as_str()) {
+        if !PIN_LENGTHS.contains(&(e - s)) || !sink.free(text, s, e) {
             continue;
         }
-        let n = digits(m.as_str()).len();
+        let near = |labels: &[&str]| {
+            label_before(&lower, s, PIN_WINDOW, labels)
+                .filter(|&d| text[s - d..s].matches('\n').count() <= 1)
+        };
+        let (pin, ip) = (near(PIN_LABELS), near(IP_PIN_LABELS));
+        match (pin, ip) {
+            (_, Some(i)) if pin.is_none_or(|p| i <= p) => {
+                sink.add(
+                    s,
+                    e,
+                    TokenKind::Custom("ip_pin".into()),
+                    "ip_pin_context",
+                    0.85,
+                );
+            }
+            (Some(_), _) => {
+                sink.add(s, e, TokenKind::Custom("pin".into()), "pin_context", 0.85);
+            }
+            _ => {}
+        }
+    }
+
+    // Account numbers: 6-17 digits after an account label, digit boxes
+    // ("0 0 0 1 2 3 ...", "0001 2345 6789") taken whole.
+    for (s, e) in box_runs(text) {
+        let v = &text[s..e];
+        if !sink.free(text, s, e) || DATE.is_match(v) {
+            continue;
+        }
+        let n = digits(v).len();
         if !(6..=17).contains(&n) {
             continue;
         }
