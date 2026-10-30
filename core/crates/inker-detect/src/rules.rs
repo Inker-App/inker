@@ -9,7 +9,9 @@ use std::sync::LazyLock;
 use inker_core::{Detection, PageText, TokenKind, Treatment};
 use regex::Regex;
 
-use crate::util::{Folded, detection, digits, isolated, label_before, overlaps, re, rule};
+use crate::util::{
+    Folded, box_runs, detection, digits, isolated, label_before, overlaps, re, rule,
+};
 
 /// The outcome of checking nine digits as an SSN.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -343,7 +345,6 @@ static PHONE: LazyLock<Regex> =
 /// A bare ten-digit North American number: area and exchange start 2-9.
 static PHONE_BARE: LazyLock<Regex> = LazyLock::new(|| re(r"[2-9]\d{2}[2-9]\d{6}"));
 static NINE: LazyLock<Regex> = LazyLock::new(|| re(r"\d{9}"));
-static ACCOUNT: LazyLock<Regex> = LazyLock::new(|| re(r"\d(?:-?\d){5,16}"));
 static DATE: LazyLock<Regex> = LazyLock::new(|| re(r"^\d{4}-\d{2}-\d{2}$|^\d{2}-\d{2}-\d{4}$"));
 
 /// Context window, in bytes before a value, for the label rules.
@@ -465,13 +466,14 @@ fn find_folded(page: &PageText) -> Vec<Detection> {
         }
     }
 
-    // Account numbers: 6-17 digits after an account label.
-    for m in ACCOUNT.find_iter(text) {
-        let (s, e) = (m.start(), m.end());
-        if !sink.free(text, s, e) || DATE.is_match(m.as_str()) {
+    // Account numbers: 6-17 digits after an account label, digit boxes
+    // ("0 0 0 1 2 3 ...", "0001 2345 6789") taken whole.
+    for (s, e) in box_runs(text) {
+        let v = &text[s..e];
+        if !sink.free(text, s, e) || DATE.is_match(v) {
             continue;
         }
-        let n = digits(m.as_str()).len();
+        let n = digits(v).len();
         if !(6..=17).contains(&n) {
             continue;
         }

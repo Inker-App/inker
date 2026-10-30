@@ -430,6 +430,35 @@ fn account_numbers_near_labels() {
 }
 
 #[test]
+fn account_numbers_printed_from_digit_boxes() {
+    // Text layers and OCR space out the digit boxes of Form 1040 line 35d.
+    let cases = [
+        (
+            "d Account number    0 0 0 1 2 3 4 5 6 7 8 9",
+            "0 0 0 1 2 3 4 5 6 7 8 9",
+        ),
+        ("d Account number    0001 2345 6789", "0001 2345 6789"),
+        ("d Account number    00012 3456789", "00012 3456789"),
+    ];
+    for (t, v) in cases {
+        let f = found(t);
+        assert_eq!(f.len(), 1, "{t}: {f:?}");
+        assert!(has(t, TokenKind::Account, v), "{t}: {f:?}");
+    }
+    // Two whole numbers one space apart stay two.
+    let t = "Account number 000123456789 77001234";
+    assert!(has(t, TokenKind::Account, "000123456789"), "{t}");
+    assert!(has(t, TokenKind::Account, "77001234"), "{t}");
+    let reject = [
+        "Account balance 1 234 567.89", // an amount
+        "Account number: 1 2 3",        // too short
+    ];
+    for t in reject {
+        assert!(none_of(t, TokenKind::Account), "{t}");
+    }
+}
+
+#[test]
 fn account_confidence_falls_with_distance() {
     let near = found("Account: 7700012345678");
     let far = found("Account (see the summary on the next page) 7700012345678");

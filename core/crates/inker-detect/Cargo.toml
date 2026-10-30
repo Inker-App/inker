@@ -28,3 +28,4 @@ workspace = true
 [dev-dependencies]
 inker-extract.workspace = true
 camino.workspace = true
+tempfile = "3.27.0"
