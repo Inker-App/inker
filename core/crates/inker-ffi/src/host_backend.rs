@@ -739,6 +739,7 @@ fn review_question(q: &inker_core::ReviewQuestion) -> ReviewQuestion {
         // The peek draws its own gap before the outline.
         context_before: q.context_before.trim_end().to_string(),
         value_length: q.value_length,
+        can_leave: q.can_leave,
         span: q.span.map(|s| TextSpan {
             start: u32::try_from(s.start).unwrap_or(u32::MAX),
             end: u32::try_from(s.end).unwrap_or(u32::MAX),

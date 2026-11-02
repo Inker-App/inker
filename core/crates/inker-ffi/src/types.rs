@@ -144,6 +144,9 @@ pub struct ReviewQuestion {
     /// Where the value sits in that page's text, so the shell can re-read the
     /// file and show the page around it. `None` for a form field's value.
     pub span: Option<TextSpan>,
+    /// Whether "Leave it" may be offered. `false` for an SSN-shaped value:
+    /// the core refuses that answer, so the card shows "Ink it" alone.
+    pub can_leave: bool,
 }
 
 /// A byte range into a page's text, as the core indexed it. On macOS that

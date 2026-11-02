@@ -27,7 +27,7 @@ use crate::{
 };
 
 /// Current schema version.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 const MIGRATIONS: &[&str] = &[
     // 1
@@ -118,13 +118,17 @@ const MIGRATIONS: &[&str] = &[
     ALTER TABLE review_questions ADD COLUMN span_start INTEGER;
     ALTER TABLE review_questions ADD COLUMN span_end INTEGER;
     "#,
+    // 5: "Leave it" is withheld for SSN-shaped values (2026-11-02).
+    r#"
+    ALTER TABLE review_questions ADD COLUMN can_leave INTEGER NOT NULL DEFAULT 1;
+    "#,
 ];
 
 const DOC_COLS: &str = "id, codename, path, original_name, kind, year, state, inked, folder_id, ingest, \
                         created_at, updated_at, status_note, tag, payer_token";
 const FOLDER_COLS: &str = "id, codename, path, created_at";
 const Q_COLS: &str = "id, doc_id, page, kind, prompt, answer, created_at, answered_at, value_length, \
-                      page_count, span_start, span_end";
+                      page_count, span_start, span_end, can_leave";
 
 /// Treated form fields, role map and treatment counts for one document.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -298,6 +302,7 @@ fn question_from_row(row: &Row<'_>) -> rusqlite::Result<ReviewQuestion> {
             }),
             _ => None,
         },
+        can_leave: row.get::<_, i64>(12)? != 0,
     })
 }
 
@@ -741,7 +746,7 @@ impl Index {
     /// Record what the attention card shows around a question's held value:
     /// its length, the document's page count, where it sits in the page's
     /// text (`None` for a form field), and the context, which the caller
-    /// has sealed.
+    /// has sealed, and whether "Leave it" may be offered.
     pub fn set_question_peek(
         &self,
         id: QuestionId,
@@ -749,13 +754,14 @@ impl Index {
         page_count: u32,
         span: Option<Span>,
         sealed_context: &[u8],
+        can_leave: bool,
     ) -> Result<()> {
         let start = span.map(|s| i64::try_from(s.start).unwrap_or(i64::MAX));
         let end = span.map(|s| i64::try_from(s.end).unwrap_or(i64::MAX));
         self.conn().execute(
             "UPDATE review_questions SET value_length=?2, page_count=?3, span_start=?4, span_end=?5, \
-             context=?6 WHERE id=?1",
-            params![id.0, value_length, page_count, start, end, sealed_context],
+             context=?6, can_leave=?7 WHERE id=?1",
+            params![id.0, value_length, page_count, start, end, sealed_context, can_leave],
         )?;
         Ok(())
     }
@@ -1070,7 +1076,9 @@ mod tests {
             .add_question(r.id, 0, 1, &TokenKind::Account, None)
             .unwrap();
         assert_eq!(ix.question(q).unwrap().unwrap().value_length, 0);
-        ix.set_question_peek(q, 9, 1, None, b"x").unwrap();
+        assert!(ix.question(q).unwrap().unwrap().can_leave);
+        ix.set_question_peek(q, 9, 1, None, b"x", false).unwrap();
+        assert!(!ix.question(q).unwrap().unwrap().can_leave);
         assert_eq!(ix.question(q).unwrap().unwrap().value_length, 9);
     }
 
@@ -1265,8 +1273,15 @@ mod tests {
             .unwrap();
         assert_eq!(ix.questions(Some(r.id), false).unwrap().len(), 2);
         assert_eq!(ix.questions(None, false).unwrap().len(), 2);
-        ix.set_question_peek(q1, 11, 2, Some(Span { start: 40, end: 51 }), b"sealed")
-            .unwrap();
+        ix.set_question_peek(
+            q1,
+            11,
+            2,
+            Some(Span { start: 40, end: 51 }),
+            b"sealed",
+            true,
+        )
+        .unwrap();
         let q = ix.question(q1).unwrap().unwrap();
         assert_eq!((q.value_length, q.page_count), (11, 2));
         // Where the value sits in its page's text, for the card's page crop.

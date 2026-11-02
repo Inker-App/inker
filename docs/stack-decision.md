@@ -400,16 +400,18 @@ branch each, merged as `detection-leaks` (673 workspace tests, up from 597). Wha
 - **Undashed SSN throughout a return.** Only the page-1 box was placed by the 1040 template; the
   9-digit copies in page and schedule headers sat too far from any label, fell to the fail-closed
   pass as "a long number I can't place", and a "Leave it" answer, which the chat agent can give
-  itself over MCP `inker/answer`, puts that copy in the clear. Closed by step 7 above. Open: should
-  an agent be able to answer review questions at all, and should "Leave it" ever apply to an
-  SSN-shaped value? Ben's call.
+  itself over MCP `inker/answer`, puts that copy in the clear. Closed by step 7 above. Decided
+  2026-11-02: "Leave it" is never allowed on an SSN-shaped value (nine digits, however
+  dressed). The core refuses the answer (`Error::Refused`), the question carries `can_leave`,
+  the attention card shows "Ink it" alone, and `inker/answer` says so. Only the INKER CLI can
+  call `inker/answer`; chat agents never could.
 - **Dates of birth** were never detected. New `dob` module.
 - **Routing and account numbers raw beside the `[ACCOUNT_1]` token.** Digit boxes: the template
   took the first chunk of `0001 2345 6789` and left the rest. Closed by step 8.
 - **Form 8879 with nothing inked.** Reproduced with a letter-spaced text layer (every glyph
   placed by itself); no rule can match `9 0 0 - 1 2 - 3 4 5 6`, and a document with zero
-  detections is served as Ready. Closed by step 8 plus a PIN rule and an 8879 template. Open: a
-  document that ends with nothing inked is still served; whether to hold it is Ben's call.
+  detections is served as Ready. Closed by step 8 plus a PIN rule and an 8879 template. Decided
+  2026-11-02: a document that ends with nothing inked is served as Ready, not held.
 - **Full name and street address raw.** The address patterns only matched title case, so an
   all-caps mailing block lost its street line and, with it, the unlabelled name above. Fixed in
   `address.rs` and `names.rs` (surname-first runs too).

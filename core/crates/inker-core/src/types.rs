@@ -682,6 +682,33 @@ pub struct ReviewQuestion {
     /// a form field's, which has no place on the page, or was never recorded.
     #[serde(default)]
     pub span: Option<Span>,
+    /// Whether "Leave it" is offered. `false` when the held value is
+    /// SSN-shaped: INKER never leaves nine digits in the clear on a user's
+    /// say-so (decision of 2026-11-02).
+    #[serde(default = "default_true")]
+    pub can_leave: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+/// Nine digits, however they are dressed: `900-12-3456`, `900123456`,
+/// `900 12 3456`, `900.12.3456`, or one digit per box. An EIN's nine digits
+/// count too; the point is the shape, not the kind.
+pub fn ssn_shaped(value: &str) -> bool {
+    let mut digits = 0usize;
+    for c in value.chars() {
+        if c.is_ascii_digit() {
+            digits += 1;
+        } else if !matches!(
+            c,
+            ' ' | '-' | '.' | '\u{2010}' | '\u{2011}' | '\u{2012}' | '\u{2013}'
+        ) {
+            return false;
+        }
+    }
+    digits == 9
 }
 
 /// One audit-log row: an agent read a handle. Feeds the "Claude Code read
@@ -717,6 +744,31 @@ mod tests {
         assert_eq!(a, b);
         assert_eq!(a.render(HandleStyle::Octopus), "🐙/w2-acme-2025");
         assert_eq!(a.render(HandleStyle::Ascii), "ink/w2-acme-2025");
+    }
+
+    #[test]
+    fn nine_digits_in_any_dress_are_ssn_shaped() {
+        for v in [
+            "900-12-3456",
+            "900123456",
+            "900 12 3456",
+            "900.12.3456",
+            "07-1234567",
+            "9 0 0 1 2 3 4 5 6",
+        ] {
+            assert!(ssn_shaped(v), "{v}");
+        }
+        for v in [
+            "12345678",
+            "1234567890",
+            "4471",
+            "Jordan A Example",
+            "900-12-345x",
+            "",
+            "2025-03-09 12:00",
+        ] {
+            assert!(!ssn_shaped(v), "{v}");
+        }
     }
 
     #[test]

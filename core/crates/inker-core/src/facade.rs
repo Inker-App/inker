@@ -24,6 +24,7 @@ use crate::{
     DocumentRecord, Error, Extracted, FolderId, FolderRecord, FolderSummary, Handle, IngestMode,
     ListEntry, QuestionId, Resolved, ResolvedDocument, ResolvedFolder, ResolvedPage, Result,
     ReviewAnswer, ReviewQuestion, TokenKind, Treatment, WriteOutcome, ingest, rehydrate,
+    ssn_shaped,
 };
 
 /// Kind given to files written by agents through `write`.
@@ -504,6 +505,17 @@ impl Core {
     /// answered, the document is re-inked with the answers applied and
     /// becomes `Ready`. Returns the document's state afterwards.
     pub fn answer_review(&self, question: QuestionId, answer: ReviewAnswer) -> Result<DocState> {
+        if answer == ReviewAnswer::LeaveIt {
+            let held = self
+                .index
+                .question(question)?
+                .ok_or_else(|| Error::Index(format!("no question #{}", question.0)))?;
+            if !held.can_leave {
+                return Err(Error::Refused(
+                    "INKER will not leave an SSN-shaped value in the clear. Ink it.".into(),
+                ));
+            }
+        }
         let q = self.index.answer_question(question, answer)?;
         let rec = self.document(q.document)?;
         if !self.index.questions(Some(rec.id), false)?.is_empty()
@@ -763,8 +775,9 @@ impl Core {
             let sealed = self.vault.seal(&serde_json::to_vec(&context)?)?;
             // A form field's value has no place on the page to crop to.
             let span = d.field.is_none().then_some(d.span);
+            let can_leave = detected_text(extracted, d).is_none_or(|v| !ssn_shaped(v));
             self.index
-                .set_question_peek(q, value_length, page_count, span, &sealed)?;
+                .set_question_peek(q, value_length, page_count, span, &sealed, can_leave)?;
         }
         self.index.set_state(id, DocState::NeedsAttention, None)?;
         tracing::info!(doc = %id.0, questions = review.len(), "needs attention");
@@ -1258,6 +1271,81 @@ mod tests {
         };
         assert_eq!(doc.pages[0].text, "Order 4471 [X_1]");
         assert_eq!(rec.inked, 1);
+    }
+
+    #[test]
+    fn leave_it_is_refused_for_an_ssn_shaped_value() {
+        let f = fx();
+        let text = "Ref 900123456 ok";
+        let ids = f
+            .core
+            .begin_ingest(&[drop_file(&f, "r.txt", text)], IngestMode::Move)
+            .unwrap();
+        let dets = [d(
+            text,
+            "900123456",
+            TokenKind::Custom("number".into()),
+            true,
+        )];
+        f.core
+            .complete_processing(
+                ids[0],
+                &ex(text),
+                &dets,
+                DocKind("receipt".into()),
+                None,
+                None,
+            )
+            .unwrap();
+        let qs = f.core.pending_reviews().unwrap();
+        assert_eq!(qs.len(), 1);
+        assert!(!qs[0].can_leave);
+        assert!(matches!(
+            f.core.answer_review(qs[0].id, ReviewAnswer::LeaveIt),
+            Err(Error::Refused(_))
+        ));
+        // Nothing moved: still held, still unanswered.
+        assert_eq!(
+            f.core.document(ids[0]).unwrap().state,
+            DocState::NeedsAttention
+        );
+        assert_eq!(f.core.pending_reviews().unwrap().len(), 1);
+        assert_eq!(
+            f.core.answer_review(qs[0].id, ReviewAnswer::InkIt).unwrap(),
+            DocState::Ready
+        );
+        let rec = f.core.document(ids[0]).unwrap();
+        let Resolved::Document(doc) = f.core.resolve(&Handle::new(rec.codename)).unwrap() else {
+            panic!()
+        };
+        assert!(
+            !doc.pages[0].text.contains("900123456"),
+            "{}",
+            doc.pages[0].text
+        );
+    }
+
+    #[test]
+    fn a_short_number_can_still_be_left() {
+        let f = fx();
+        let text = "Order 4471 shipped";
+        let ids = f
+            .core
+            .begin_ingest(&[drop_file(&f, "r.txt", text)], IngestMode::Move)
+            .unwrap();
+        let dets = [d(text, "4471", TokenKind::Account, true)];
+        f.core
+            .complete_processing(
+                ids[0],
+                &ex(text),
+                &dets,
+                DocKind("receipt".into()),
+                None,
+                None,
+            )
+            .unwrap();
+        let qs = f.core.pending_reviews().unwrap();
+        assert!(qs[0].can_leave);
     }
 
     #[test]

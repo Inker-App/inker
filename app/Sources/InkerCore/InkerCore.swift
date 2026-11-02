@@ -2320,6 +2320,11 @@ public struct ReviewQuestion: Equatable, Hashable {
      * file and show the page around it. `None` for a form field's value.
      */
     public let span: TextSpan?
+    /**
+     * Whether "Leave it" may be offered. `false` for an SSN-shaped value:
+     * the core refuses that answer, so the card shows "Ink it" alone.
+     */
+    public let canLeave: Bool
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
@@ -2346,7 +2351,11 @@ public struct ReviewQuestion: Equatable, Hashable {
         /**
          * Where the value sits in that page's text, so the shell can re-read the
          * file and show the page around it. `None` for a form field's value.
-         */span: TextSpan?) {
+         */span: TextSpan?, 
+        /**
+         * Whether "Leave it" may be offered. `false` for an SSN-shaped value:
+         * the core refuses that answer, so the card shows "Ink it" alone.
+         */canLeave: Bool) {
         self.id = id
         self.prompt = prompt
         self.location = location
@@ -2354,6 +2363,7 @@ public struct ReviewQuestion: Equatable, Hashable {
         self.contextBefore = contextBefore
         self.valueLength = valueLength
         self.span = span
+        self.canLeave = canLeave
     }
 
     
@@ -2378,7 +2388,8 @@ public struct FfiConverterTypeReviewQuestion: FfiConverterRustBuffer {
                 pageIndex: FfiConverterUInt32.read(from: &buf), 
                 contextBefore: FfiConverterString.read(from: &buf), 
                 valueLength: FfiConverterUInt32.read(from: &buf), 
-                span: FfiConverterOptionTypeTextSpan.read(from: &buf)
+                span: FfiConverterOptionTypeTextSpan.read(from: &buf), 
+                canLeave: FfiConverterBool.read(from: &buf)
         )
     }
 
@@ -2390,6 +2401,7 @@ public struct FfiConverterTypeReviewQuestion: FfiConverterRustBuffer {
         FfiConverterString.write(value.contextBefore, into: &buf)
         FfiConverterUInt32.write(value.valueLength, into: &buf)
         FfiConverterOptionTypeTextSpan.write(value.span, into: &buf)
+        FfiConverterBool.write(value.canLeave, into: &buf)
     }
 }
 

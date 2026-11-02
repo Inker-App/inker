@@ -22,6 +22,9 @@ const JORDAN_SSN: &str = "900-12-3456";
 /// A held value: eleven zeros look like an account number but fail every
 /// checksum, so the core asks.
 const HELD_NOTE: &str = "Wire confirmation 00000000000 received\n";
+/// Nine bare digits with no label: held by the fail-closed pass, and
+/// SSN-shaped, so "Leave it" is withheld.
+const NINE_DIGIT_NOTE: &str = "Ref 900123456 ok\n";
 
 struct Counter(Arc<AtomicUsize>);
 
@@ -157,6 +160,35 @@ fn ingest_returns_once_queued_and_the_sink_reports_ready() {
 }
 
 #[test]
+fn a_held_nine_digit_value_cannot_be_left() {
+    let w = World::new();
+    let h = w.open();
+    let src = w.download_text("nine.txt", NINE_DIGIT_NOTE);
+    h.ingest(vec![src], IngestMode::Move).unwrap();
+
+    let q = wait_queue(&h, all_settled);
+    assert_no_value(&q);
+    let d = docs(&q)[0].clone();
+    assert_eq!(d.state, DocState::NeedsAttention, "{d:#?}");
+    let question = d.question.expect("a held document carries its question");
+    assert!(!question.can_leave, "nine digits are SSN-shaped");
+
+    let err = h.answer(question.id.clone(), ReviewAnswer::LeaveIt);
+    assert!(err.is_err(), "leave is refused");
+    let d = docs(&h.queue())[0].clone();
+    assert_eq!(
+        d.state,
+        DocState::NeedsAttention,
+        "still held after the refusal"
+    );
+
+    h.answer(question.id, ReviewAnswer::InkIt).unwrap();
+    let q = h.queue();
+    assert_eq!(docs(&q)[0].state, DocState::Ready);
+    assert_no_value(&q);
+}
+
+#[test]
 fn a_held_note_shows_its_question_without_the_value_and_answering_makes_it_ready() {
     let w = World::new();
     let h = w.open();
@@ -174,6 +206,7 @@ fn a_held_note_shows_its_question_without_the_value_and_answering_makes_it_ready
     // value.
     assert_eq!(question.context_before, "Wire confirmation");
     assert_eq!(question.value_length, 11);
+    assert!(question.can_leave, "eleven digits are not SSN-shaped");
     // The page crop: a 0-based page and the byte span in that page's text.
     assert_eq!(question.page_index, 0);
     assert_eq!(question.span.clone().map(|s| s.end - s.start), Some(11));

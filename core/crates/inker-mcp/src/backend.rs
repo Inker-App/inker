@@ -42,6 +42,9 @@ pub struct PendingReview {
     pub prompt: Option<String>,
     pub context_before: String,
     pub context_after: String,
+    /// Whether "leave" is an acceptable answer. `false` for an SSN-shaped
+    /// value: the core refuses to leave nine digits in the clear.
+    pub can_leave: bool,
 }
 
 /// What the running server is serving, for `inker doctor`. Holds paths, so

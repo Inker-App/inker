@@ -60,8 +60,10 @@ struct AttentionCard: View {
             HStack(spacing: 8) {
                 Button("Ink it") { store.answer(questionID: card.questionID, .inkIt) }
                     .buttonStyle(InkButtonStyle(kind: .primary, height: 30, horizontalPadding: 14))
-                Button("Leave it") { store.answer(questionID: card.questionID, .leaveIt) }
-                    .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 30, horizontalPadding: 14))
+                if card.canLeave {
+                    Button("Leave it") { store.answer(questionID: card.questionID, .leaveIt) }
+                        .buttonStyle(InkButtonStyle(kind: .outline(opacity: 0.3), height: 30, horizontalPadding: 14))
+                }
                 Spacer(minLength: 0)
                 Button("Open file") { store.reveal(path: card.filePath) }
                     .buttonStyle(InkButtonStyle(kind: .link, height: 30, horizontalPadding: 6))

@@ -150,6 +150,7 @@ fn preview_attention_holds_one_document_with_a_question_and_no_value() {
     let q = held[0].question.as_ref().expect("held doc has a question");
     assert_eq!(q.location, "page 3 of 11");
     assert_eq!(q.value_length, 9);
+    assert!(q.can_leave);
     assert!(held[0].path.ends_with("closing-statement.pdf"));
     assert!(q.prompt.ends_with("Ink it?"));
     // The value never crosses the FFI: no digit runs anywhere in the question.
