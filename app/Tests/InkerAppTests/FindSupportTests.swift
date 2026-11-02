@@ -3,7 +3,7 @@ import InkerCore
 import Testing
 @testable import InkerKit
 
-/// The clipboard chip's parse, the remembered year groups, the expanded
+/// The clipboard chip's parse, the remembered open folders, the expanded
 /// row's lines, the two new settings and the ink pulse.
 struct FindSupportTests {
     @Test func clipboardParseAcceptsOnlyHandlesWithAPrefix() {
@@ -19,20 +19,25 @@ struct FindSupportTests {
         #expect(ClipboardHandle.chipButton == "Find it")
     }
 
-    @Test func yearGroupsRememberWhatTheUserOpenedAndDefaultToTheNewest() {
+    @Test func foldersRememberWhatTheUserOpenedByPathAndStartCollapsed() {
         let store = MemoryStore()
-        var memory = YearGroupMemory(store: store)
-        #expect(memory.isOpen("2025", newest: "2025"))
-        #expect(!memory.isOpen("2024", newest: "2025"))
-        #expect(!memory.isOpen("undated", newest: "2025"))
-        memory.set("2024", open: true)
-        memory.set("2025", open: false)
-        #expect(memory.isOpen("2024", newest: "2025"))
-        #expect(!memory.isOpen("2025", newest: "2025"))
-        let again = YearGroupMemory(store: store)
-        #expect(again.isOpen("2024", newest: "2025"), "persists")
-        #expect(!again.isOpen("2025", newest: "2025"))
-        #expect(again.isOpen("2026", newest: "2026"), "a new newest year opens by default")
+        var memory = FolderMemory(store: store)
+        #expect(memory.isOpen(""), "the root is always open")
+        #expect(!memory.isOpen("Taxes 2025"))
+        #expect(!memory.isOpen("Taxes 2025/Receipts"))
+        memory.set("Taxes 2025", open: true)
+        memory.set("Taxes 2025/Receipts", open: true)
+        memory.set("Taxes 2025/Receipts", open: false)
+        #expect(memory.isOpen("Taxes 2025"))
+        #expect(!memory.isOpen("Taxes 2025/Receipts"))
+        let again = FolderMemory(store: store)
+        #expect(again.isOpen("Taxes 2025"), "persists")
+        #expect(!again.isOpen("Taxes 2025/Receipts"))
+        #expect(!again.isOpen("taxes 2025"), "a path is matched exactly")
+        var odd = FolderMemory(store: store)
+        odd.set("a,b=1/c\nd", open: true)
+        #expect(FolderMemory(store: store).isOpen("a,b=1/c\nd"), "any character a folder name can hold")
+        #expect(FolderMemory(store: store).isOpen("Taxes 2025"))
     }
 
     @Test func detailsLinesReadLikeTheBoard() {

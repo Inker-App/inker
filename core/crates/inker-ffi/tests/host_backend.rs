@@ -479,11 +479,11 @@ fn the_board_carries_the_payer_the_tag_and_the_year_and_find_reads_the_inked_tex
     h.ingest(vec![w.download("w2-acme-2025.txt")], IngestMode::Move)
         .unwrap();
     wait_queue(&h, all_settled);
-    let b = h.board(None);
+    let b = h.board();
     assert_eq!(b.total, 1);
-    assert_eq!(b.groups.len(), 1);
-    assert_eq!(b.groups[0].year, Some(2025));
-    let doc = ready_doc(&b.groups[0].entries[0]);
+    assert!(b.root.folders.is_empty());
+    assert_eq!(b.root.files.len(), 1, "a loose file sits at the root");
+    let doc = &b.root.files[0];
     assert_eq!(doc.kind_label, "W-2");
     assert_eq!(doc.tag.as_deref(), Some("Taxes"));
     assert_eq!(doc.year, Some(2025));
@@ -492,8 +492,6 @@ fn the_board_carries_the_payer_the_tag_and_the_year_and_find_reads_the_inked_tex
         Some("Acme Robotics Inc"),
         "the template's employer, read back through the vault"
     );
-    assert_eq!(b.tags[0].tag, "Taxes");
-    assert_eq!(b.tags[0].count, 1);
 
     let hits = h.find("wage and tax".into());
     assert_eq!(hits.len(), 1, "{hits:#?}");
@@ -522,6 +520,62 @@ fn the_board_carries_the_payer_the_tag_and_the_year_and_find_reads_the_inked_tex
 }
 
 #[test]
+fn a_dropped_folder_keeps_its_shape_on_the_board() {
+    let w = World::new();
+    let h = w.open();
+    let dir = w.tmp.path().join("Downloads").join("Taxes 2025");
+    fs::create_dir_all(dir.join("Receipts")).unwrap();
+    fs::copy(
+        Path::new(SAMPLES).join("w2-acme-2025.txt"),
+        dir.join("w2-acme-2025.txt"),
+    )
+    .unwrap();
+    fs::write(
+        dir.join("Receipts").join("note.txt"),
+        "A note with no values.",
+    )
+    .unwrap();
+    h.ingest(vec![s(&dir)], IngestMode::Move).unwrap();
+    wait_queue(&h, all_settled);
+
+    let b = h.board();
+    assert_eq!(b.total, 2);
+    assert!(b.root.files.is_empty());
+    let taxes = &b.root.folders[0];
+    assert_eq!(taxes.name, "Taxes 2025");
+    assert_eq!(taxes.rel_path, "Taxes 2025");
+    let private = fs::canonicalize(w.private()).unwrap();
+    assert_eq!(Path::new(&taxes.path), private.join("Taxes 2025"));
+    let code = taxes
+        .codename
+        .clone()
+        .expect("a dropped folder has a handle");
+    assert!(code.starts_with("folder-"), "{code}");
+    assert_eq!(taxes.summary.total, 2);
+    assert_eq!(taxes.files[0].original_name, "w2-acme-2025.txt");
+
+    let receipts = &taxes.folders[0];
+    assert_eq!(receipts.name, "Receipts");
+    assert_eq!(receipts.id, "dir:Taxes 2025/Receipts");
+    assert_eq!(receipts.codename, None, "a sub-folder has no handle");
+    assert_eq!(
+        Path::new(&receipts.path),
+        private.join("Taxes 2025/Receipts")
+    );
+    assert_eq!(receipts.summary.total, 1);
+
+    let Some(BoardEntry::Folder { item }) = h.locate(format!("🐙/{code}")) else {
+        panic!("locate finds the folder")
+    };
+    assert_eq!(item.id, taxes.id);
+    let note = &receipts.files[0].codename;
+    assert!(matches!(
+        h.locate(format!("ink/{note}")),
+        Some(BoardEntry::Doc { .. })
+    ));
+}
+
+#[test]
 fn forget_leaves_the_file_and_ink_again_keeps_the_handle() {
     let w = World::new();
     let h = w.open();
@@ -544,6 +598,6 @@ fn forget_leaves_the_file_and_ink_again_keeps_the_handle() {
         Path::new(&doc.path).exists(),
         "the original stays in the private folder"
     );
-    assert!(h.board(None).groups.is_empty());
+    assert!(h.board().root.files.is_empty());
     assert!(matches!(h.forget(doc.id), Err(FfiError::NotFound { .. })));
 }

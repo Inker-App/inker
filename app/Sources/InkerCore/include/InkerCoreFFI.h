@@ -323,7 +323,7 @@ void uniffi_inker_ffi_fn_method_corehandle_answer(uint64_t ptr, RustBuffer quest
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_BOARD
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_BOARD
-RustBuffer uniffi_inker_ffi_fn_method_corehandle_board(uint64_t ptr, RustBuffer tag, RustCallStatus *_Nonnull out_status
+RustBuffer uniffi_inker_ffi_fn_method_corehandle_board(uint64_t ptr, RustCallStatus *_Nonnull out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_CLEAR_LISTENER

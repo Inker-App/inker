@@ -291,6 +291,18 @@ Plus hardening: partial-overlap union, a lock file against a second writer, `wri
 Ben's designer delivered `docs/handoff/find-handoff/` (brief plus four artboards) for the
 problem that `TypeYear` handles all look alike at 30 files. Built test-first, core to shell:
 
+> **2026-11-02: the board is a file tree.** Ben: "Drop the tags and date sorting. Mirror the
+> exact file structure that is there, but with aliases." The year groups, `UNDATED`, the tag
+> chips and newest-first ordering below are gone. `find::tree` lays every document out by its
+> path inside the private folder; a folder that was dropped carries its `FolderRecord` (handle,
+> summary, Copy, menu), a folder that is only a path segment carries its name and file count.
+> Sub-folders first, then files, each in Finder order (case-insensitive, numbers as numbers).
+> Over the FFI the board is `Board { root: FolderItem, total }` with `FolderItem` recursive
+> (UniFFI 0.32 generates it cleanly); `board()` takes no tag. The shell flattens the tree into
+> rows, 12 pt in per level; folders start collapsed and their open state is remembered by path
+> (`FolderMemory`). The row's detail line gains the year after the form type. Find, details,
+> locate, the row menu and the `tag` field on records are unchanged.
+
 - **inker-core `find`**: the board grouped by tax year (newest first, `UNDATED` last), dropped
   folders as sub-groups placed by their newest child in the year most of their files have, tag
   counts for the chips, and matching over file name, handle (prefix optional), form type, payer,

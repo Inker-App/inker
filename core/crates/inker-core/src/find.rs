@@ -1,14 +1,15 @@
-//! Finding documents in the popover: the ready board grouped by year, tag
-//! counts for the chips, and matching for the Find field. Pure functions over
-//! records; `Core::board` and `Core::find` feed them from the index and the
-//! vault. Nothing here reads a file.
+//! Finding documents in the popover: the ready board as a tree that mirrors
+//! the private folder on disk, and matching for the Find field. Pure
+//! functions over records; `Core::board` and `Core::find` feed them from the
+//! index and the vault. Nothing here reads a file.
 //!
 //! The payer is the one real value that reaches the shell: the employer,
 //! payer or lender a template attributed, read back through the vault for the
 //! popover only. It never goes over MCP and never into a log.
 
-use std::collections::BTreeMap;
+use std::cmp::Ordering;
 
+use camino::Utf8Path;
 use chrono::{DateTime, Utc};
 
 use crate::types::{DocKind, DocumentRecord, FolderRecord, FolderSummary, HandleStyle};
@@ -23,64 +24,202 @@ pub struct DocView {
     pub folder_name: Option<String>,
 }
 
-/// A dropped folder: a sub-group inside its year.
+/// One folder of the board's tree. Generic so the shell's preview data can
+/// be laid out by the same rules as the core's records.
 #[derive(Debug, Clone, PartialEq)]
-pub struct FolderView {
-    pub record: FolderRecord,
-    /// The folder's original name, from its path.
+pub struct Tree<D, F> {
+    /// The folder's name on disk; empty for the root.
     pub name: String,
-    pub summary: FolderSummary,
-    /// Newest drop first.
-    pub children: Vec<DocView>,
+    /// Relative to the private folder, `/`-separated; empty for the root.
+    pub path: String,
+    /// The dropped folder at this path, if one was dropped here.
+    pub folder: Option<F>,
+    /// Sub-folders, in Finder order.
+    pub folders: Vec<Tree<D, F>>,
+    /// Files directly in this folder, in Finder order.
+    pub files: Vec<D>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum BoardEntry {
-    Doc(DocView),
-    Folder(FolderView),
-}
-
-impl BoardEntry {
-    /// When the entry was dropped: a folder counts as its newest child.
-    fn dropped_at(&self) -> Option<DateTime<Utc>> {
-        match self {
-            BoardEntry::Doc(d) => Some(d.record.created_at),
-            BoardEntry::Folder(f) => f.children.iter().map(|c| c.record.created_at).max(),
+impl<D, F> Tree<D, F> {
+    fn new(name: &str, path: String) -> Self {
+        Self {
+            name: name.to_string(),
+            path,
+            folder: None,
+            folders: Vec::new(),
+            files: Vec::new(),
         }
     }
 
-    fn files(&self) -> u32 {
-        match self {
-            BoardEntry::Doc(_) => 1,
-            BoardEntry::Folder(f) => u32::try_from(f.children.len()).unwrap_or(u32::MAX),
+    /// Every file under this folder, at any depth.
+    pub fn file_count(&self) -> u32 {
+        let own = u32::try_from(self.files.len()).unwrap_or(u32::MAX);
+        self.folders
+            .iter()
+            .fold(own, |n, f| n.saturating_add(f.file_count()))
+    }
+
+    /// Every file under this folder, depth first.
+    pub fn all_files(&self) -> Vec<&D> {
+        let mut out: Vec<&D> = Vec::new();
+        for f in &self.folders {
+            out.extend(f.all_files());
+        }
+        out.extend(self.files.iter());
+        out
+    }
+
+    /// The folder at `segments` below this one, created if missing.
+    fn descend(&mut self, segments: &[&str]) -> &mut Self {
+        let Some((first, rest)) = segments.split_first() else {
+            return self;
+        };
+        let i = match self.folders.iter().position(|f| f.name == *first) {
+            Some(i) => i,
+            None => {
+                let path = if self.path.is_empty() {
+                    (*first).to_string()
+                } else {
+                    format!("{}/{first}", self.path)
+                };
+                self.folders.push(Tree::new(first, path));
+                self.folders.len() - 1
+            }
+        };
+        self.folders[i].descend(rest)
+    }
+
+    /// The folder at `segments`, if it exists.
+    fn find_mut(&mut self, segments: &[&str]) -> Option<&mut Self> {
+        match segments.split_first() {
+            None => Some(self),
+            Some((first, rest)) => self
+                .folders
+                .iter_mut()
+                .find(|f| f.name == *first)?
+                .find_mut(rest),
+        }
+    }
+
+    fn sort(&mut self, name_of: &impl Fn(&D) -> &str) {
+        self.folders.sort_by(|a, b| finder_order(&a.name, &b.name));
+        self.files
+            .sort_by(|a, b| finder_order(name_of(a), name_of(b)));
+        for f in &mut self.folders {
+            f.sort(name_of);
         }
     }
 }
 
-/// `2025 · 14 FILES`; `year` is `None` for `UNDATED`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct YearGroup {
-    pub year: Option<u16>,
-    pub files: u32,
-    pub entries: Vec<BoardEntry>,
+fn segments(rel: &str) -> Vec<&str> {
+    rel.split('/').filter(|s| !s.is_empty()).collect()
 }
 
-/// `Taxes · 24` on a chip.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TagCount {
-    pub tag: String,
-    pub count: u32,
+/// Lay files out by the folder each sits in. `files` pairs each file with
+/// its folder relative to the root (empty for the root itself); `folders`
+/// pairs each dropped folder with its path, and a folder no file sits under
+/// is left out. Sub-folders come first, then files, each in Finder order by
+/// name (`name_of` for a file).
+pub fn build_tree<D, F>(
+    files: Vec<(String, D)>,
+    folders: Vec<(String, F)>,
+    name_of: impl Fn(&D) -> &str,
+) -> Tree<D, F> {
+    let mut root = Tree::new("", String::new());
+    for (dir, file) in files {
+        root.descend(&segments(&dir)).files.push(file);
+    }
+    for (dir, folder) in folders {
+        if let Some(node) = root.find_mut(&segments(&dir)) {
+            node.folder = Some(folder);
+        }
+    }
+    root.sort(&name_of);
+    root
 }
 
-/// The ready board at any size.
+/// A folder of the ready board, with the dropped folder at its path, if any.
+pub type FolderNode = Tree<DocView, FolderRecord>;
+
+impl FolderNode {
+    /// "9 files · all ready · 41 inked" for everything under this folder.
+    pub fn summary(&self) -> FolderSummary {
+        summary_of(self.all_files())
+    }
+}
+
+/// The ready board: the private folder as it is on disk.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Board {
-    /// Newest year first, `UNDATED` last.
-    pub groups: Vec<YearGroup>,
-    /// Every tag with at least one file, most files first, then by name.
-    pub tags: Vec<TagCount>,
+    /// The private folder itself; its name and path are empty.
+    pub root: FolderNode,
     /// Every document, whatever its state.
     pub total: u32,
+}
+
+/// Lay documents out as the tree of `private_folder`. A document outside
+/// it (which ingest does not make) is listed at the root.
+pub fn tree(docs: Vec<DocView>, folders: &[FolderRecord], private_folder: &Utf8Path) -> Board {
+    let total = u32::try_from(docs.len()).unwrap_or(u32::MAX);
+    let rel = |p: &Utf8Path| -> Option<String> {
+        p.strip_prefix(private_folder)
+            .ok()
+            .map(|r| r.as_str().to_string())
+    };
+    let files = docs
+        .into_iter()
+        .map(|d| {
+            let dir = d.record.path.parent().and_then(rel).unwrap_or_default();
+            (dir, d)
+        })
+        .collect();
+    let dropped = folders
+        .iter()
+        .filter_map(|f| rel(&f.path).map(|r| (r, f.clone())))
+        .collect();
+    Board {
+        root: build_tree(files, dropped, |d: &DocView| {
+            d.record.original_name.as_str()
+        }),
+        total,
+    }
+}
+
+/// Finder's order for names: case-insensitive, with runs of digits read as
+/// numbers, so `9.pdf` comes before `10.pdf`. Ties fall back to the plain
+/// text so the order is total.
+pub fn finder_order(a: &str, b: &str) -> Ordering {
+    let (mut x, mut y) = (a.chars().peekable(), b.chars().peekable());
+    loop {
+        let o = match (x.peek().copied(), y.peek().copied()) {
+            (None, None) => break,
+            (None, Some(_)) => Ordering::Less,
+            (Some(_), None) => Ordering::Greater,
+            (Some(cx), Some(cy)) if cx.is_ascii_digit() && cy.is_ascii_digit() => {
+                let (nx, ny) = (digit_run(&mut x), digit_run(&mut y));
+                let (tx, ty) = (nx.trim_start_matches('0'), ny.trim_start_matches('0'));
+                tx.len().cmp(&ty.len()).then_with(|| tx.cmp(ty))
+            }
+            (Some(cx), Some(cy)) => {
+                x.next();
+                y.next();
+                cx.to_lowercase().cmp(cy.to_lowercase())
+            }
+        };
+        if o != Ordering::Equal {
+            return o;
+        }
+    }
+    a.len().cmp(&b.len()).then_with(|| a.cmp(b))
+}
+
+/// The digits at the front of `it`, consumed.
+fn digit_run(it: &mut std::iter::Peekable<std::str::Chars<'_>>) -> String {
+    let mut out = String::new();
+    while let Some(c) = it.next_if(char::is_ascii_digit) {
+        out.push(c);
+    }
+    out
 }
 
 /// The expanded row: where the file is, when it came, who read it.
@@ -129,122 +268,7 @@ pub fn folder_name(f: &FolderRecord) -> String {
         .unwrap_or_else(|| f.codename.as_str().to_string())
 }
 
-/// Group documents by tax year, newest year first and `UNDATED` last. Inside
-/// a year, newest drop first; a dropped folder is one entry placed by its
-/// newest child and in the year most of its children have (ties to the
-/// newest). Documents in a folder that is not in `folders` are listed loose.
-pub fn group(docs: Vec<DocView>, folders: &[FolderRecord]) -> Board {
-    let total = u32::try_from(docs.len()).unwrap_or(u32::MAX);
-    let tags = tag_counts(&docs);
-
-    let mut loose: Vec<DocView> = Vec::new();
-    let mut by_folder: BTreeMap<String, Vec<DocView>> = BTreeMap::new();
-    for d in docs {
-        match d.record.folder {
-            Some(id) if folders.iter().any(|f| f.id == id) => {
-                by_folder.entry(id.0.to_string()).or_default().push(d);
-            }
-            _ => loose.push(d),
-        }
-    }
-
-    let mut entries: Vec<(Option<u16>, BoardEntry)> = loose
-        .into_iter()
-        .map(|d| (d.record.year, BoardEntry::Doc(d)))
-        .collect();
-    for f in folders {
-        let Some(mut children) = by_folder.remove(&f.id.0.to_string()) else {
-            continue;
-        };
-        children.sort_by_key(|c| std::cmp::Reverse(c.record.created_at));
-        let year = folder_year(&children);
-        let summary = summary_of(&children);
-        entries.push((
-            year,
-            BoardEntry::Folder(FolderView {
-                record: f.clone(),
-                name: folder_name(f),
-                summary,
-                children,
-            }),
-        ));
-    }
-
-    let mut groups: BTreeMap<Option<u16>, Vec<BoardEntry>> = BTreeMap::new();
-    for (year, e) in entries {
-        groups.entry(year).or_default().push(e);
-    }
-    let mut out: Vec<YearGroup> = groups
-        .into_iter()
-        .map(|(year, mut entries)| {
-            entries.sort_by_key(|e| std::cmp::Reverse(e.dropped_at()));
-            YearGroup {
-                year,
-                files: entries.iter().map(BoardEntry::files).sum(),
-                entries,
-            }
-        })
-        .collect();
-    // Newest year first; None (undated) last.
-    out.sort_by(|a, b| match (a.year, b.year) {
-        (Some(x), Some(y)) => y.cmp(&x),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
-    });
-    Board {
-        groups: out,
-        tags,
-        total,
-    }
-}
-
-/// The documents carrying `tag`, for a chip; `None` is `All`.
-pub fn with_tag(docs: Vec<DocView>, tag: Option<&str>) -> Vec<DocView> {
-    match tag {
-        None => docs,
-        Some(t) => docs
-            .into_iter()
-            .filter(|d| d.record.tag.as_deref() == Some(t))
-            .collect(),
-    }
-}
-
-fn tag_counts(docs: &[DocView]) -> Vec<TagCount> {
-    let mut counts: BTreeMap<&str, u32> = BTreeMap::new();
-    for d in docs {
-        if let Some(t) = d.record.tag.as_deref() {
-            *counts.entry(t).or_default() += 1;
-        }
-    }
-    let mut out: Vec<TagCount> = counts
-        .into_iter()
-        .map(|(tag, count)| TagCount {
-            tag: tag.to_string(),
-            count,
-        })
-        .collect();
-    out.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.tag.cmp(&b.tag)));
-    out
-}
-
-/// The year most children have; ties go to the newest drop among them.
-fn folder_year(children: &[DocView]) -> Option<u16> {
-    let mut counts: BTreeMap<u16, (usize, DateTime<Utc>)> = BTreeMap::new();
-    for c in children {
-        if let Some(y) = c.record.year {
-            let e = counts.entry(y).or_insert((0, c.record.created_at));
-            e.0 += 1;
-            e.1 = e.1.max(c.record.created_at);
-        }
-    }
-    counts
-        .into_iter()
-        .max_by(|a, b| a.1.cmp(&b.1))
-        .map(|(y, _)| y)
-}
-
-fn summary_of(children: &[DocView]) -> FolderSummary {
+fn summary_of<'a>(children: impl IntoIterator<Item = &'a DocView>) -> FolderSummary {
     let mut s = FolderSummary::default();
     for c in children {
         s.total += 1;
@@ -411,7 +435,7 @@ pub fn kind_label(kind: &DocKind) -> String {
 mod tests {
     use super::*;
     use crate::types::{Codename, DocState, DocumentId, FolderId, IngestMode};
-    use camino::Utf8PathBuf;
+    use camino::{Utf8Path, Utf8PathBuf};
     use chrono::TimeZone;
 
     fn at(day: u32) -> DateTime<Utc> {
@@ -461,287 +485,144 @@ mod tests {
         }
     }
 
-    /// 30 files: 2025 has a 9-file folder and 4 loose, 2024 a 6-file folder
-    /// and 4 loose, 2023 has 5 loose, and 2 are undated.
-    fn thirty() -> (Vec<DocView>, Vec<FolderRecord>) {
-        let f25 = folder("folder-0412", "Taxes 2025", 14);
-        let f24 = folder("folder-0377", "Taxes 2024", 3);
-        let mut docs = Vec::new();
-        for i in 0..9 {
-            let code = if i == 0 {
-                "w2-2025".to_string()
-            } else {
-                format!("w2-2025-{}", i + 1)
-            };
-            docs.push(doc(
-                &code,
-                &format!("w2-{i}.pdf"),
-                "w2",
-                Some(2025),
-                14,
-                Some(&f25),
-                Some("Taxes"),
-                Some("Acme Robotics"),
-            ));
-        }
-        docs.push(doc(
-            "1099-int-2025",
-            "IMG_4471.heic",
-            "1099-int",
-            Some(2025),
-            20,
-            None,
-            Some("Taxes"),
-            Some("Harbor Street CU"),
-        ));
-        docs.push(doc(
-            "1098-2025",
-            "1098_harbor.pdf",
-            "1098",
-            Some(2025),
-            18,
-            None,
-            Some("Taxes"),
-            Some("Harbor Street CU"),
-        ));
-        docs.push(doc(
-            "bank-statement-2025",
-            "statement-march.pdf",
-            "bank-statement",
-            Some(2025),
-            16,
-            None,
-            Some("Banking"),
-            None,
-        ));
-        docs.push(doc(
-            "closing-statement-2025",
-            "closing.pdf",
-            "closing-statement",
-            Some(2025),
-            15,
-            None,
-            Some("Legal"),
-            None,
-        ));
-        for i in 0..6 {
-            docs.push(doc(
-                &format!("1099-nec-2024-{}", i + 2),
-                &format!("nec-{i}.pdf"),
-                "1099-nec",
-                Some(2024),
-                3,
-                Some(&f24),
-                Some("Taxes"),
-                Some("Bluefin Analytics"),
-            ));
-        }
-        for i in 0..4 {
-            docs.push(doc(
-                &format!("w2-2024-{}", i + 2),
-                &format!("w2-2024-{i}.pdf"),
-                "w2",
-                Some(2024),
-                5 + i,
-                None,
-                Some("Taxes"),
-                Some("Acme Robotics"),
-            ));
-        }
-        for i in 0..5 {
-            docs.push(doc(
-                &format!("1040-2023-{}", i + 2),
-                &format!("1040-{i}.pdf"),
-                "1040",
-                Some(2023),
-                1,
-                None,
-                Some("Taxes"),
-                None,
-            ));
-        }
-        docs.push(doc(
-            "receipt-4471",
-            "IMG_0001.heic",
-            "receipt",
-            None,
-            2,
-            None,
-            None,
-            None,
-        ));
-        docs.push(doc(
-            "scan-4472",
-            "IMG_0002.heic",
-            "scan",
-            None,
-            1,
-            None,
-            None,
-            None,
-        ));
-        assert_eq!(docs.len(), 30);
-        (docs, vec![f25, f24])
+    /// A ready document at `rel` inside the private folder.
+    fn at_path(code: &str, rel: &str, folder: Option<&FolderRecord>) -> DocView {
+        let name = rel.rsplit('/').next().unwrap_or(rel);
+        let mut d = doc(code, name, "w2", Some(2025), 1, folder, None, None);
+        d.record.path = Utf8PathBuf::from(format!("/Users/t/Private/{rel}"));
+        d
+    }
+
+    fn names<D, F>(t: &Tree<D, F>, name_of: impl Fn(&D) -> String) -> (Vec<String>, Vec<String>) {
+        (
+            t.folders.iter().map(|f| f.name.clone()).collect(),
+            t.files.iter().map(name_of).collect(),
+        )
+    }
+
+    fn doc_name(d: &DocView) -> String {
+        d.record.original_name.clone()
     }
 
     #[test]
-    fn thirty_files_group_by_year_newest_first_with_folders_and_undated() {
-        let (docs, folders) = thirty();
-        let b = group(docs, &folders);
-        assert_eq!(b.total, 30);
-        let years: Vec<Option<u16>> = b.groups.iter().map(|g| g.year).collect();
-        assert_eq!(years, vec![Some(2025), Some(2024), Some(2023), None]);
-        let files: Vec<u32> = b.groups.iter().map(|g| g.files).collect();
-        assert_eq!(files, vec![13, 10, 5, 2]);
-
-        // 2025: newest drop first; the folder sits where its newest child does.
-        let g = &b.groups[0];
-        let order: Vec<String> = g
-            .entries
-            .iter()
-            .map(|e| match e {
-                BoardEntry::Doc(d) => d.record.codename.as_str().to_string(),
-                BoardEntry::Folder(f) => format!("folder:{}", f.name),
-            })
-            .collect();
+    fn finder_order_is_case_insensitive_and_reads_numbers_as_numbers() {
+        let mut v = vec![
+            "b.pdf", "A.pdf", "10.pdf", "9.pdf", "a2.pdf", "a10.pdf", "B.pdf",
+        ];
+        v.sort_by(|a, b| finder_order(a, b));
         assert_eq!(
-            order,
+            v,
             vec![
-                "1099-int-2025",
-                "1098-2025",
-                "bank-statement-2025",
-                "closing-statement-2025",
-                "folder:Taxes 2025"
+                "9.pdf", "10.pdf", "A.pdf", "a2.pdf", "a10.pdf", "B.pdf", "b.pdf"
             ]
         );
-        let BoardEntry::Folder(f) = &g.entries[4] else {
-            panic!("folder")
-        };
-        assert_eq!(f.record.codename.as_str(), "folder-0412");
-        assert_eq!(f.children.len(), 9);
-        assert_eq!(f.summary.total, 9);
-        assert_eq!(f.summary.ready, 9);
-        assert_eq!(f.summary.inked, 54);
-
-        // 2024: loose files newest first, then the older folder.
-        let g = &b.groups[1];
-        assert!(
-            matches!(&g.entries[0], BoardEntry::Doc(d) if d.record.original_name == "w2-2024-3.pdf")
-        );
-        assert!(matches!(g.entries.last(), Some(BoardEntry::Folder(f)) if f.name == "Taxes 2024"));
-
-        // Undated last, newest first.
-        let g = &b.groups[3];
-        assert_eq!(g.year, None);
-        assert!(
-            matches!(&g.entries[0], BoardEntry::Doc(d) if d.record.codename.as_str() == "receipt-4471")
-        );
+        assert_eq!(finder_order("x", "x"), std::cmp::Ordering::Equal);
+        assert_eq!(finder_order("007", "7"), std::cmp::Ordering::Greater);
     }
 
     #[test]
-    fn tag_counts_are_most_files_first_and_skip_untagged() {
-        let (docs, folders) = thirty();
-        let b = group(docs, &folders);
+    fn the_tree_mirrors_the_private_folder_folders_first_then_files_by_name() {
+        let taxes = folder("folder-0412", "Taxes 2025", 1);
+        let docs = vec![
+            at_path("w2-2025", "b.pdf", None),
+            at_path("w2-2025-2", "A.pdf", None),
+            at_path("w2-2025-3", "10.pdf", None),
+            at_path("w2-2025-4", "9.pdf", None),
+            at_path("w2-2025-5", "Taxes 2025/w2.pdf", Some(&taxes)),
+            at_path("w2-2025-6", "Taxes 2025/Receipts/R2.heic", Some(&taxes)),
+            at_path("w2-2025-7", "Taxes 2025/Receipts/r1.heic", Some(&taxes)),
+            at_path("w2-2025-8", "archive/old/x.pdf", None),
+        ];
+        let b = tree(docs, &[taxes], Utf8Path::new("/Users/t/Private"));
+        assert_eq!(b.total, 8);
+        let root = &b.root;
+        assert_eq!(root.name, "");
+        assert_eq!(root.path, "");
+        assert!(root.folder.is_none());
+        assert_eq!(root.file_count(), 8);
         assert_eq!(
-            b.tags,
-            vec![
-                TagCount {
-                    tag: "Taxes".into(),
-                    count: 26
-                },
-                TagCount {
-                    tag: "Banking".into(),
-                    count: 1
-                },
-                TagCount {
-                    tag: "Legal".into(),
-                    count: 1
-                },
-            ]
+            names(root, doc_name),
+            (
+                vec!["archive".to_string(), "Taxes 2025".into()],
+                vec![
+                    "9.pdf".to_string(),
+                    "10.pdf".into(),
+                    "A.pdf".into(),
+                    "b.pdf".into()
+                ]
+            )
+        );
+
+        // A dropped folder carries its handle and summary.
+        let t = &root.folders[1];
+        assert_eq!(t.path, "Taxes 2025");
+        assert_eq!(
+            t.folder.as_ref().map(|f| f.codename.as_str()),
+            Some("folder-0412")
+        );
+        assert_eq!(t.file_count(), 3);
+        let s = t.summary();
+        assert_eq!((s.total, s.ready, s.inked), (3, 3, 18));
+        assert_eq!(
+            names(t, doc_name),
+            (vec!["Receipts".to_string()], vec!["w2.pdf".to_string()])
+        );
+
+        // A folder that is only a path segment has a name and a count, no handle.
+        let r = &t.folders[0];
+        assert_eq!(r.path, "Taxes 2025/Receipts");
+        assert!(r.folder.is_none());
+        assert_eq!(
+            names(r, doc_name),
+            (vec![], vec!["r1.heic".to_string(), "R2.heic".into()])
+        );
+
+        // Folders nest as deep as the paths go.
+        let a = &root.folders[0];
+        assert!(a.files.is_empty());
+        assert_eq!(a.file_count(), 1);
+        assert_eq!(a.folders[0].path, "archive/old");
+        assert_eq!(a.folders[0].files[0].record.original_name, "x.pdf");
+    }
+
+    #[test]
+    fn a_nested_dropped_folder_keeps_its_own_handle() {
+        let outer = folder("folder-0001", "Taxes", 1);
+        let inner = folder("folder-0002", "Taxes/2024", 2);
+        let docs = vec![
+            at_path("w2-2025", "Taxes/a.pdf", Some(&outer)),
+            at_path("w2-2024", "Taxes/2024/b.pdf", Some(&inner)),
+        ];
+        let b = tree(docs, &[outer, inner], Utf8Path::new("/Users/t/Private"));
+        let t = &b.root.folders[0];
+        assert_eq!(
+            t.folder.as_ref().map(|f| f.codename.as_str()),
+            Some("folder-0001")
+        );
+        assert_eq!(t.summary().total, 2, "a summary covers everything under it");
+        assert_eq!(
+            t.folders[0].folder.as_ref().map(|f| f.codename.as_str()),
+            Some("folder-0002")
         );
     }
 
     #[test]
-    fn a_tag_chip_filters_before_grouping_and_years_still_apply() {
-        let (docs, folders) = thirty();
-        let b = group(with_tag(docs, Some("Taxes")), &folders);
-        assert_eq!(b.total, 26);
-        let files: Vec<u32> = b.groups.iter().map(|g| g.files).collect();
-        assert_eq!(files, vec![11, 10, 5]);
-        assert!(
-            b.groups.iter().all(|g| g.year.is_some()),
-            "no undated under Taxes"
-        );
+    fn a_folder_without_files_is_left_out_and_a_stray_file_sits_at_the_root() {
+        let empty = folder("folder-0001", "Empty", 1);
+        let mut stray = at_path("w2-2025", "x.pdf", None);
+        stray.record.path = Utf8PathBuf::from("/Users/t/Downloads/stray.pdf");
+        stray.record.original_name = "stray.pdf".into();
+        let b = tree(vec![stray], &[empty], Utf8Path::new("/Users/t/Private"));
+        assert!(b.root.folders.is_empty());
+        assert_eq!(names(&b.root, doc_name).1, vec!["stray.pdf".to_string()]);
     }
 
     #[test]
-    fn a_folder_with_mixed_years_goes_where_most_of_its_files_are() {
-        let f = folder("folder-0001", "Mixed", 1);
-        let docs = vec![
-            doc(
-                "w2-2025",
-                "a.pdf",
-                "w2",
-                Some(2025),
-                1,
-                Some(&f),
-                None,
-                None,
-            ),
-            doc(
-                "w2-2024",
-                "b.pdf",
-                "w2",
-                Some(2024),
-                2,
-                Some(&f),
-                None,
-                None,
-            ),
-            doc(
-                "w2-2024-2",
-                "c.pdf",
-                "w2",
-                Some(2024),
-                3,
-                Some(&f),
-                None,
-                None,
-            ),
-            doc("scan-1", "d.heic", "scan", None, 4, Some(&f), None, None),
-        ];
-        let b = group(docs, &[f]);
-        assert_eq!(b.groups.len(), 1);
-        assert_eq!(b.groups[0].year, Some(2024));
-        assert_eq!(b.groups[0].files, 4);
-    }
-
-    #[test]
-    fn a_folder_of_undated_files_is_undated() {
-        let f = folder("folder-0001", "Scans", 1);
-        let docs = vec![
-            doc("scan-1", "a.heic", "scan", None, 1, Some(&f), None, None),
-            doc("scan-2", "b.heic", "scan", None, 2, Some(&f), None, None),
-        ];
-        let b = group(docs, &[f]);
-        assert_eq!(b.groups[0].year, None);
-    }
-
-    #[test]
-    fn a_document_whose_folder_is_gone_is_listed_loose() {
-        let f = folder("folder-0001", "Gone", 1);
-        let docs = vec![doc(
-            "w2-2025",
-            "a.pdf",
-            "w2",
-            Some(2025),
-            1,
-            Some(&f),
-            None,
-            None,
-        )];
-        let b = group(docs, &[]);
-        assert!(matches!(&b.groups[0].entries[0], BoardEntry::Doc(_)));
+    fn an_empty_board_is_an_empty_root() {
+        let b = tree(Vec::new(), &[], Utf8Path::new("/Users/t/Private"));
+        assert_eq!(b.total, 0);
+        assert!(b.root.folders.is_empty() && b.root.files.is_empty());
+        assert_eq!(b.root.file_count(), 0);
     }
 
     // --- find -----------------------------------------------------------

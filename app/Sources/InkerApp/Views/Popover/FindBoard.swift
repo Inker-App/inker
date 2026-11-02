@@ -2,8 +2,8 @@ import InkerKit
 import SwiftUI
 
 /// The ready board (AppFindScale, AppFindSearch, AppFindHandle, AppFindRow):
-/// "Drop more" beside Find, tag chips, the clipboard chip, year groups with
-/// folder sub-groups, or a flat list of matches while a query is typed.
+/// "Drop more" beside Find, the clipboard chip, the private folder as a tree
+/// of folder and file rows, or a flat list of matches while a query is typed.
 struct FindBoard: View {
     @EnvironmentObject private var store: CoreStore
 
@@ -16,10 +16,6 @@ struct FindBoard: View {
                 }
             }
             .padding(.top, 10)
-            if store.results == nil, !store.board.chips.isEmpty {
-                ChipRow(chips: store.board.chips) { store.setTag($0) }
-                    .padding(.top, 8)
-            }
             PopoverScroll {
                 ScrollViewReader { proxy in
                     VStack(spacing: 0) {
@@ -30,9 +26,17 @@ struct FindBoard: View {
                         if let results = store.results {
                             FindResults(results: results)
                         } else {
-                            ForEach(store.board.groups) { group in
-                                YearGroupSection(group: group)
+                            VStack(spacing: 0) {
+                                ForEach(store.board.rows) { row in
+                                    switch row {
+                                    case .doc(let doc):
+                                        DocRow(row: doc)
+                                    case .folder(let folder):
+                                        FolderRow(row: folder)
+                                    }
+                                }
                             }
+                            .padding(.top, 6)
                         }
                     }
                     .onChange(of: store.scrollTarget) { _, id in
@@ -76,31 +80,6 @@ struct FindField: View {
     }
 }
 
-/// `All` filled, the rest outlined, 22 tall, 11 pt.
-struct ChipRow: View {
-    let chips: [ChipModel]
-    let onPick: (String?) -> Void
-
-    var body: some View {
-        HStack(spacing: 6) {
-            ForEach(chips) { chip in
-                Button { onPick(chip.tag) } label: {
-                    Text(chip.title)
-                        .font(Typography.archivo(11, weight: chip.isActive ? 600 : 400))
-                        .foregroundColor(chip.isActive ? Palette.background : Palette.checkLabel)
-                        .padding(.horizontal, 9)
-                        .frame(height: 22)
-                        .background(Capsule().fill(chip.isActive ? Palette.paper : Color.clear))
-                        .overlay(Capsule().strokeBorder(chip.isActive ? Color.clear : Palette.field, lineWidth: 1))
-                }
-                .buttonStyle(.plain)
-                .accessibilityAddTraits(chip.isActive ? .isSelected : [])
-            }
-            Spacer(minLength: 0)
-        }
-    }
-}
-
 /// "Your clipboard holds 🐙/w2-2025-2 · Find it".
 struct ClipboardChip: View {
     let handle: String
@@ -128,39 +107,6 @@ struct ClipboardChip: View {
     }
 }
 
-/// `2025 · 14 FILES` with its chevron, then the rows when open.
-struct YearGroupSection: View {
-    let group: YearGroupModel
-    @EnvironmentObject private var store: CoreStore
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Button { store.toggleYear(group.id) } label: {
-                HStack {
-                    LabelText(group.label, color: Palette.muted)
-                    Spacer(minLength: 8)
-                    Chevron(open: group.isOpen)
-                }
-                .padding(.top, 12)
-                .padding(.bottom, 6)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(group.label), \(group.isOpen ? "open" : "collapsed")")
-            if group.isOpen {
-                ForEach(group.rows) { row in
-                    switch row {
-                    case .doc(let doc):
-                        DocRow(row: doc)
-                    case .folder(let folder):
-                        FolderRow(row: folder)
-                    }
-                }
-            }
-        }
-    }
-}
-
 /// Points down when open, right when collapsed.
 struct Chevron: View {
     let open: Bool
@@ -174,47 +120,46 @@ struct Chevron: View {
     }
 }
 
-/// A folder's row: name and count over its handle and summary, its own
-/// Copy, and the children indented 12 pt when open.
+/// A folder's row: chevron, name and count over its handle and summary, its
+/// own Copy. A folder that is only a path segment has no handle: the first
+/// line alone, no Copy. Its contents follow as rows of their own, one step in.
 struct FolderRow: View {
     let row: FolderRowModel
     @EnvironmentObject private var store: CoreStore
     @State private var hovering = false
 
     var body: some View {
-        VStack(spacing: 0) {
-            RowSurface(id: row.id, hovering: $hovering) {
-                HStack(spacing: 10) {
-                    Button { store.toggleFolder(row.id) } label: {
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 8) {
-                                Chevron(open: row.isOpen)
-                                Text(row.name).font(Typography.body)
-                                Text(row.countLine).font(Typography.body).foregroundColor(Palette.muted)
-                            }
-                            .lineLimit(1)
+        RowSurface(id: row.id, hovering: $hovering) {
+            HStack(spacing: 10) {
+                Button { store.toggleFolder(row.relPath) } label: {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Chevron(open: row.isOpen)
+                            Text(row.name).font(Typography.body)
+                            Text(row.countLine).font(Typography.body).foregroundColor(Palette.muted)
+                        }
+                        .lineLimit(1)
+                        if let handle = row.handle {
                             HStack(spacing: 6) {
-                                Text(row.handle).font(Typography.mono(11)).foregroundColor(Palette.paper)
+                                Text(handle).font(Typography.mono(11)).foregroundColor(Palette.paper)
                                 Text("·").foregroundColor(Palette.muted)
                                 Text(row.summary).foregroundColor(Palette.muted)
                             }
                             .font(Typography.caption)
                             .lineLimit(1)
                         }
-                        .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("\(row.name), \(row.countLine), \(row.isOpen ? "open" : "collapsed")")
-                    Spacer(minLength: 8)
-                    RowActions(id: row.id, handle: row.handle, copyEnabled: row.copyEnabled, hovering: hovering)
+                    .contentShape(Rectangle())
                 }
-            }
-            if row.isOpen {
-                ForEach(row.children) { child in
-                    DocRow(row: child)
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(row.name), \(row.countLine), \(row.isOpen ? "open" : "collapsed")")
+                Spacer(minLength: 8)
+                if let handle = row.handle {
+                    RowActions(id: row.id, handle: handle, copyEnabled: row.copyEnabled, hovering: hovering)
                 }
             }
         }
+        .padding(.leading, row.indent)
     }
 }
 
@@ -255,10 +200,10 @@ struct DocRow: View {
                     InkLoaderView(mode: mode).padding(.top, 8)
                 }
             }
-            .padding(.leading, row.indented ? 12 : 0)
+            .padding(.leading, row.indent)
             if store.expandedID == row.id {
                 DetailsPanel(lines: store.expandedDetails, path: row.path)
-                    .padding(.leading, row.indented ? 12 : 0)
+                    .padding(.leading, row.indent)
             }
         }
     }

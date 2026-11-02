@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, SystemTime};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use inker_core::find::{normalize_query, text_snippet};
+use inker_core::find::{build_tree, normalize_query, text_snippet};
 
 use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
@@ -53,27 +53,6 @@ impl Group {
             is_folder: self.is_folder,
             summary: FolderSummary::of(&self.docs),
             children: self.docs.clone(),
-        }
-    }
-
-    fn to_entry(&self) -> BoardEntry {
-        if self.is_folder {
-            let mut children = self.docs.clone();
-            children.sort_by_key(|d| std::cmp::Reverse(d.dropped_at));
-            BoardEntry::Folder {
-                item: FolderItem {
-                    id: self.id.clone(),
-                    codename: self.codename.clone(),
-                    name: self.name.clone(),
-                    path: self.path.clone(),
-                    summary: FolderSummary::of(&children),
-                    children,
-                },
-            }
-        } else {
-            BoardEntry::Doc {
-                item: self.docs[0].clone(),
-            }
         }
     }
 }
@@ -378,13 +357,40 @@ impl Backend for PreviewBackend {
 
     fn board(&self) -> Board {
         let inner = self.lock();
-        let docs = Self::all_docs(&inner);
-        let entries = inner.groups.iter().map(Group::to_entry).collect();
-        Board::assemble(
-            entries,
-            Board::count_tags(&docs),
-            u32::try_from(docs.len()).unwrap_or(u32::MAX),
-        )
+        let mut files: Vec<(String, DocItem)> = Vec::new();
+        let mut dropped: Vec<(String, (String, String))> = Vec::new();
+        for g in &inner.groups {
+            if !g.is_folder {
+                files.extend(g.docs.iter().map(|d| (String::new(), d.clone())));
+                continue;
+            }
+            dropped.push((g.name.clone(), (g.id.clone(), g.codename.clone())));
+            for d in &g.docs {
+                // A file in a sub-folder of the drop keeps its place under it.
+                let sub = Utf8Path::new(&d.path)
+                    .parent()
+                    .and_then(|p| p.strip_prefix(&g.path).ok())
+                    .map(|r| r.as_str().to_string())
+                    .unwrap_or_default();
+                let dir = if sub.is_empty() {
+                    g.name.clone()
+                } else {
+                    format!("{}/{sub}", g.name)
+                };
+                files.push((dir, d.clone()));
+            }
+        }
+        let total = u32::try_from(files.len()).unwrap_or(u32::MAX);
+        let tree = build_tree(files, dropped, |d: &DocItem| d.original_name.as_str());
+        Board {
+            root: FolderItem::from_tree(
+                tree,
+                &self.private_folder_display,
+                &|d: DocItem| d,
+                &|f: &(String, String)| f.clone(),
+            ),
+            total,
+        }
     }
 
     fn find(&self, query: &str) -> Vec<FindMatch> {
@@ -447,16 +453,7 @@ impl Backend for PreviewBackend {
     }
 
     fn locate(&self, codename: &str) -> Option<BoardEntry> {
-        let inner = self.lock();
-        for g in &inner.groups {
-            if g.is_folder && g.codename == codename {
-                return Some(g.to_entry());
-            }
-            if let Some(d) = g.docs.iter().find(|d| d.codename == codename) {
-                return Some(BoardEntry::Doc { item: d.clone() });
-            }
-        }
-        None
+        self.board().locate(codename)
     }
 
     fn details(&self, id: &str) -> Result<DocDetails, FfiError> {

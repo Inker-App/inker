@@ -1,5 +1,16 @@
 # INKER: finding documents in the popover
 
+> **2026-11-02: the board is a file tree.** Ben dropped the tag chips (section 4) and the
+> grouping by tax year and drop date (section 3): "Mirror the exact file structure that is there,
+> but with aliases." The ready board now mirrors the private folder as it is on disk. Every row
+> shows the original file or folder name with its copyable handle; sub-folders come first, then
+> files, each sorted by name the way Finder sorts. A dropped folder keeps its handle, summary,
+> Copy and menu; a folder that is only part of a path shows its name and file count. Folders
+> start collapsed and are remembered open or closed across launches. Since no year header sits
+> above a row any more, the row's detail line carries the year after the form type
+> (`🐙/w2-2025 · W-2 · 2025 · Acme Robotics · 6 inked`). Find, handle to document, the row menu
+> and the expanded row are unchanged. The rest of this file describes the board as first built.
+
 Read this whole file, then the four design files in `design/`. This is additive to the App v2 popover: the four boards (empty, processing, attention, ready) and the drop card stay as designed. Everything here lives inside the 360x500 popover. There are no new windows.
 
 ## The problem being solved

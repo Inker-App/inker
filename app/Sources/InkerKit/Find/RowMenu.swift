@@ -59,17 +59,15 @@ public struct RowMenuTarget: Equatable, Sendable {
 }
 
 public extension BoardModel {
-    /// The menu and path of the row an id names, folders and their children included.
+    /// The menu and path of the shown row an id names. A folder with no
+    /// handle has no menu.
     func menuTarget(for id: String) -> RowMenuTarget? {
-        for group in groups {
-            for row in group.rows {
-                switch row {
-                case .doc(let d):
-                    if d.id == id { return RowMenuTarget(menu: d.menu, path: d.path) }
-                case .folder(let f):
-                    if f.id == id { return RowMenuTarget(menu: f.menu, path: f.path) }
-                    if let c = f.children.first(where: { $0.id == id }) { return RowMenuTarget(menu: c.menu, path: c.path) }
-                }
+        for row in rows {
+            switch row {
+            case .doc(let d):
+                if d.id == id { return RowMenuTarget(menu: d.menu, path: d.path) }
+            case .folder(let f):
+                if f.id == id, let menu = f.menu { return RowMenuTarget(menu: menu, path: f.path) }
             }
         }
         return nil

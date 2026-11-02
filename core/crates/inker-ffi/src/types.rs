@@ -179,12 +179,13 @@ pub struct DocItem {
     pub loader: Loader,
     /// Set while `state == NeedsAttention`.
     pub question: Option<ReviewQuestion>,
-    /// Tax year, once classified; the board groups by it.
+    /// Tax year, once classified; the row shows it after the form type.
     pub year: Option<u16>,
     /// "Acme Robotics": the employer, payer or lender a template attributed.
     /// Shown in the popover only; a setting hides it.
     pub payer: Option<String>,
-    /// The chip it counts under ("Taxes"); `None` is under `All` only.
+    /// The template's tag ("Taxes"); Find matches it. The board does not
+    /// group by it.
     pub tag: Option<String>,
     /// When it was dropped.
     pub dropped_at: SystemTime,
@@ -192,23 +193,97 @@ pub struct DocItem {
     pub folder_name: Option<String>,
 }
 
-/// A dropped folder on the board: a sub-group inside its year.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+/// A folder on the board, as it is on disk. The board's root is the private
+/// folder itself. UniFFI carries the recursion: a Swift struct may hold an
+/// array of its own type.
+#[derive(Debug, Clone, Default, PartialEq, Eq, uniffi::Record)]
 pub struct FolderItem {
+    /// The dropped folder's id, or `dir:` and the relative path for a
+    /// folder that is only a path segment (and for the root, `dir:`).
     pub id: String,
-    /// `folder-0412`
-    pub codename: String,
-    /// The folder's original name, for line 1 of its row.
+    /// `folder-0412` for a dropped folder; `None` for a folder that is only
+    /// a path segment, which has no handle.
+    pub codename: Option<String>,
+    /// The folder's name on disk, for line 1 of its row; empty for the root.
     pub name: String,
+    /// Relative to the private folder (`Taxes 2025/Receipts`), empty for
+    /// the root. The shell remembers open folders by it.
+    pub rel_path: String,
     /// Where it lives now, for Show in Finder.
     pub path: String,
+    /// Everything under it, at any depth; `total` is the file count.
     pub summary: FolderSummary,
-    /// Newest drop first.
-    pub children: Vec<DocItem>,
+    /// Sub-folders, in Finder order (case-insensitive, numbers as numbers).
+    pub folders: Vec<FolderItem>,
+    /// Files directly inside, after the sub-folders, in Finder order.
+    pub files: Vec<DocItem>,
 }
 
-/// One row of a year group. A UniFFI enum cannot box its payload, so the
-/// size difference between the variants is accepted.
+impl FolderItem {
+    /// Convert a tree laid out by `inker_core::find::build_tree`. `root` is
+    /// the private folder's path, `doc` converts a file and `dropped` gives
+    /// a dropped folder's id and codename.
+    pub fn from_tree<D, F>(
+        t: inker_core::find::Tree<D, F>,
+        root: &str,
+        doc: &impl Fn(D) -> DocItem,
+        dropped: &impl Fn(&F) -> (String, String),
+    ) -> Self {
+        let folders: Vec<FolderItem> = t
+            .folders
+            .into_iter()
+            .map(|f| FolderItem::from_tree(f, root, doc, dropped))
+            .collect();
+        let files: Vec<DocItem> = t.files.into_iter().map(doc).collect();
+        let mut summary = FolderSummary::of(&files);
+        for f in &folders {
+            summary.add(&f.summary);
+        }
+        let (id, codename) = match t.folder.as_ref().map(dropped) {
+            Some((id, code)) => (id, Some(code)),
+            None => (format!("dir:{}", t.path), None),
+        };
+        let path = if t.path.is_empty() {
+            root.to_string()
+        } else {
+            format!("{}/{}", root.trim_end_matches('/'), t.path)
+        };
+        FolderItem {
+            id,
+            codename,
+            name: t.name,
+            rel_path: t.path,
+            path,
+            summary,
+            folders,
+            files,
+        }
+    }
+
+    /// The document or dropped folder with this codename, at any depth.
+    pub fn locate(&self, codename: &str) -> Option<BoardEntry> {
+        if self.codename.as_deref() == Some(codename) {
+            return Some(BoardEntry::Folder { item: self.clone() });
+        }
+        if let Some(d) = self.files.iter().find(|d| d.codename == codename) {
+            return Some(BoardEntry::Doc { item: d.clone() });
+        }
+        self.folders.iter().find_map(|f| f.locate(codename))
+    }
+
+    /// Every file under this folder, depth first.
+    pub fn all_files(&self) -> Vec<&DocItem> {
+        let mut out: Vec<&DocItem> = Vec::new();
+        for f in &self.folders {
+            out.extend(f.all_files());
+        }
+        out.extend(self.files.iter());
+        out
+    }
+}
+
+/// What `locate` found: a document or a dropped folder. A UniFFI enum
+/// cannot box its payload, so the size difference is accepted.
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq, uniffi::Enum)]
 pub enum BoardEntry {
@@ -224,164 +299,29 @@ impl BoardEntry {
         }
     }
 
-    pub fn codename(&self) -> &str {
+    /// The handle's codename; `None` only for a folder that has no handle.
+    pub fn codename(&self) -> Option<&str> {
         match self {
-            BoardEntry::Doc { item } => &item.codename,
-            BoardEntry::Folder { item } => &item.codename,
-        }
-    }
-
-    fn files(&self) -> u32 {
-        match self {
-            BoardEntry::Doc { .. } => 1,
-            BoardEntry::Folder { item } => u32::try_from(item.children.len()).unwrap_or(u32::MAX),
-        }
-    }
-
-    fn dropped_at(&self) -> Option<SystemTime> {
-        match self {
-            BoardEntry::Doc { item } => Some(item.dropped_at),
-            BoardEntry::Folder { item } => item.children.iter().map(|c| c.dropped_at).max(),
-        }
-    }
-
-    /// A folder's year is the one most of its files have (ties to the
-    /// newest drop among them), as in `inker_core::find`.
-    fn year(&self) -> Option<u16> {
-        match self {
-            BoardEntry::Doc { item } => item.year,
-            BoardEntry::Folder { item } => {
-                let mut counts: Vec<(u16, usize, SystemTime)> = Vec::new();
-                for c in &item.children {
-                    let Some(y) = c.year else { continue };
-                    match counts.iter_mut().find(|(v, _, _)| *v == y) {
-                        Some(e) => {
-                            e.1 += 1;
-                            e.2 = e.2.max(c.dropped_at);
-                        }
-                        None => counts.push((y, 1, c.dropped_at)),
-                    }
-                }
-                counts
-                    .into_iter()
-                    .max_by(|a, b| (a.1, a.2).cmp(&(b.1, b.2)))
-                    .map(|(y, _, _)| y)
-            }
-        }
-    }
-
-    fn keep_tag(&self, tag: &str) -> Option<BoardEntry> {
-        match self {
-            BoardEntry::Doc { item } => (item.tag.as_deref() == Some(tag)).then(|| self.clone()),
-            BoardEntry::Folder { item } => {
-                let children: Vec<DocItem> = item
-                    .children
-                    .iter()
-                    .filter(|c| c.tag.as_deref() == Some(tag))
-                    .cloned()
-                    .collect();
-                (!children.is_empty()).then(|| BoardEntry::Folder {
-                    item: FolderItem {
-                        summary: FolderSummary::of(&children),
-                        children,
-                        ..item.clone()
-                    },
-                })
-            }
+            BoardEntry::Doc { item } => Some(&item.codename),
+            BoardEntry::Folder { item } => item.codename.as_deref(),
         }
     }
 }
 
-/// `2025 · 14 FILES`; `year` is `None` for `UNDATED`.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct YearGroup {
-    pub year: Option<u16>,
-    pub files: u32,
-    pub entries: Vec<BoardEntry>,
-}
-
-/// `Taxes · 24` on a chip.
-#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
-pub struct TagCount {
-    pub tag: String,
-    pub count: u32,
-}
-
-/// The ready board at any size. Mirrors `inker_core::find::Board`.
+/// The ready board: the private folder as it is on disk, every row under
+/// its original name with its handle. Mirrors `inker_core::find::Board`.
 #[derive(Debug, Clone, PartialEq, Eq, Default, uniffi::Record)]
 pub struct Board {
-    /// Newest year first, `UNDATED` last.
-    pub groups: Vec<YearGroup>,
-    /// Every tag with at least one file, most files first.
-    pub tags: Vec<TagCount>,
-    /// Every document, whatever its state and whatever chip is active.
+    /// The private folder itself: its sub-folders, then its files.
+    pub root: FolderItem,
+    /// Every document, whatever its state.
     pub total: u32,
 }
 
 impl Board {
-    /// Group entries by year, newest year first, `UNDATED` last; inside a
-    /// year, newest drop first. The preview builds its board with this.
-    pub fn assemble(entries: Vec<BoardEntry>, tags: Vec<TagCount>, total: u32) -> Self {
-        let mut groups: Vec<YearGroup> = Vec::new();
-        for e in entries {
-            let year = e.year();
-            match groups.iter_mut().find(|g| g.year == year) {
-                Some(g) => g.entries.push(e),
-                None => groups.push(YearGroup {
-                    year,
-                    files: 0,
-                    entries: vec![e],
-                }),
-            }
-        }
-        for g in &mut groups {
-            g.entries.sort_by_key(|e| std::cmp::Reverse(e.dropped_at()));
-            g.files = g.entries.iter().map(BoardEntry::files).sum();
-        }
-        groups.sort_by(|a, b| match (a.year, b.year) {
-            (Some(x), Some(y)) => y.cmp(&x),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => std::cmp::Ordering::Equal,
-        });
-        Self {
-            groups,
-            tags,
-            total,
-        }
-    }
-
-    /// The board under one chip. Tag counts and the total stay as they are.
-    pub fn filtered(self, tag: &str) -> Self {
-        let entries: Vec<BoardEntry> = self
-            .groups
-            .into_iter()
-            .flat_map(|g| g.entries)
-            .filter_map(|e| e.keep_tag(tag))
-            .collect();
-        Self::assemble(entries, self.tags, self.total)
-    }
-
-    /// Every entry, in board order, folders included.
-    pub fn entries(&self) -> impl Iterator<Item = &BoardEntry> {
-        self.groups.iter().flat_map(|g| g.entries.iter())
-    }
-
-    /// Chip counts from a flat list of documents, most files first.
-    pub fn count_tags(docs: &[DocItem]) -> Vec<TagCount> {
-        let mut out: Vec<TagCount> = Vec::new();
-        for d in docs {
-            let Some(t) = d.tag.as_deref() else { continue };
-            match out.iter_mut().find(|c| c.tag == t) {
-                Some(c) => c.count += 1,
-                None => out.push(TagCount {
-                    tag: t.to_string(),
-                    count: 1,
-                }),
-            }
-        }
-        out.sort_by(|a, b| b.count.cmp(&a.count).then_with(|| a.tag.cmp(&b.tag)));
-        out
+    /// The document or dropped folder with this codename, at any depth.
+    pub fn locate(&self, codename: &str) -> Option<BoardEntry> {
+        self.root.locate(codename)
     }
 }
 
@@ -477,6 +417,16 @@ impl FolderSummary {
             }
         }
         s
+    }
+
+    /// Fold a sub-folder's counts into this one.
+    pub fn add(&mut self, o: &FolderSummary) {
+        self.total = self.total.saturating_add(o.total);
+        self.ready = self.ready.saturating_add(o.ready);
+        self.inking = self.inking.saturating_add(o.inking);
+        self.needs_attention = self.needs_attention.saturating_add(o.needs_attention);
+        self.failed = self.failed.saturating_add(o.failed);
+        self.inked = self.inked.saturating_add(o.inked);
     }
 }
 
