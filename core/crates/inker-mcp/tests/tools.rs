@@ -419,6 +419,46 @@ async fn hidden_tools_refuse_any_client_but_the_cli() {
 }
 
 #[tokio::test]
+async fn an_ssn_shaped_question_takes_ink_only() {
+    let (mut c, fake) = ready(inker_mcp::INKER_CLI_CLIENT).await;
+    fake.hold(inker_mcp::PendingReview {
+        id: inker_core::QuestionId(2),
+        handle: inker_core::Handle::parse("🐙/1099-int-bank-2025").unwrap(),
+        kind: inker_core::TokenKind::Custom("number".into()),
+        page: 2,
+        page_count: 2,
+        prompt: Some("A long number I can't place. Ink it?".into()),
+        context_before: "Ref".into(),
+        context_after: "ok".into(),
+        can_leave: false,
+    });
+    let r = c.call("inker/review", json!({})).await;
+    assert!(!is_error(&r), "{r}");
+    let qs = r["result"]["structuredContent"]["questions"]
+        .as_array()
+        .unwrap()
+        .clone();
+    assert_eq!(qs.len(), 2);
+    assert_eq!(qs[0]["can_leave"], json!(true));
+    assert_eq!(qs[1]["can_leave"], json!(false));
+    assert!(text(&r).contains("ink only"), "{}", text(&r));
+
+    let r = c
+        .call("inker/answer", json!({"question": 2, "answer": "leave"}))
+        .await;
+    assert!(is_error(&r), "{r}");
+    assert!(text(&r).contains("SSN-shaped"), "{}", text(&r));
+    assert_eq!(fake.pending_reviews().unwrap().len(), 2, "nothing answered");
+
+    let r = c
+        .call("inker/answer", json!({"question": 2, "answer": "ink"}))
+        .await;
+    assert!(!is_error(&r), "{r}");
+    assert_eq!(fake.pending_reviews().unwrap().len(), 1);
+    assert_no_real_values(&c);
+}
+
+#[tokio::test]
 async fn the_cli_reviews_and_answers_without_seeing_the_value() {
     let (mut c, fake) = ready(inker_mcp::INKER_CLI_CLIENT).await;
     let r = c.call("inker/review", json!({})).await;

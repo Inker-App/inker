@@ -219,6 +219,7 @@ impl Backend for Host {
                     prompt: q.prompt,
                     context_before: q.context_before,
                     context_after: q.context_after,
+                    can_leave: q.can_leave,
                 })
             })
             .collect()

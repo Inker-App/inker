@@ -75,6 +75,9 @@ public struct AttentionModel: Equatable, Sendable {
     /// The crop needs the file; without a span the card keeps the octopus.
     public var pageIndex: Int
     public var span: Range<Int>?
+    /// Whether "Leave it" is offered. False for an SSN-shaped value: the
+    /// core refuses that answer, so the card shows "Ink it" alone.
+    public var canLeave: Bool
 }
 
 public enum FooterLeft: Equatable, Sendable {

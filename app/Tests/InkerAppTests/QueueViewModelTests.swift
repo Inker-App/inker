@@ -39,7 +39,19 @@ struct QueueViewModelTests {
     private var question: ReviewQuestion {
         ReviewQuestion(id: "q-4", prompt: "Looks like an account number, but the scan is rough. Ink it?",
                        location: "page 3 of 11", pageIndex: 2, contextBefore: "…wire to", valueLength: 9,
-                       span: TextSpan(start: 120, end: 129))
+                       span: TextSpan(start: 120, end: 129), canLeave: true)
+    }
+
+    private var inkOnlyQuestion: ReviewQuestion {
+        ReviewQuestion(id: "q-5", prompt: "A long number I can't place. Ink it?",
+                       location: "page 1 of 1", pageIndex: 0, contextBefore: "Ref", valueLength: 9,
+                       span: TextSpan(start: 4, end: 13), canLeave: false)
+    }
+
+    @Test func anSsnShapedValueOffersInkOnly() {
+        let held = folder([doc("4", "c", "c.pdf", "x", .needsAttention, question: inkOnlyQuestion)])
+        let card = build([held]).groups[0].attention!
+        #expect(!card.canLeave, "the card shows Ink it alone")
     }
 
     // MARK: modes
@@ -96,6 +108,7 @@ struct QueueViewModelTests {
         #expect(card.prompt == "Looks like an account number, but the scan is rough. Ink it?")
         #expect(card.questionID == "q-4")
         #expect(card.valueLength == 9)
+        #expect(card.canLeave, "a short number may be left")
         #expect(card.pageIndex == 2 && card.span == 120..<129, "the page crop knows where to look")
         #expect(card.footnote == "Handle is held until you answer. Agents asking for it are told \"pending\".")
         #expect(g.rows.map(\.kind) == [.ready, .ready, .ready], "the held file is the card, not a row")

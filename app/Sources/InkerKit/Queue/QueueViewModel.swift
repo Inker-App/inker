@@ -62,7 +62,8 @@ public enum QueueViewModel {
                                            filePath: d.path, location: q.location,
                                            prompt: q.prompt, contextBefore: q.contextBefore, valueLength: Int(q.valueLength),
                                            footnote: attentionFootnote, pageIndex: Int(q.pageIndex),
-                                           span: q.span.map { Int($0.start)..<Int($0.end) })
+                                           span: q.span.map { Int($0.start)..<Int($0.end) },
+                                           canLeave: q.canLeave)
                 continue
             }
             rows.append(row(d, mode: mode, style: style))

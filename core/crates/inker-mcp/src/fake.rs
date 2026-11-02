@@ -110,6 +110,11 @@ fn slug(name: &str) -> String {
 }
 
 impl FakeBackend {
+    /// Hold one more question, for tests of the answer path.
+    pub fn hold(&self, question: PendingReview) {
+        lock(&self.questions).push(question);
+    }
+
     /// The sample data set: a ready W-2, a held 1099, one still inking, and a folder.
     pub fn sample() -> Self {
         let w2 = FakeDoc {
@@ -162,6 +167,7 @@ impl FakeBackend {
             prompt: Some("Is this an account number?".into()),
             context_before: "Account number (see instructions):".into(),
             context_after: String::new(),
+            can_leave: true,
         };
         let inking = FakeDoc {
             entry: entry("1098-mortgage-2025", "1098", DocState::Inking, 0, false),
