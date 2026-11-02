@@ -645,10 +645,10 @@ public protocol CoreHandleProtocol: AnyObject, Sendable {
     func answer(questionId: String, answer: ReviewAnswer) throws 
     
     /**
-     * The ready board grouped by year. `tag` keeps only the documents under
-     * that chip; the chip counts and the total always cover everything.
+     * The ready board: the private folder as it is on disk, sub-folders
+     * first, then files, each in Finder order.
      */
-    func board(tag: String?)  -> Board
+    func board()  -> Board
     
     func clearListener() 
     
@@ -831,15 +831,14 @@ open func answer(questionId: String, answer: ReviewAnswer)throws   {try rustCall
 }
     
     /**
-     * The ready board grouped by year. `tag` keeps only the documents under
-     * that chip; the chip counts and the total always cover everything.
+     * The ready board: the private folder as it is on disk, sub-folders
+     * first, then files, each in Finder order.
      */
-open func board(tag: String?) -> Board  {
+open func board() -> Board  {
     return try!  FfiConverterTypeBoard_lift(try! rustCall() {
         uniffiCallStatus in
     uniffi_inker_ffi_fn_method_corehandle_board(
-            self.uniffiCloneHandle(),
-        FfiConverterOptionString.lower(tag),uniffiCallStatus
+            self.uniffiCloneHandle(),uniffiCallStatus
     )
 })
 }
@@ -1147,19 +1146,16 @@ public func FfiConverterTypeAgentReport_lower(_ value: AgentReport) -> RustBuffe
 
 
 /**
- * The ready board at any size. Mirrors `inker_core::find::Board`.
+ * The ready board: the private folder as it is on disk, every row under
+ * its original name with its handle. Mirrors `inker_core::find::Board`.
  */
 public struct Board: Equatable, Hashable {
     /**
-     * Newest year first, `UNDATED` last.
+     * The private folder itself: its sub-folders, then its files.
      */
-    public let groups: [YearGroup]
+    public let root: FolderItem
     /**
-     * Every tag with at least one file, most files first.
-     */
-    public let tags: [TagCount]
-    /**
-     * Every document, whatever its state and whatever chip is active.
+     * Every document, whatever its state.
      */
     public let total: UInt32
 
@@ -1167,16 +1163,12 @@ public struct Board: Equatable, Hashable {
     // declare one manually.
     public init(
         /**
-         * Newest year first, `UNDATED` last.
-         */groups: [YearGroup], 
+         * The private folder itself: its sub-folders, then its files.
+         */root: FolderItem, 
         /**
-         * Every tag with at least one file, most files first.
-         */tags: [TagCount], 
-        /**
-         * Every document, whatever its state and whatever chip is active.
+         * Every document, whatever its state.
          */total: UInt32) {
-        self.groups = groups
-        self.tags = tags
+        self.root = root
         self.total = total
     }
 
@@ -1196,15 +1188,13 @@ public struct FfiConverterTypeBoard: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Board {
         return
             try Board(
-                groups: FfiConverterSequenceTypeYearGroup.read(from: &buf), 
-                tags: FfiConverterSequenceTypeTagCount.read(from: &buf), 
+                root: FfiConverterTypeFolderItem.read(from: &buf), 
                 total: FfiConverterUInt32.read(from: &buf)
         )
     }
 
     public static func write(_ value: Board, into buf: inout [UInt8]) {
-        FfiConverterSequenceTypeYearGroup.write(value.groups, into: &buf)
-        FfiConverterSequenceTypeTagCount.write(value.tags, into: &buf)
+        FfiConverterTypeFolderItem.write(value.root, into: &buf)
         FfiConverterUInt32.write(value.total, into: &buf)
     }
 }
@@ -1341,7 +1331,7 @@ public struct DocItem: Equatable, Hashable {
      */
     public let question: ReviewQuestion?
     /**
-     * Tax year, once classified; the board groups by it.
+     * Tax year, once classified; the row shows it after the form type.
      */
     public let year: UInt16?
     /**
@@ -1350,7 +1340,8 @@ public struct DocItem: Equatable, Hashable {
      */
     public let payer: String?
     /**
-     * The chip it counts under ("Taxes"); `None` is under `All` only.
+     * The template's tag ("Taxes"); Find matches it. The board does not
+     * group by it.
      */
     public let tag: String?
     /**
@@ -1390,14 +1381,15 @@ public struct DocItem: Equatable, Hashable {
          * Set while `state == NeedsAttention`.
          */question: ReviewQuestion?, 
         /**
-         * Tax year, once classified; the board groups by it.
+         * Tax year, once classified; the row shows it after the form type.
          */year: UInt16?, 
         /**
          * "Acme Robotics": the employer, payer or lender a template attributed.
          * Shown in the popover only; a setting hides it.
          */payer: String?, 
         /**
-         * The chip it counts under ("Taxes"); `None` is under `All` only.
+         * The template's tag ("Taxes"); Find matches it. The board does not
+         * group by it.
          */tag: String?, 
         /**
          * When it was dropped.
@@ -1807,49 +1799,85 @@ public func FfiConverterTypeFindMatch_lower(_ value: FindMatch) -> RustBuffer {
 
 
 /**
- * A dropped folder on the board: a sub-group inside its year.
+ * A folder on the board, as it is on disk. The board's root is the private
+ * folder itself. UniFFI carries the recursion: a Swift struct may hold an
+ * array of its own type.
  */
 public struct FolderItem: Equatable, Hashable {
+    /**
+     * The dropped folder's id, or `dir:` and the relative path for a
+     * folder that is only a path segment (and for the root, `dir:`).
+     */
     public let id: String
     /**
-     * `folder-0412`
+     * `folder-0412` for a dropped folder; `None` for a folder that is only
+     * a path segment, which has no handle.
      */
-    public let codename: String
+    public let codename: String?
     /**
-     * The folder's original name, for line 1 of its row.
+     * The folder's name on disk, for line 1 of its row; empty for the root.
      */
     public let name: String
+    /**
+     * Relative to the private folder (`Taxes 2025/Receipts`), empty for
+     * the root. The shell remembers open folders by it.
+     */
+    public let relPath: String
     /**
      * Where it lives now, for Show in Finder.
      */
     public let path: String
+    /**
+     * Everything under it, at any depth; `total` is the file count.
+     */
     public let summary: FolderSummary
     /**
-     * Newest drop first.
+     * Sub-folders, in Finder order (case-insensitive, numbers as numbers).
      */
-    public let children: [DocItem]
+    public let folders: [FolderItem]
+    /**
+     * Files directly inside, after the sub-folders, in Finder order.
+     */
+    public let files: [DocItem]
 
     // Default memberwise initializers are never public by default, so we
     // declare one manually.
-    public init(id: String, 
+    public init(
         /**
-         * `folder-0412`
-         */codename: String, 
+         * The dropped folder's id, or `dir:` and the relative path for a
+         * folder that is only a path segment (and for the root, `dir:`).
+         */id: String, 
         /**
-         * The folder's original name, for line 1 of its row.
+         * `folder-0412` for a dropped folder; `None` for a folder that is only
+         * a path segment, which has no handle.
+         */codename: String?, 
+        /**
+         * The folder's name on disk, for line 1 of its row; empty for the root.
          */name: String, 
         /**
-         * Where it lives now, for Show in Finder.
-         */path: String, summary: FolderSummary, 
+         * Relative to the private folder (`Taxes 2025/Receipts`), empty for
+         * the root. The shell remembers open folders by it.
+         */relPath: String, 
         /**
-         * Newest drop first.
-         */children: [DocItem]) {
+         * Where it lives now, for Show in Finder.
+         */path: String, 
+        /**
+         * Everything under it, at any depth; `total` is the file count.
+         */summary: FolderSummary, 
+        /**
+         * Sub-folders, in Finder order (case-insensitive, numbers as numbers).
+         */folders: [FolderItem], 
+        /**
+         * Files directly inside, after the sub-folders, in Finder order.
+         */files: [DocItem]) {
         self.id = id
         self.codename = codename
         self.name = name
+        self.relPath = relPath
         self.path = path
         self.summary = summary
-        self.children = children
+        self.folders = folders
+        self.files = files
     }
 
     
@@ -1869,21 +1897,25 @@ public struct FfiConverterTypeFolderItem: FfiConverterRustBuffer {
         return
             try FolderItem(
                 id: FfiConverterString.read(from: &buf), 
-                codename: FfiConverterString.read(from: &buf), 
+                codename: FfiConverterOptionString.read(from: &buf), 
                 name: FfiConverterString.read(from: &buf), 
+                relPath: FfiConverterString.read(from: &buf), 
                 path: FfiConverterString.read(from: &buf), 
                 summary: FfiConverterTypeFolderSummary.read(from: &buf), 
-                children: FfiConverterSequenceTypeDocItem.read(from: &buf)
+                folders: FfiConverterSequenceTypeFolderItem.read(from: &buf), 
+                files: FfiConverterSequenceTypeDocItem.read(from: &buf)
         )
     }
 
     public static func write(_ value: FolderItem, into buf: inout [UInt8]) {
         FfiConverterString.write(value.id, into: &buf)
-        FfiConverterString.write(value.codename, into: &buf)
+        FfiConverterOptionString.write(value.codename, into: &buf)
         FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.relPath, into: &buf)
         FfiConverterString.write(value.path, into: &buf)
         FfiConverterTypeFolderSummary.write(value.summary, into: &buf)
-        FfiConverterSequenceTypeDocItem.write(value.children, into: &buf)
+        FfiConverterSequenceTypeFolderItem.write(value.folders, into: &buf)
+        FfiConverterSequenceTypeDocItem.write(value.files, into: &buf)
     }
 }
 
@@ -2461,63 +2493,6 @@ public func FfiConverterTypeStatus_lower(_ value: Status) -> RustBuffer {
 
 
 /**
- * `Taxes · 24` on a chip.
- */
-public struct TagCount: Equatable, Hashable {
-    public let tag: String
-    public let count: UInt32
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(tag: String, count: UInt32) {
-        self.tag = tag
-        self.count = count
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension TagCount: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeTagCount: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TagCount {
-        return
-            try TagCount(
-                tag: FfiConverterString.read(from: &buf), 
-                count: FfiConverterUInt32.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: TagCount, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.tag, into: &buf)
-        FfiConverterUInt32.write(value.count, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeTagCount_lift(_ buf: RustBuffer) throws -> TagCount {
-    return try FfiConverterTypeTagCount.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeTagCount_lower(_ value: TagCount) -> RustBuffer {
-    return FfiConverterTypeTagCount.lower(value)
-}
-
-
-/**
  * A byte range into a page's text, as the core indexed it. On macOS that
  * text came from PDFKit or Vision through the shell's own providers, so the
  * shell can map it back onto the page.
@@ -2573,67 +2548,6 @@ public func FfiConverterTypeTextSpan_lift(_ buf: RustBuffer) throws -> TextSpan 
 #endif
 public func FfiConverterTypeTextSpan_lower(_ value: TextSpan) -> RustBuffer {
     return FfiConverterTypeTextSpan.lower(value)
-}
-
-
-/**
- * `2025 · 14 FILES`; `year` is `None` for `UNDATED`.
- */
-public struct YearGroup: Equatable, Hashable {
-    public let year: UInt16?
-    public let files: UInt32
-    public let entries: [BoardEntry]
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(year: UInt16?, files: UInt32, entries: [BoardEntry]) {
-        self.year = year
-        self.files = files
-        self.entries = entries
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension YearGroup: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeYearGroup: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> YearGroup {
-        return
-            try YearGroup(
-                year: FfiConverterOptionUInt16.read(from: &buf), 
-                files: FfiConverterUInt32.read(from: &buf), 
-                entries: FfiConverterSequenceTypeBoardEntry.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: YearGroup, into buf: inout [UInt8]) {
-        FfiConverterOptionUInt16.write(value.year, into: &buf)
-        FfiConverterUInt32.write(value.files, into: &buf)
-        FfiConverterSequenceTypeBoardEntry.write(value.entries, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeYearGroup_lift(_ buf: RustBuffer) throws -> YearGroup {
-    return try FfiConverterTypeYearGroup.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeYearGroup_lower(_ value: YearGroup) -> RustBuffer {
-    return FfiConverterTypeYearGroup.lower(value)
 }
 
 
@@ -2723,8 +2637,8 @@ public func FfiConverterTypeAgentKind_lower(_ value: AgentKind) -> RustBuffer {
 
 
 /**
- * One row of a year group. A UniFFI enum cannot box its payload, so the
- * size difference between the variants is accepted.
+ * What `locate` found: a document or a dropped folder. A UniFFI enum
+ * cannot box its payload, so the size difference is accepted.
  */
 
 public enum BoardEntry: Equatable, Hashable {
@@ -4275,6 +4189,31 @@ fileprivate struct FfiConverterSequenceTypeFindMatch: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeFolderItem: FfiConverterRustBuffer {
+    typealias SwiftType = [FolderItem]
+
+    public static func write(_ value: [FolderItem], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeFolderItem.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [FolderItem] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [FolderItem]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeFolderItem.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePlanStep: FfiConverterRustBuffer {
     typealias SwiftType = [PlanStep]
 
@@ -4347,81 +4286,6 @@ fileprivate struct FfiConverterSequenceTypeReadEvent: FfiConverterRustBuffer {
     }
 }
 
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceTypeTagCount: FfiConverterRustBuffer {
-    typealias SwiftType = [TagCount]
-
-    public static func write(_ value: [TagCount], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeTagCount.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TagCount] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [TagCount]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeTagCount.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceTypeYearGroup: FfiConverterRustBuffer {
-    typealias SwiftType = [YearGroup]
-
-    public static func write(_ value: [YearGroup], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeYearGroup.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [YearGroup] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [YearGroup]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeYearGroup.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-fileprivate struct FfiConverterSequenceTypeBoardEntry: FfiConverterRustBuffer {
-    typealias SwiftType = [BoardEntry]
-
-    public static func write(_ value: [BoardEntry], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeBoardEntry.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [BoardEntry] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [BoardEntry]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeBoardEntry.read(from: &buf))
-        }
-        return seq
-    }
-}
-
 private enum InitializationResult {
     case ok
     case contractVersionMismatch
@@ -4443,7 +4307,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_inker_ffi_checksum_method_corehandle_answer() != 46053) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_inker_ffi_checksum_method_corehandle_board() != 58770) {
+    if (uniffi_inker_ffi_checksum_method_corehandle_board() != 30715) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_clear_listener() != 1314) {

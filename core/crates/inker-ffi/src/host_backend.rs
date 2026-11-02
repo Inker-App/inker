@@ -36,7 +36,7 @@ use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
 use crate::types::{
     Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary, Loader,
-    QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TagCount, TextSpan, YearGroup,
+    QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TextSpan,
 };
 
 /// How many agent reads the snapshot keeps for the footer.
@@ -453,11 +453,7 @@ impl Backend for HostBackend {
     }
 
     fn locate(&self, codename: &str) -> Option<BoardEntry> {
-        let snap = lock(&self.shared.snapshot);
-        snap.board
-            .entries()
-            .find(|e| e.codename() == codename)
-            .cloned()
+        lock(&self.shared.snapshot).board.locate(codename)
     }
 
     fn details(&self, id: &str) -> Result<DocDetails, FfiError> {
@@ -604,7 +600,11 @@ fn collect(core: &Core) -> inker_core::Result<Collected> {
     let (views, _) = core.doc_views()?;
     let by_id: std::collections::HashMap<DocumentId, &DocView> =
         views.iter().map(|v| (v.record.id, v)).collect();
-    let board = board_item(core.board(None)?, &pending);
+    let board = board_item(
+        core.board()?,
+        core.paths().private_folder.as_str(),
+        &pending,
+    );
     let mut groups: Vec<(Option<DateTime<Utc>>, QueueItem)> = Vec::new();
     let mut queued = Vec::new();
     for entry in core.list()? {
@@ -668,40 +668,18 @@ fn collect(core: &Core) -> inker_core::Result<Collected> {
 }
 
 /// The core's board as the shell sees it.
-fn board_item(b: find::Board, pending: &[inker_core::ReviewQuestion]) -> Board {
-    let entry = |e: find::BoardEntry| match e {
-        find::BoardEntry::Doc(v) => BoardEntry::Doc {
-            item: doc_item(&v, pending),
-        },
-        find::BoardEntry::Folder(f) => BoardEntry::Folder {
-            item: FolderItem {
-                id: f.record.id.0.to_string(),
-                codename: f.record.codename.as_str().to_string(),
-                name: f.name,
-                path: f.record.path.to_string(),
-                summary: f.summary.into(),
-                children: f.children.iter().map(|c| doc_item(c, pending)).collect(),
-            },
-        },
-    };
+fn board_item(
+    b: find::Board,
+    private_folder: &str,
+    pending: &[inker_core::ReviewQuestion],
+) -> Board {
     Board {
-        groups: b
-            .groups
-            .into_iter()
-            .map(|g| YearGroup {
-                year: g.year,
-                files: g.files,
-                entries: g.entries.into_iter().map(entry).collect(),
-            })
-            .collect(),
-        tags: b
-            .tags
-            .into_iter()
-            .map(|t| TagCount {
-                tag: t.tag,
-                count: t.count,
-            })
-            .collect(),
+        root: FolderItem::from_tree(
+            b.root,
+            private_folder,
+            &|v: DocView| doc_item(&v, pending),
+            &|f: &inker_core::FolderRecord| (f.id.0.to_string(), f.codename.as_str().to_string()),
+        ),
         total: b.total,
     }
 }

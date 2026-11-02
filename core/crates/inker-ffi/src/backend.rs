@@ -58,7 +58,7 @@ pub trait Backend: Send + Sync + fmt::Debug {
     fn recent_reads(&self, n: u32) -> Vec<ReadEvent>;
     /// Footer state.
     fn status(&self) -> Status;
-    /// The ready board, unfiltered; the handle applies a chip.
+    /// The ready board: the private folder as a tree.
     fn board(&self) -> Board;
     /// Find results, best first. Empty for an empty query.
     fn find(&self, query: &str) -> Vec<FindMatch>;

@@ -536,73 +536,59 @@ fn doctor_reports_lines() {
 // Finding documents: the board at scale, Find, locate, the row menu
 // ---------------------------------------------------------------------------
 
-use inker_ffi::{BoardEntry, MatchField};
+use inker_ffi::{Board, BoardEntry, FolderItem, MatchField};
 
-fn entry_names(g: &inker_ffi::YearGroup) -> Vec<String> {
-    g.entries
-        .iter()
-        .map(|e| match e {
-            BoardEntry::Doc { item } => item.original_name.clone(),
-            BoardEntry::Folder { item } => format!("folder:{}", item.name),
-        })
-        .collect()
+fn file_names(f: &FolderItem) -> Vec<String> {
+    f.files.iter().map(|d| d.original_name.clone()).collect()
 }
 
 #[test]
-fn preview_scale_is_thirty_files_in_three_years_with_two_folders_and_three_chips() {
+fn preview_scale_is_thirty_files_in_a_tree_of_the_private_folder() {
     let h = CoreHandle::preview(PreviewScenario::Scale);
-    let b = h.board(None);
+    let b = h.board();
     assert_eq!(b.total, 30);
-    let years: Vec<Option<u16>> = b.groups.iter().map(|g| g.year).collect();
-    assert_eq!(years, vec![Some(2025), Some(2024), Some(2023)]);
-    let files: Vec<u32> = b.groups.iter().map(|g| g.files).collect();
-    assert_eq!(files, vec![14, 11, 5]);
-    let tags: Vec<(String, u32)> = b.tags.iter().map(|t| (t.tag.clone(), t.count)).collect();
+    assert_eq!(b.root.summary.total, 30, "the root counts everything");
+    let folders: Vec<&str> = b.root.folders.iter().map(|f| f.name.as_str()).collect();
     assert_eq!(
-        tags,
-        vec![
-            ("Taxes".to_string(), 24),
-            ("Banking".to_string(), 5),
-            ("Legal".to_string(), 1)
-        ]
+        folders,
+        vec!["Taxes 2024", "Taxes 2025"],
+        "folders first, by name"
     );
-    let names = entry_names(&b.groups[0]);
+
+    let folder = &b.root.folders[1];
+    assert_eq!(folder.codename.as_deref(), Some("folder-0412"));
+    assert_eq!(folder.rel_path, "Taxes 2025");
+    assert_eq!(folder.path, "~/Private/Taxes 2025");
+    assert_eq!(folder.files.len(), 9);
+    assert_eq!(folder.summary.total, 9);
+    assert_eq!(folder.summary.inked, 41);
     assert!(
-        names.contains(&"folder:Taxes 2025".to_string()),
-        "{names:?}"
+        folder
+            .files
+            .iter()
+            .all(|c| c.folder_name.as_deref() == Some("Taxes 2025"))
     );
+    let sub: u32 = b.root.folders.iter().map(|f| f.summary.total).sum();
+    assert_eq!(b.root.files.len() as u32 + sub, 30);
+
+    // Files in Finder order: case-insensitive, numbers as numbers.
+    let names = file_names(&b.root);
+    let mut sorted = names.clone();
+    sorted.sort_by(|a, b| inker_core::find::finder_order(a, b));
+    assert_eq!(names, sorted);
     assert!(
         names.contains(&"W2_AcmeRobotics_2025.pdf".to_string()),
         "{names:?}"
     );
-    let folder = b.groups[0]
-        .entries
+
+    let w2 = b
+        .root
+        .files
         .iter()
-        .find_map(|e| match e {
-            BoardEntry::Folder { item } => Some(item),
-            BoardEntry::Doc { .. } => None,
-        })
-        .unwrap();
-    assert_eq!(folder.codename, "folder-0412");
-    assert_eq!(folder.children.len(), 9);
-    assert_eq!(folder.summary.inked, 41);
-    assert!(
-        folder
-            .children
-            .iter()
-            .all(|c| c.folder_name.as_deref() == Some("Taxes 2025"))
-    );
-    let w2 = b.groups[0]
-        .entries
-        .iter()
-        .find_map(|e| match e {
-            BoardEntry::Doc { item } if item.codename == "w2-2025-2" => Some(item),
-            _ => None,
-        })
+        .find(|d| d.codename == "w2-2025-2")
         .unwrap();
     assert_eq!(w2.original_name, "w2-bluefin.pdf");
     assert_eq!(w2.payer.as_deref(), Some("Bluefin Analytics"));
-    assert_eq!(w2.tag.as_deref(), Some("Taxes"));
     assert_eq!(w2.year, Some(2025));
     assert_eq!(w2.kind_label, "W-2");
     assert_eq!(w2.inked, 6);
@@ -616,21 +602,29 @@ fn preview_scale_is_thirty_files_in_three_years_with_two_folders_and_three_chips
 }
 
 #[test]
-fn a_chip_filters_the_board_but_the_counts_cover_everything() {
+fn the_board_is_only_the_tree_with_no_tags_or_year_groups() {
     let h = CoreHandle::preview(PreviewScenario::Scale);
-    let b = h.board(Some("Banking".into()));
-    assert_eq!(b.total, 30);
-    assert_eq!(b.tags.len(), 3);
-    let files: Vec<u32> = b.groups.iter().map(|g| g.files).collect();
-    assert_eq!(files, vec![1, 2, 2]);
-    assert!(b.groups.iter().all(|g| {
-        g.entries.iter().all(
-            |e| matches!(e, BoardEntry::Doc { item } if item.tag.as_deref() == Some("Banking")),
-        )
-    }));
-    let legal = h.board(Some("Legal".into()));
-    assert_eq!(legal.groups.len(), 1);
-    assert_eq!(legal.groups[0].year, Some(2023));
+    // Every field named, so a tag list or a year group cannot come back unseen.
+    let Board { root, total } = h.board();
+    assert_eq!(total, 30);
+    let FolderItem {
+        id,
+        codename,
+        name,
+        rel_path,
+        path,
+        summary,
+        folders,
+        files,
+    } = root;
+    assert_eq!(id, "dir:");
+    assert_eq!(codename, None, "the private folder itself has no handle");
+    assert_eq!(name, "");
+    assert_eq!(rel_path, "");
+    assert_eq!(path, "~/Private");
+    assert_eq!(summary.total, 30);
+    assert_eq!(folders.len(), 2);
+    assert!(!files.is_empty());
 }
 
 #[test]
@@ -681,10 +675,15 @@ fn locate_accepts_both_prefixes_and_only_handles_the_app_holds() {
         h.locate(" ink/w2-2025-2 \n".into()),
         Some(BoardEntry::Doc { .. })
     ));
-    assert!(matches!(
-        h.locate("🐙/folder-0412".into()),
-        Some(BoardEntry::Folder { .. })
-    ));
+    let Some(BoardEntry::Folder { item }) = h.locate("🐙/folder-0412".into()) else {
+        panic!("the dropped folder")
+    };
+    assert_eq!(item.rel_path, "Taxes 2025");
+    assert_eq!(item.files.len(), 9);
+    assert!(
+        matches!(h.locate("🐙/1099-nec-2025".into()), Some(BoardEntry::Doc { item }) if item.folder_name.as_deref() == Some("Taxes 2025")),
+        "a file inside a folder"
+    );
     assert!(
         h.locate("w2-2025-2".into()).is_none(),
         "a bare codename is not a handle"
@@ -733,7 +732,7 @@ fn forget_removes_a_file_or_a_folder_and_notifies() {
     };
     h.forget(item.id.clone()).unwrap();
     assert!(h.locate("🐙/w2-2025-2".into()).is_none());
-    assert_eq!(h.board(None).total, 29);
+    assert_eq!(h.board().total, 29);
     assert!(n.load(Ordering::SeqCst) >= 1);
     assert!(matches!(h.forget(item.id), Err(FfiError::NotFound { .. })));
 
@@ -742,7 +741,7 @@ fn forget_removes_a_file_or_a_folder_and_notifies() {
     };
     h.forget(item.id).unwrap();
     assert!(h.locate("🐙/folder-0412".into()).is_none());
-    assert_eq!(h.board(None).total, 20);
+    assert_eq!(h.board().total, 20);
 }
 
 #[test]

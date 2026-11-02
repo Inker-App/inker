@@ -216,14 +216,10 @@ impl CoreHandle {
         self.backend.status()
     }
 
-    /// The ready board grouped by year. `tag` keeps only the documents under
-    /// that chip; the chip counts and the total always cover everything.
-    pub fn board(&self, tag: Option<String>) -> Board {
-        let board = self.backend.board();
-        match tag {
-            Some(t) => board.filtered(&t),
-            None => board,
-        }
+    /// The ready board: the private folder as it is on disk, sub-folders
+    /// first, then files, each in Finder order.
+    pub fn board(&self) -> Board {
+        self.backend.board()
     }
 
     /// Find: best field first, then newest drop. The handle prefix is

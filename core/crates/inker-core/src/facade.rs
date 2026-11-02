@@ -804,19 +804,11 @@ impl Core {
         Ok((docs, folders))
     }
 
-    /// The ready board: every document grouped by year, newest first,
-    /// dropped folders as sub-groups, `UNDATED` last. `tag` keeps only the
-    /// documents under that chip; the chip counts always cover everything.
-    pub fn board(&self, tag: Option<&str>) -> Result<Board> {
+    /// The ready board: every document in a tree that mirrors the private
+    /// folder on disk. A folder that was dropped carries its record.
+    pub fn board(&self) -> Result<Board> {
         let (docs, folders) = self.doc_views()?;
-        let all = find::group(docs.clone(), &folders);
-        if tag.is_none() {
-            return Ok(all);
-        }
-        let mut filtered = find::group(find::with_tag(docs, tag), &folders);
-        filtered.tags = all.tags;
-        filtered.total = all.total;
-        Ok(filtered)
+        Ok(find::tree(docs, &folders, &self.paths.private_folder))
     }
 
     /// Find: one match per document, best field first, then newest drop.
@@ -1828,14 +1820,11 @@ mod tests {
             Some("[ORG_1]"),
             "the index holds the token, never the name"
         );
-        let board = f.core.board(None).unwrap();
+        let board = f.core.board().unwrap();
         assert_eq!(board.total, 1);
-        let find::BoardEntry::Doc(view) = &board.groups[0].entries[0] else {
-            panic!("a loose file")
-        };
+        let view = &board.root.files[0];
         assert_eq!(view.payer.as_deref(), Some("Acme Robotics"));
-        assert_eq!(board.groups[0].year, Some(2025));
-        assert_eq!(board.tags[0].tag, "Taxes");
+        assert_eq!(view.record.year, Some(2025), "the row carries its year");
 
         // A model guess at an org is not a payer.
         let text = "Paid by Northwind Bank 2025";
@@ -1860,18 +1849,26 @@ mod tests {
         let rec = f.core.document(ids[0]).unwrap();
         assert_eq!(rec.payer_token, None);
         assert_eq!(rec.tag, None);
-        let board = f.core.board(None).unwrap();
-        assert_eq!(board.groups.last().unwrap().year, None, "undated last");
+        let board = f.core.board().unwrap();
         assert_eq!(board.total, 2);
+        let note = board
+            .root
+            .files
+            .iter()
+            .find(|v| v.record.id == ids[0])
+            .unwrap();
+        assert_eq!(note.record.year, None, "no year, nothing to show");
     }
 
     #[test]
-    fn board_groups_a_dropped_folder_inside_its_year_and_a_chip_filters_it() {
+    fn the_board_mirrors_the_private_folder_with_dropped_folders_carrying_their_handles() {
         let f = fx();
         let dir = f.root.join("Downloads/Taxes 2024");
-        fs::create_dir_all(&dir).unwrap();
-        fs::write(dir.join("a.txt"), "a").unwrap();
+        fs::create_dir_all(dir.join("Receipts")).unwrap();
         fs::write(dir.join("b.txt"), "b").unwrap();
+        fs::write(dir.join("A.txt"), "a").unwrap();
+        fs::write(dir.join("Receipts/r10.txt"), "r").unwrap();
+        fs::write(dir.join("Receipts/r9.txt"), "r").unwrap();
         let ids = f
             .core
             .begin_ingest(std::slice::from_ref(&dir), IngestMode::Move)
@@ -1889,45 +1886,53 @@ mod tests {
                 .unwrap();
         }
         let loose = w2(&f, "statement.txt", 2025, Some("Banking"));
+        w2(&f, "Archive.txt", 2023, None);
 
-        let board = f.core.board(None).unwrap();
-        assert_eq!(board.total, 3);
-        assert_eq!(board.groups.len(), 2);
-        assert_eq!(board.groups[0].year, Some(2025));
-        assert!(
-            matches!(&board.groups[0].entries[0], find::BoardEntry::Doc(v) if v.record.id == loose)
-        );
-        assert_eq!(board.groups[1].year, Some(2024));
-        assert_eq!(board.groups[1].files, 2);
-        let find::BoardEntry::Folder(folder) = &board.groups[1].entries[0] else {
-            panic!("a folder")
-        };
-        assert_eq!(folder.name, "Taxes 2024");
-        assert_eq!(folder.children.len(), 2);
-        assert_eq!(
-            folder.children[0].folder_name.as_deref(),
-            Some("Taxes 2024")
-        );
-        assert_eq!(folder.summary.ready, 2);
-        assert_eq!(
-            board.tags,
-            vec![
-                find::TagCount {
-                    tag: "Taxes".into(),
-                    count: 2
-                },
-                find::TagCount {
-                    tag: "Banking".into(),
-                    count: 1
-                }
-            ]
-        );
+        // Every field of the board, so a tag list or year group cannot creep back.
+        let find::Board { root, total } = f.core.board().unwrap();
+        assert_eq!(total, 6);
+        assert_eq!(root.name, "");
+        assert_eq!(root.path, "");
+        assert!(root.folder.is_none());
 
-        let taxes = f.core.board(Some("Taxes")).unwrap();
-        assert_eq!(taxes.groups.len(), 1);
-        assert_eq!(taxes.groups[0].year, Some(2024));
-        assert_eq!(taxes.total, 3, "the chip counts cover everything");
-        assert_eq!(taxes.tags.len(), 2);
+        // Folders first, then files, each by name ignoring case.
+        let folders: Vec<&str> = root.folders.iter().map(|n| n.name.as_str()).collect();
+        assert_eq!(folders, vec!["Taxes 2024"]);
+        let files: Vec<&str> = root
+            .files
+            .iter()
+            .map(|v| v.record.original_name.as_str())
+            .collect();
+        assert_eq!(files, vec!["Archive.txt", "statement.txt"]);
+        assert_eq!(root.files[1].record.id, loose);
+
+        // The dropped folder: its handle and its summary.
+        let taxes = &root.folders[0];
+        assert_eq!(taxes.path, "Taxes 2024");
+        let rec = taxes.folder.as_ref().expect("a dropped folder");
+        assert!(rec.codename.as_str().starts_with("folder-"));
+        assert_eq!(taxes.summary(), f.core.folder_summary(rec.id).unwrap());
+        assert_eq!(taxes.file_count(), 4);
+        let files: Vec<&str> = taxes
+            .files
+            .iter()
+            .map(|v| v.record.original_name.as_str())
+            .collect();
+        assert_eq!(files, vec!["A.txt", "b.txt"]);
+        assert_eq!(taxes.files[0].folder_name.as_deref(), Some("Taxes 2024"));
+
+        // A sub-folder of the drop has a name and a count, and no handle.
+        let receipts = &taxes.folders[0];
+        assert_eq!(receipts.name, "Receipts");
+        assert_eq!(receipts.path, "Taxes 2024/Receipts");
+        assert!(receipts.folder.is_none());
+        assert_eq!(receipts.file_count(), 2);
+        let files: Vec<&str> = receipts
+            .files
+            .iter()
+            .map(|v| v.record.original_name.as_str())
+            .collect();
+        assert_eq!(files, vec!["r9.txt", "r10.txt"], "numbers sort as numbers");
     }
 
     #[test]
