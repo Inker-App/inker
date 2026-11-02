@@ -120,10 +120,15 @@ struct ReviewView {
     prompt: String,
     context_before: String,
     context_after: String,
+    /// `false` when only "ink" is accepted (an SSN-shaped value).
+    can_leave: bool,
 }
 
 /// Prompt shown when the core stored none.
 const DEFAULT_PROMPT: &str = "Ink it?";
+/// The answer to "leave" on a question that does not allow it.
+const LEAVE_REFUSED: &str =
+    "INKER will not leave an SSN-shaped value in the clear. Answer \"ink\".";
 
 impl From<&PendingReview> for ReviewView {
     fn from(q: &PendingReview) -> Self {
@@ -139,6 +144,7 @@ impl From<&PendingReview> for ReviewView {
                 .unwrap_or_else(|| DEFAULT_PROMPT.to_string()),
             context_before: q.context_before.clone(),
             context_after: q.context_after.clone(),
+            can_leave: q.can_leave,
         }
     }
 }
@@ -157,8 +163,9 @@ impl ReviewView {
             self.context_before.trim(),
             self.context_after.trim()
         );
+        let only = if self.can_leave { "" } else { " · ink only" };
         format!(
-            "#{} · {} · {} · {page}\n  {}\n  {}",
+            "#{} · {} · {} · {page}{only}\n  {}\n  {}",
             self.id,
             self.handle,
             self.kind,
@@ -583,6 +590,7 @@ impl InkerServer {
         };
         let answer = match a.answer {
             AnswerWord::Ink => ReviewAnswer::InkIt,
+            AnswerWord::Leave if !q.can_leave => return Ok(tool_error(LEAVE_REFUSED.to_string())),
             AnswerWord::Leave => ReviewAnswer::LeaveIt,
         };
         let state = match self.blocking(move |b| b.answer_review(id, answer)).await? {

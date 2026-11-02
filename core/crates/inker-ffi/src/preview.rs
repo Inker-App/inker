@@ -716,6 +716,7 @@ fn sample_question(doc_id: &str) -> ReviewQuestion {
         page_index: 2,
         context_before: "…wire to".into(),
         value_length: 9,
+        can_leave: true,
         span: Some(TextSpan {
             start: 120,
             end: 129,
