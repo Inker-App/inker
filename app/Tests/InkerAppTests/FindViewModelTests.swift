@@ -43,7 +43,7 @@ struct FindViewModelTests {
         #expect(m.rows.map(\.matched) == ["Acme", "w2-2025", "Acme", "W-2", "Wage and Tax", "Taxes 20", "Tax"])
         #expect(m.rows[0].row.name == "W2_AcmeRobotics_2025.pdf")
         #expect(m.rows[0].row.handle == "🐙/w2-2025")
-        #expect(m.rows[0].row.detail == "W-2 · Acme Robotics · 6 inked")
+        #expect(m.rows[0].row.detail == "W-2 · 2025 · Acme Robotics · 6 inked")
         #expect(m.rows[0].snippet == nil)
         #expect(m.rows[4].snippet == "Wage and Tax Statement · Employee [PERSON_1]")
         #expect(m.rows[4].snippetIsInkedText)

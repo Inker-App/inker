@@ -39,7 +39,7 @@ public enum FindViewModel {
 
     public static func build(matches: [FindMatch], total: Int, style: HandleStyle, showPayer: Bool) -> FindResultsModel {
         let rows = matches.map { m -> FindRowModel in
-            let row = BoardViewModel.docRow(m.doc, style: style, showPayer: showPayer, indented: false)
+            let row = BoardViewModel.docRow(m.doc, style: style, showPayer: showPayer, depth: 0)
             let highlight: FindRowModel.Highlight
             var snippet: String?
             var inked = false

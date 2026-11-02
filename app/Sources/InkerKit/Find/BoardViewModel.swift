@@ -1,9 +1,9 @@
 import Foundation
 import InkerCore
 
-/// Which Find hit a row carries, and the row menu. The ready board at any
-/// size (AppFindScale): year groups, folder sub-groups and tag chips. Pure:
-/// no AppKit, no FFI calls.
+/// The row menu, and the ready board as a tree of the private folder: folder
+/// rows open or collapsed, files under their original names. Pure: no
+/// AppKit, no FFI calls.
 
 /// The `···` menu and the right-click menu, for a file or a folder.
 public struct RowMenuModel: Equatable, Sendable {
@@ -38,30 +38,37 @@ public struct DocRowModel: Equatable, Sendable, Identifiable {
     public var name: String
     /// "🐙/w2-2025-2", in the clipboard style.
     public var handle: String
-    /// "W-2 · Bluefin Analytics · 6 inked", or the status note while in flight.
+    /// "W-2 · 2025 · Bluefin Analytics · 6 inked", or the status note while in flight.
     public var detail: String
     public var state: RowState
     public var copyEnabled: Bool
     public var path: String
-    /// Inside an open folder: 12 pt further in.
-    public var indented: Bool
+    /// How many folders down the tree: 0 at the root of the private folder.
+    public var depth: Int
     public var menu: RowMenuModel
+    /// 12 pt further in per level.
+    public var indent: CGFloat { CGFloat(depth) * BoardViewModel.indentStep }
 }
 
-/// A dropped folder: its name and count over the folder handle.
+/// A folder: chevron, name and count over the folder handle and summary.
+/// A folder that is only a path segment (not dropped as a folder) has no
+/// handle, so its row is the first line alone, with no Copy and no menu.
 public struct FolderRowModel: Equatable, Sendable, Identifiable {
     public var id: String
     public var name: String
-    /// "· 9 files"
+    /// "· 9 files", everything under it.
     public var countLine: String
-    public var handle: String
+    public var handle: String?
     /// "all ready · 41 inked"
     public var summary: String
     public var copyEnabled: Bool
     public var isOpen: Bool
-    public var children: [DocRowModel]
+    /// Inside the private folder; what the open state is remembered by.
+    public var relPath: String
+    public var depth: Int
     public var path: String
-    public var menu: RowMenuModel
+    public var menu: RowMenuModel?
+    public var indent: CGFloat { CGFloat(depth) * BoardViewModel.indentStep }
 }
 
 public enum BoardRow: Equatable, Sendable, Identifiable {
@@ -74,34 +81,24 @@ public enum BoardRow: Equatable, Sendable, Identifiable {
         case .folder(let f): return f.id
         }
     }
+
+    public var depth: Int {
+        switch self {
+        case .doc(let d): return d.depth
+        case .folder(let f): return f.depth
+        }
+    }
 }
 
-/// `2025 · 14 FILES` with its chevron.
-public struct YearGroupModel: Equatable, Sendable, Identifiable {
-    /// "2025" or "undated".
-    public var id: String
-    public var label: String
-    public var isOpen: Bool
-    public var rows: [BoardRow]
-}
-
-/// `All`, `Taxes · 24`.
-public struct ChipModel: Equatable, Sendable, Identifiable {
-    public var id: String
-    public var title: String
-    /// nil for `All`.
-    public var tag: String?
-    public var isActive: Bool
-}
-
+/// The ready board: the rows of the private folder's tree that show, in
+/// order, with the contents of collapsed folders left out.
 public struct BoardModel: Equatable, Sendable {
-    public var groups: [YearGroupModel]
-    public var chips: [ChipModel]
+    public var rows: [BoardRow]
     /// The Find field only appears above eight files.
     public var showsFind: Bool
     public var total: Int
 
-    public static let empty = BoardModel(groups: [], chips: [], showsFind: false, total: 0)
+    public static let empty = BoardModel(rows: [], showsFind: false, total: 0)
 }
 
 public extension BoardEntry {
@@ -117,38 +114,50 @@ public extension BoardEntry {
 public enum BoardViewModel {
     /// Files above this count get the Find field.
     public static let findThreshold = 8
+    /// How far in each level of the tree sits.
+    public static let indentStep: CGFloat = 12
 
-    public static func yearID(_ year: UInt16?) -> String {
-        year.map { String($0) } ?? "undated"
+    /// The rows in tree order: each folder's sub-folders, then its files.
+    /// `isFolderOpen` takes a folder's path inside the private folder.
+    public static func build(board: Board, style: HandleStyle, showPayer: Bool,
+                             isFolderOpen: (String) -> Bool) -> BoardModel {
+        var rows: [BoardRow] = []
+        appendContents(of: board.root, depth: 0, style: style, showPayer: showPayer, isFolderOpen: isFolderOpen, into: &rows)
+        return BoardModel(rows: rows, showsFind: Int(board.total) > findThreshold, total: Int(board.total))
     }
 
-    public static func build(board: Board, style: HandleStyle, showPayer: Bool, activeTag: String?,
-                             isYearOpen: (String) -> Bool, isFolderOpen: (String) -> Bool) -> BoardModel {
-        let groups = board.groups.map { g -> YearGroupModel in
-            let id = yearID(g.year)
-            let head = g.year.map { String($0) } ?? "UNDATED"
-            let files = g.files == 1 ? "1 FILE" : "\(g.files) FILES"
-            let rows = g.entries.map { entry -> BoardRow in
-                switch entry {
-                case .doc(let item):
-                    return .doc(docRow(item, style: style, showPayer: showPayer, indented: false))
-                case .folder(let item):
-                    return .folder(folderRow(item, style: style, showPayer: showPayer, isOpen: isFolderOpen(item.id)))
-                }
-            }
-            return YearGroupModel(id: id, label: "\(head) · \(files)", isOpen: isYearOpen(id), rows: rows)
-        }
-        var chips: [ChipModel] = []
-        if !board.tags.isEmpty {
-            chips.append(ChipModel(id: "all", title: "All", tag: nil, isActive: activeTag == nil))
-            for t in board.tags {
-                chips.append(ChipModel(id: t.tag, title: "\(t.tag) · \(t.count)", tag: t.tag, isActive: activeTag == t.tag))
+    private static func appendContents(of folder: FolderItem, depth: Int, style: HandleStyle, showPayer: Bool,
+                                       isFolderOpen: (String) -> Bool, into rows: inout [BoardRow]) {
+        for sub in folder.folders {
+            let open = isFolderOpen(sub.relPath)
+            rows.append(.folder(folderRow(sub, style: style, depth: depth, isOpen: open)))
+            if open {
+                appendContents(of: sub, depth: depth + 1, style: style, showPayer: showPayer,
+                               isFolderOpen: isFolderOpen, into: &rows)
             }
         }
-        return BoardModel(groups: groups, chips: chips, showsFind: Int(board.total) > findThreshold, total: Int(board.total))
+        for file in folder.files {
+            rows.append(.doc(docRow(file, style: style, showPayer: showPayer, depth: depth)))
+        }
     }
 
-    public static func docRow(_ d: DocItem, style: HandleStyle, showPayer: Bool, indented: Bool) -> DocRowModel {
+    /// The paths of the folders to open so the row `id` shows: every folder
+    /// above it and, for a folder, the folder itself. Nil when the board
+    /// does not hold it.
+    public static func pathsToOpen(for id: String, in board: Board) -> [String]? {
+        pathsToOpen(for: id, in: board.root)
+    }
+
+    private static func pathsToOpen(for id: String, in folder: FolderItem) -> [String]? {
+        if folder.files.contains(where: { $0.id == id }) { return [] }
+        for sub in folder.folders {
+            if sub.id == id { return [sub.relPath] }
+            if let inner = pathsToOpen(for: id, in: sub) { return [sub.relPath] + inner }
+        }
+        return nil
+    }
+
+    public static func docRow(_ d: DocItem, style: HandleStyle, showPayer: Bool, depth: Int) -> DocRowModel {
         let handle = HandleFormatter.render(codename: d.codename, style: style) ?? d.codename
         let menu = RowMenuModel(codename: d.codename, isFolder: false)
         let state: RowState
@@ -166,12 +175,16 @@ public enum BoardViewModel {
             detail = processingDetail(d)
         }
         return DocRowModel(id: d.id, name: d.originalName, handle: handle, detail: detail, state: state,
-                           copyEnabled: d.state == .ready, path: d.path, indented: indented, menu: menu)
+                           copyEnabled: d.state == .ready, path: d.path, depth: depth, menu: menu)
     }
 
-    /// "W-2 · Acme Robotics · 6 inked"; the payer only when shown and known.
+    /// "W-2 · 2025 · Acme Robotics · 6 inked"; the year when known, the
+    /// payer only when shown and known.
     public static func readyDetail(_ d: DocItem, showPayer: Bool) -> String {
         var parts = [d.kindLabel]
+        if let year = d.year {
+            parts.append(String(year))
+        }
         if showPayer, let payer = d.payer, !payer.isEmpty {
             parts.append(payer)
         }
@@ -189,13 +202,13 @@ public enum BoardViewModel {
         return note.isEmpty ? d.kindLabel : "\(d.kindLabel) · \(note)"
     }
 
-    static func folderRow(_ f: FolderItem, style: HandleStyle, showPayer: Bool, isOpen: Bool) -> FolderRowModel {
-        let handle = HandleFormatter.render(codename: f.codename, style: style) ?? f.codename
-        let children = f.children.map { docRow($0, style: style, showPayer: showPayer, indented: true) }
+    static func folderRow(_ f: FolderItem, style: HandleStyle, depth: Int, isOpen: Bool) -> FolderRowModel {
+        let handle = f.codename.map { HandleFormatter.render(codename: $0, style: style) ?? $0 }
         let count = f.summary.total == 1 ? "· 1 file" : "· \(f.summary.total) files"
         return FolderRowModel(id: f.id, name: f.name, countLine: count, handle: handle,
-                              summary: SummaryLine.folderDetail(f.summary), copyEnabled: f.summary.ready > 0,
-                              isOpen: isOpen, children: children, path: f.path,
-                              menu: RowMenuModel(codename: f.codename, isFolder: true))
+                              summary: SummaryLine.folderDetail(f.summary),
+                              copyEnabled: handle != nil && f.summary.ready > 0, isOpen: isOpen,
+                              relPath: f.relPath, depth: depth, path: f.path,
+                              menu: f.codename.map { RowMenuModel(codename: $0, isFolder: true) })
     }
 }

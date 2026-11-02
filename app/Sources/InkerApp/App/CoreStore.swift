@@ -28,12 +28,11 @@ final class CoreStore: ObservableObject {
     /// Which screen the popover shows: a board, an onboarding step, settings.
     @Published private(set) var flow: ScreenFlow
 
-    // The ready board at scale (find handoff). `board` is rebuilt with the
-    // queue; `results` replaces the groups while a query is typed.
+    // The ready board: the private folder as a tree. `board` is rebuilt with
+    // the queue; `results` replaces the tree while a query is typed.
     @Published private(set) var board: BoardModel = .empty
     @Published private(set) var results: FindResultsModel?
     @Published private(set) var query = ""
-    @Published private(set) var activeTag: String?
     /// The row whose details are open, and the one the ink pulse plays behind.
     @Published private(set) var expandedID: String?
     @Published private(set) var expandedDetails: [DetailLine] = []
@@ -58,8 +57,7 @@ final class CoreStore: ObservableObject {
     weak var presenter: CorePresenter?
     private(set) var settings: AppSettings
     private var dropPreferences: DropPreferences
-    private var yearMemory: YearGroupMemory
-    private var openFolders: Set<String> = []
+    private var folderMemory: FolderMemory
     private var findGeneration = 0
     /// Previews and snapshots run Find and details on the calling thread:
     /// the preview backend has no lock to wait on, and a snapshot renders at once.
@@ -77,7 +75,7 @@ final class CoreStore: ObservableObject {
         self.home = home
         settings = initialSettings
         dropPreferences = DropPreferences(store: defaults)
-        yearMemory = YearGroupMemory(store: defaults)
+        folderMemory = FolderMemory(store: defaults)
         flow = ScreenFlow(onboarding: OnboardingState(store: defaults), forceOnboarding: forceOnboarding)
         model = QueueViewModel.build(queue: [], status: handle.status(), reads: [], lastDrop: nil,
                                      style: initialSettings.handleStyle, now: Date())
@@ -190,30 +188,16 @@ final class CoreStore: ObservableObject {
     // MARK: The ready board
 
     private func rebuildBoard() {
-        let raw = handle.board(tag: activeTag)
-        let newest = raw.groups.first.map { BoardViewModel.yearID($0.year) }
-        let memory = yearMemory
-        let folders = openFolders
-        board = BoardViewModel.build(board: raw, style: settings.handleStyle, showPayer: settings.showsPayer,
-                                     activeTag: activeTag, isYearOpen: { memory.isOpen($0, newest: newest) },
-                                     isFolderOpen: { folders.contains($0) })
+        let memory = folderMemory
+        board = BoardViewModel.build(board: handle.board(), style: settings.handleStyle, showPayer: settings.showsPayer,
+                                     isFolderOpen: { memory.isOpen($0) })
         if results != nil { runFind() }
         if let id = expandedID { loadDetails(id) }
     }
 
-    func setTag(_ tag: String?) {
-        activeTag = tag
-        rebuildBoard()
-    }
-
-    func toggleYear(_ id: String) {
-        let open = board.groups.first { $0.id == id }?.isOpen ?? false
-        yearMemory.set(id, open: !open)
-        rebuildBoard()
-    }
-
-    func toggleFolder(_ id: String) {
-        if openFolders.contains(id) { openFolders.remove(id) } else { openFolders.insert(id) }
+    /// A folder row's chevron: open or collapse it, remembered by its path.
+    func toggleFolder(_ path: String) {
+        folderMemory.set(path, open: !folderMemory.isOpen(path))
         rebuildBoard()
     }
 
@@ -262,37 +246,26 @@ final class CoreStore: ObservableObject {
     }
 
     /// The footer's last-read button, the clipboard chip and a pasted handle
-    /// all land here: clear the search, open the group, expand and pulse.
+    /// all land here: clear the search, open every folder above the row,
+    /// expand and pulse.
     func locate(handle text: String) {
         guard let entry = handle.locate(handle: text) else { return }
         clipboardHandle = nil
         query = ""
         results = nil
-        activeTag = nil
+        let id = entry.entryID
+        for path in BoardViewModel.pathsToOpen(for: id, in: handle.board()) ?? [] {
+            folderMemory.set(path, open: true)
+        }
+        rebuildBoard()
         switch entry {
-        case .doc(let item):
-            yearMemory.set(BoardViewModel.yearID(item.year), open: true)
-            if let folder = folderID(containing: item.id) { openFolders.insert(folder) }
-            rebuildBoard()
-            expand(item.id, pulse: true)
-        case .folder(let item):
-            let year = handle.board(tag: nil).groups.first { g in g.entries.contains { $0.entryID == item.id } }?.year
-            yearMemory.set(BoardViewModel.yearID(year), open: true)
-            openFolders.insert(item.id)
-            rebuildBoard()
+        case .doc:
+            expand(id, pulse: true)
+        case .folder:
             expandedID = nil
-            pulse = (item.id, Date())
-            scrollTarget = item.id
+            pulse = (id, Date())
+            scrollTarget = id
         }
-    }
-
-    private func folderID(containing docID: String) -> String? {
-        for g in handle.board(tag: nil).groups {
-            for case .folder(let f) in g.entries where f.children.contains(where: { $0.id == docID }) {
-                return f.id
-            }
-        }
-        return nil
     }
 
     /// Open or close a row's details. Only one row is open at a time.
@@ -345,6 +318,8 @@ final class CoreStore: ObservableObject {
     }
 
     func openMenu(id: String) {
+        // A folder that is only a path segment has no handle and no menu.
+        guard menuTarget(for: id) != nil else { return }
         if openMenuID != id { confirmingForgetID = nil }
         openMenuID = id
     }
