@@ -50,6 +50,20 @@ make run    # make app, then open build/INKER.app
 ```
 
 `swift build` and `swift run INKER` work too; the app runs as a menu bar item either way.
+
+### The disk image
+
+```sh
+pip install dmgbuild   # once
+make dmg               # build/INKER.dmg: INKER.app beside an Applications link
+```
+
+The Finder window of the image is a picture plus pinned icon positions, so both come from
+one place: `scripts/make-dmg-background.py` draws `dmg/background.png` (and `@2x`), the
+halftone octopus below the icon row with a dotted arrow between them, and writes
+`dmg/layout.json`, which `dmg/settings.py` feeds to dmgbuild. Re-run the script after
+changing the layout and commit the PNGs; `scripts/test_make_dmg_background.py` checks the
+committed images still match. The release workflow calls `scripts/make-dmg.sh` the same way.
 Open `Package.swift` in Xcode for SwiftUI previews (`Sources/InkerApp/Previews.swift`, one per
 popover screen) and Instruments.
 

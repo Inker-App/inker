@@ -24,3 +24,6 @@ node_modules/
 !samples/synthetic/**/*.pdf
 !samples/synthetic/**/*.png
 !docs/**/*.png
+!app/Resources/*.png
+!app/dmg/*.png
+__pycache__/

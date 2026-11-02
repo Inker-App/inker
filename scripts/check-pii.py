@@ -194,7 +194,7 @@ DOCUMENT_EXTS = frozenset({".pdf", ".heic", ".jpg", ".jpeg", ".png"})
 CONTENT_ALLOWED_PREFIXES = ("samples/synthetic/", "docs/handoff/")
 DOCUMENT_ALLOWED_PREFIXES = ("samples/synthetic/", "docs/")
 # Artwork the app ships (icons), images only; a PDF here is still refused.
-ARTWORK_ALLOWED_PREFIXES = ("app/Resources/",)
+ARTWORK_ALLOWED_PREFIXES = ("app/Resources/", "app/dmg/")
 ARTWORK_EXTS = frozenset({".png"})
 FIXTURE_DIRS = frozenset({"fixtures", "testdata", "test-fixtures"})
 

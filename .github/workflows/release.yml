@@ -202,8 +202,10 @@ jobs:
           ls -la dist/out
 
       # A disk image: open it and drag INKER.app to Applications, no unzip.
-      # The app inside is the already stapled one. When signing for real the
-      # image is signed and notarized too, so it opens offline.
+      # dmgbuild lays the window out (app/dmg: the drawn background, pinned
+      # icon positions, the volume icon). The app inside is the already
+      # stapled one. When signing for real the image is signed and notarized
+      # too, so it opens offline.
       - name: Disk image
         env:
           NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
@@ -211,11 +213,10 @@ jobs:
           NOTARY_KEY_P8: ${{ secrets.NOTARY_KEY_P8 }}
         run: |
           DMG="dist/out/INKER-${{ steps.v.outputs.version }}-macos.dmg"
-          STAGE="$RUNNER_TEMP/dmg"
-          rm -rf "$STAGE" && mkdir -p "$STAGE"
-          ditto app/build/INKER.app "$STAGE/INKER.app"
-          ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname INKER -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov "$DMG"
+          python3 -m venv "$RUNNER_TEMP/dmgbuild"
+          "$RUNNER_TEMP/dmgbuild/bin/pip" install --quiet dmgbuild
+          export PATH="$RUNNER_TEMP/dmgbuild/bin:$PATH"
+          app/scripts/make-dmg.sh app/build/INKER.app "$DMG" app/build/AppIcon.icns
           if [ "${{ steps.sign.outputs.real }}" = "true" ]; then
             codesign --force --timestamp --sign "${{ steps.sign.outputs.identity }}" "$DMG"
             if [ -n "$NOTARY_KEY_P8" ] && [ -n "$NOTARY_KEY_ID" ] && [ -n "$NOTARY_ISSUER_ID" ]; then

@@ -173,6 +173,7 @@ class Paths(WithoutPublishedSamples):
         self.assertEqual(cp.check_file("docs/screenshot.png", b"\x89PNG"), [])
         # The app icon is artwork, not a document.
         self.assertEqual(cp.check_file("app/Resources/AppIcon-1024.png", b"\x89PNG"), [])
+        self.assertEqual(cp.check_file("app/dmg/background@2x.png", b"\x89PNG"), [])
         self.assertEqual(kinds(cp.check_file("app/Resources/scan.pdf", b"%PDF")), ["document-file"])
 
     def test_fixture_dirs_still_reject_documents(self):
