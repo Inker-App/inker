@@ -36,6 +36,8 @@ core="$(cd "$app/../core" && pwd)"
 out_swift="$app/Sources/InkerCore"
 out_headers="$out_swift/include"
 xcframework="$app/Frameworks/InkerCoreFFI.xcframework"
+# Cargo's output, wherever CARGO_TARGET_DIR puts it.
+target_dir="${CARGO_TARGET_DIR:-$core/target}"
 
 export PATH="$HOME/.cargo/bin:$PATH"
 cargo_profile_flag=()
@@ -54,8 +56,8 @@ if [ "$bindings_only" = 1 ]; then
   targets=()
   (cd "$core" && cargo build -p inker-ffi "${cargo_profile_flag[@]}")
   case "$host_os" in
-    Darwin) lib_for_bindgen="$core/target/$profile/libinker_ffi.dylib" ;;
-    *) lib_for_bindgen="$core/target/$profile/libinker_ffi.so" ;;
+    Darwin) lib_for_bindgen="$target_dir/$profile/libinker_ffi.dylib" ;;
+    *) lib_for_bindgen="$target_dir/$profile/libinker_ffi.so" ;;
   esac
 else
   targets=(aarch64-apple-darwin)
@@ -67,7 +69,7 @@ else
     fi
     (cd "$core" && cargo build -p inker-ffi "${cargo_profile_flag[@]}" --target "$t")
   done
-  lib_for_bindgen="$core/target/${targets[0]}/$profile/libinker_ffi.dylib"
+  lib_for_bindgen="$target_dir/${targets[0]}/$profile/libinker_ffi.dylib"
 fi
 
 # Bindings. The bindgen binary lives in inker-ffi itself, so its version always
@@ -85,14 +87,14 @@ fi
 
 # Static library: one arch, or a fat one.
 if [ "${#targets[@]}" -gt 1 ]; then
-  fat_dir="$core/target/universal-apple-darwin/$profile"
+  fat_dir="$target_dir/universal-apple-darwin/$profile"
   mkdir -p "$fat_dir"
   libs=()
-  for t in "${targets[@]}"; do libs+=("$core/target/$t/$profile/libinker_ffi.a"); done
+  for t in "${targets[@]}"; do libs+=("$target_dir/$t/$profile/libinker_ffi.a"); done
   lipo -create "${libs[@]}" -output "$fat_dir/libinker_ffi.a"
   static_lib="$fat_dir/libinker_ffi.a"
 else
-  static_lib="$core/target/${targets[0]}/$profile/libinker_ffi.a"
+  static_lib="$target_dir/${targets[0]}/$profile/libinker_ffi.a"
 fi
 
 # The headers dir holds InkerCoreFFI.h and module.modulemap; xcodebuild copies

@@ -369,6 +369,36 @@ fn tool_descriptions_carry_the_handle_rule_for_clients_that_ignore_instructions(
     );
 }
 
+/// Claude Desktop defers connector tools behind tool search, which matches
+/// on tool names and descriptions. The words a model would search for when
+/// it meets a pasted handle must sit in the first sentence of every tool.
+const DISCOVERY_CUES: &[&str] = &["🐙/", "ink/", "handle", "INKER", "private document"];
+
+fn first_sentence(text: &str) -> &str {
+    text.split(". ").next().unwrap_or(text)
+}
+
+#[test]
+fn every_tool_description_opens_with_the_discovery_cues() {
+    for tool in inker_mcp::tool_definitions(inker_mcp::ServerOptions::default()) {
+        let desc = tool.description.as_deref().unwrap_or_default().to_string();
+        let head = first_sentence(&desc);
+        for cue in DISCOVERY_CUES {
+            assert!(head.contains(cue), "{}: {cue:?} not in {head:?}", tool.name);
+        }
+    }
+}
+
+#[test]
+fn instructions_open_with_the_discovery_cues() {
+    let head = first_sentence(inker_mcp::instructions());
+    for cue in DISCOVERY_CUES {
+        assert!(head.contains(cue), "{cue:?} not in {head:?}");
+    }
+    assert!(head.contains("`resolve`"), "{head}");
+    assert!(head.contains("never from disk"), "{head}");
+}
+
 /// The INKER-only tools the CLI uses. Never listed, and served only to a
 /// connection whose `initialize` named the client `inker-cli`.
 const HIDDEN: &[&str] = &["inker/review", "inker/answer", "inker/status"];

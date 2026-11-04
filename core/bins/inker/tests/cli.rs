@@ -130,6 +130,17 @@ fn instructions_prints_the_server_instructions() {
 }
 
 #[test]
+fn skill_prints_the_claude_skill() {
+    let s = Sandbox::new();
+    s.cmd()
+        .arg("skill")
+        .assert()
+        .success()
+        .stdout(format!("{}\n", inker_mcp::skill()));
+    assert!(inker_mcp::skill().starts_with("---\nname: inker\n"));
+}
+
+#[test]
 fn serve_fake_hosts_the_socket_and_stops_on_sigterm() {
     let s = Sandbox::new();
     let mut child = s.serve(&[]);

@@ -70,7 +70,7 @@ popover screen) and Instruments.
 ### One popover, no windows
 
 Everything INKER shows is a screen of the 360x500 popover: the four boards, onboarding steps
-1 to 3, settings, and the move-or-copy card. `ScreenFlow` (InkerKit, covered by
+1 to 3, settings, a document's inked preview, and the move-or-copy card. `ScreenFlow` (InkerKit, covered by
 `ScreenFlowTests`) decides which; `CoreStore.flow` publishes it and `PopoverRootView` draws it
 between the header and the footer.
 
@@ -84,6 +84,11 @@ between the header and the footer.
 - A pending drop draws the card in front of the current screen. The screen stays underneath,
   so an onboarding step keeps what was typed into it, and it comes back once the card is
   answered.
+- "Preview inked" in a document row's menu asks the core for `inkedView` off the main thread
+  and shows the document as an agent reads it (`resolve`'s pages, tokens drawn as chips,
+  form fields last); Back returns to the board. A held document says "Answer the card
+  first", one still in flight "Still inking". Folders have no such item. Placeholder
+  layout: there is no board for this screen yet.
 - The folder chooser in step 1 is the system `NSOpenPanel`; the popover is pinned
   (`.applicationDefined`) while it is up so it is still there afterwards.
 
@@ -94,7 +99,7 @@ build/INKER.app/Contents/MacOS/INKER --snapshots build/snapshots
 ```
 
 renders each screen with SwiftUI's `ImageRenderer` at 2x into PNGs (`popover-empty`,
-`-processing`, `-attention`, `-ready`, `onboarding-1` to `-3`, `settings`, `drop-card`) and
+`-processing`, `-attention`, `-ready`, `-inked`, `onboarding-1` to `-3`, `settings`, `drop-card`) and
 exits 0, without starting `NSApplication` or opening a window. The stores run on the Rust
 `PreviewBackend` (as `INKER_PREVIEW` does) with the clock frozen at `RenderClock.stillTime`.
 `ImageRenderer` cannot draw AppKit-backed views, so under the `snapshotMode` environment
@@ -127,7 +132,9 @@ cover the pure logic in the `InkerKit` target, which has no AppKit dependency:
 - handles, drop collection and the drop dialog copy, folder-picker warnings, agent rows,
   preferences, relative time, copy feedback and the queue view-model;
 - the popover's screen flow (first launch, steps, Done, settings, run setup again, the drop
-  card in front of any screen);
+  card in front of any screen, the inked preview and Back);
+- the inked preview's model (`InkedPreviewModelTests`): runs cut at byte spans, page
+  dividers, form fields and the empty states;
 - the providers' pure logic (`ProviderText`, `VaultKey`).
 
 The tests were written before the code they cover, but they have **not been compiled or run

@@ -265,3 +265,100 @@ fn untemplated_tax_forms() {
     let e = doc(&[("Attach Form 1099-R to your return.", TextOrigin::TextLayer)]);
     assert_eq!(kind(&classify::classify(&e, None, &[])), "unknown");
 }
+
+// Letters and agreements (2026-11-04). Claude Desktop reported an
+// acquisition's cancellation agreement filed as a receipt, because its text
+// "acknowledges receipt".
+
+fn sample_doc(stem: &str) -> Extracted {
+    let text = std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../samples/synthetic")
+            .join(format!("{stem}.txt")),
+    )
+    .unwrap();
+    let pages: Vec<(&str, TextOrigin)> = text
+        .split('\u{c}')
+        .map(|p| (p, TextOrigin::TextLayer))
+        .collect();
+    doc(&pages)
+}
+
+#[test]
+fn the_word_receipt_alone_is_no_receipt() {
+    for t in [
+        "The Holder acknowledges receipt of a copy of the Merger Agreement.",
+        "Notices are deemed given on receipt of notice by the party.",
+        "Please keep this receipt.\nThe total due is shown on your invoice.",
+        "Total compensation was discussed at length.\nReceipt of this letter is confirmed.",
+    ] {
+        let e = doc(&[(t, TextOrigin::TextLayer)]);
+        assert_ne!(kind(&classify::classify(&e, None, &[])), "receipt", "{t}");
+    }
+}
+
+#[test]
+fn the_receipt_sample_is_still_a_receipt() {
+    let e = sample_doc("receipt-cornerstone-2025-03-09");
+    assert_eq!(kind(&classify::classify(&e, None, &[])), "receipt");
+    // A total and a card tender, no subtotal and no heading.
+    let e = doc(&[(
+        "Corner Cafe\nLatte 4.50\nTOTAL 4.50\nVISA ****4242 4.50\n",
+        TextOrigin::TextLayer,
+    )]);
+    assert_eq!(kind(&classify::classify(&e, None, &[])), "receipt");
+}
+
+#[test]
+fn a_letter_has_a_salutation_and_a_closing() {
+    let e = sample_doc("letter-brackenridge-2026-10-14");
+    let c = classify::classify(&e, None, &[]);
+    assert_eq!(kind(&c), classify::LETTER);
+    assert_eq!(c.year, Some(2026));
+    for t in [
+        "Dear Odalys Fenwick,\n\nThank you.\n\nSincerely,\n\nThaddeus Wrenfield\n",
+        "To Whom It May Concern:\n\nPlease see below.\n\nBest regards,\nImelda Corvane\n",
+        "Dear Customer,\nYour order shipped.\nRegards,\nThe Team\n",
+    ] {
+        let e = doc(&[(t, TextOrigin::TextLayer)]);
+        assert_eq!(kind(&classify::classify(&e, None, &[])), "letter", "{t}");
+    }
+    // A salutation with no closing, or a closing with no salutation, is not
+    // enough.
+    for t in [
+        "Dear Odalys,\nSee you soon.\n",
+        "Notes\nSincerely,\nThaddeus\n",
+    ] {
+        let e = doc(&[(t, TextOrigin::TextLayer)]);
+        assert_eq!(kind(&classify::classify(&e, None, &[])), "unknown", "{t}");
+    }
+}
+
+#[test]
+fn an_agreement_reads_like_one() {
+    let e = sample_doc("agreement-kestrel-2026-09-30");
+    let c = classify::classify(&e, None, &[]);
+    assert_eq!(kind(&c), classify::AGREEMENT);
+    assert_eq!(c.tag.as_deref(), Some("Legal"));
+    for t in [
+        "SERVICES AGREEMENT\nWHEREAS, the parties wish to...\nIN WITNESS WHEREOF, the parties have signed.",
+        "This Agreement is governed by the laws of Oregon (Governing Law). The parties hereby agree.",
+        "LEASE AGREEMENT\nWITNESSETH: the Landlord hereby leases to the Tenant...",
+    ] {
+        let e = doc(&[(t, TextOrigin::TextLayer)]);
+        assert_eq!(kind(&classify::classify(&e, None, &[])), "agreement", "{t}");
+    }
+    // Mentioning an agreement is not being one.
+    let e = doc(&[(
+        "Our agreement with you is described in the enclosed terms.",
+        TextOrigin::TextLayer,
+    )]);
+    assert_eq!(kind(&classify::classify(&e, None, &[])), "unknown");
+}
+
+#[test]
+fn a_letter_carries_no_chip() {
+    // Letters show under All only until Ben picks a chip for them.
+    let e = sample_doc("letter-brackenridge-2026-10-14");
+    assert_eq!(classify::classify(&e, None, &[]).tag, None);
+}

@@ -12,9 +12,13 @@ public struct RowMenuModel: Equatable, Sendable {
     public var copyOctopus: String { "Copy \(octopusHandle)" }
     public var copyAscii: String { "Copy \(asciiHandle)" }
     public static let showInFinder = "Show in Finder"
+    public static let previewInked = "Preview inked"
     public static let inkAgain = "Ink again"
     public var showInFinder: String { RowMenuModel.showInFinder }
+    public var previewInked: String { RowMenuModel.previewInked }
     public var inkAgain: String { RowMenuModel.inkAgain }
+    /// A folder's menu has no "Preview inked".
+    public var isFolder: Bool
     /// "Forget this file" or "Forget this folder". After one click the
     /// panel shows `RowMenu.areYouSure` in red instead.
     public var forget: String
@@ -23,6 +27,7 @@ public struct RowMenuModel: Equatable, Sendable {
         octopusHandle = HandleFormatter.render(codename: codename, style: .octopus) ?? codename
         asciiHandle = HandleFormatter.render(codename: codename, style: .ascii) ?? codename
         forget = isFolder ? "Forget this folder" : "Forget this file"
+        self.isFolder = isFolder
     }
 }
 

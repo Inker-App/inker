@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// The 360x500 popover, and the whole app: header, the current screen (a
-/// board, an onboarding step or settings), footer. A pending drop puts the
+/// board, an onboarding step, settings or a document's inked preview), footer. A pending drop puts the
 /// move-or-copy card in front of the screen; the screen stays underneath so
 /// an onboarding step keeps what was typed into it.
 struct PopoverRootView: View {
@@ -63,6 +63,8 @@ struct PopoverRootView: View {
             OnboardingScreen(step: step)
         case .settings:
             SettingsView()
+        case .inkedPreview(_, let content):
+            InkedPreviewView(content: content)
         }
     }
 

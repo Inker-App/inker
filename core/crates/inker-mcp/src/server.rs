@@ -19,9 +19,13 @@ use std::sync::Arc;
 
 use inker_core::{DocState, Handle, ListEntry, QuestionId, ReviewAnswer};
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
-    InitializeRequestParams, InitializeResult, ListToolsResult, MetaObject, PaginatedRequestParams,
-    ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
+    CallToolRequestParams, CallToolResponse, CallToolResult, CompleteRequestParams, CompleteResult,
+    CompletionInfo, ContentBlock, GetPromptRequestParams, GetPromptResponse, GetPromptResult,
+    Implementation, InitializeRequestParams, InitializeResult, ListPromptsResult,
+    ListResourceTemplatesResult, ListResourcesResult, ListToolsResult, MetaObject,
+    PaginatedRequestParams, PromptMessage, ReadResourceRequestParams, ReadResourceResponse,
+    ReadResourceResult, ResourceContents, Role, ServerCapabilities, ServerConfig, Tool,
+    ToolAnnotations,
 };
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
@@ -32,6 +36,7 @@ use tokio::io::{AsyncRead, AsyncWrite};
 use tokio_util::sync::CancellationToken;
 
 use crate::backend::{Backend, PendingReview, Resolved};
+use crate::catalog;
 use crate::handle::parse_handle_arg;
 use crate::instructions::instructions;
 use crate::sessions::Sessions;
@@ -226,8 +231,8 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
     let read_only = ToolAnnotations::new().read_only(true);
     let mut resolve = Tool::new(
         "resolve",
-        "Read a private document by its handle. Whenever the user's message contains a handle \
-         like 🐙/w2-2025, ink/w2-2025 or 🐙/folder-0412, call this tool with it before \
+        "Read an INKER private document by its handle: whenever the user's message contains a \
+         handle like 🐙/w2-2025, ink/w2-2025 or 🐙/folder-0412, call this tool with it before \
          answering. A handle is not a path: there is no 🐙 folder on disk, so do not look for \
          the file with other tools or ask where it lives, and never guess what a handle refers \
          to. Returns the document's text with sensitive values replaced by stable tokens like \
@@ -245,8 +250,8 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
     vec![
         Tool::new(
             "list",
-            "List every private document and folder INKER holds, as handles (🐙/… or ink/…) with \
-             kind, year, state and how many values were inked. Use it when the user asks what \
+            "List every INKER handle (🐙/… or ink/…) for the user's private documents and \
+             folders, with kind, year, state and how many values were inked. Use it when the user asks what \
              documents are available or mentions a document without giving its handle.",
             schema::<ListArgs>(),
         )
@@ -255,8 +260,9 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
         resolve,
         Tool::new(
             "describe",
-            "Explain what each token in a document stands for (for example [SSN_1]: employee) \
-             and how each kind of value was treated. Call it after `resolve` when a token's role \
+            "Explain what each token in an INKER private document stands for, given its handle \
+             (🐙/… or ink/…), for example [SSN_1]: employee, and how each kind of value was \
+             treated. Call it after `resolve` when a token's role \
              matters to the answer. Never returns the values themselves.",
             schema::<HandleArgs>(),
         )
@@ -264,7 +270,8 @@ pub fn tool_definitions(options: ServerOptions) -> Vec<Tool> {
         .with_annotations(read_only),
         Tool::new(
             "write",
-            "Save output derived from a document into the user's private folder. Write the \
+            "Save output derived from an INKER private document (handle 🐙/… or ink/…) into the \
+             user's private folder. Write the \
              content with tokens like [SSN_1]; INKER fills in the real values when saving, so \
              never write a real value yourself. Returns a new handle for the saved file.",
             schema::<WriteArgs>(),
@@ -294,6 +301,45 @@ fn entry_line(e: &ListEntry) -> String {
         s.push_str(" · folder");
     }
     s
+}
+
+/// The text `resolve` returns, and `resources/read` too: one function, two
+/// callers, so a document reads the same whichever way it is reached.
+fn resolved_text(r: &Resolved) -> String {
+    match r {
+        Resolved::Document(d) => {
+            let mut text = format!("{} · {}", d.handle, d.kind.as_str());
+            if let Some(y) = d.year {
+                text.push_str(&format!(" · {y}"));
+            }
+            text.push_str(
+                "\nSensitive values are replaced by stable tokens like [SSN_1]. \
+                 Call `describe` for what each token stands for.",
+            );
+            for p in &d.pages {
+                text.push_str(&format!("\n\n--- page {} ---\n{}", p.page, p.text));
+            }
+            if !d.fields.is_empty() {
+                text.push_str("\n\n--- form fields ---");
+                for f in &d.fields {
+                    text.push_str(&format!("\n{}: {}", f.name, f.value));
+                }
+            }
+            text
+        }
+        Resolved::Folder(f) => {
+            let mut text = format!(
+                "{} is a folder with {} item(s). Resolve each one you need:",
+                f.handle,
+                f.children.len()
+            );
+            for c in &f.children {
+                text.push('\n');
+                text.push_str(&entry_line(c));
+            }
+            text
+        }
+    }
 }
 
 /// Map a backend error to the text the agent sees. Never includes the
@@ -435,9 +481,36 @@ impl InkerServer {
         }
     }
 
+    /// The backend's list, for resources and completions. A backend error
+    /// becomes a generic JSON-RPC error with no detail.
+    async fn listed(&self, method: &str) -> Result<Vec<ListEntry>, McpError> {
+        self.blocking(|b| b.list()).await?.map_err(|e| {
+            tracing::info!(tool = method, error = variant(&e), "list refused");
+            McpError::internal_error(error_text(method, None, &e), None)
+        })
+    }
+
     fn fail(&self, tool: &str, h: Option<&Handle>, e: &inker_core::Error) -> CallToolResult {
         tracing::info!(tool, error = variant(e), "tool call refused");
         tool_error(error_text(tool, h, e))
+    }
+
+    /// Resolve `h` and record the read. The outer error is a server fault;
+    /// the inner one is the backend's refusal, for the caller to word.
+    async fn resolve_handle(
+        &self,
+        h: &Handle,
+        agent: String,
+    ) -> Result<inker_core::Result<Resolved>, McpError> {
+        let hh = h.clone();
+        let resolved = match self.blocking(move |b| b.resolve(&hh)).await? {
+            Ok(r) => r,
+            Err(e) => return Ok(Err(e)),
+        };
+        let note = h.clone();
+        self.blocking(move |b| b.note_read(&agent, &note)).await?;
+        tracing::debug!(handle = %h, "resolved");
+        Ok(Ok(resolved))
     }
 
     async fn resolve(&self, a: HandleArgs, agent: String) -> Result<CallToolResult, McpError> {
@@ -445,34 +518,13 @@ impl InkerServer {
             Ok(h) => h,
             Err(e) => return Ok(self.fail("resolve", None, &e)),
         };
-        let hh = h.clone();
-        let res = self.blocking(move |b| b.resolve(&hh)).await?;
-        let resolved = match res {
+        let resolved = match self.resolve_handle(&h, agent).await? {
             Ok(r) => r,
             Err(e) => return Ok(self.fail("resolve", Some(&h), &e)),
         };
-        let note = h.clone();
-        self.blocking(move |b| b.note_read(&agent, &note)).await?;
-        tracing::debug!(handle = %h, "resolved");
+        let text = resolved_text(&resolved);
         Ok(match resolved {
             Resolved::Document(d) => {
-                let mut text = format!("{} · {}", d.handle, d.kind.as_str());
-                if let Some(y) = d.year {
-                    text.push_str(&format!(" · {y}"));
-                }
-                text.push_str(
-                    "\nSensitive values are replaced by stable tokens like [SSN_1]. \
-                     Call `describe` for what each token stands for.",
-                );
-                for p in &d.pages {
-                    text.push_str(&format!("\n\n--- page {} ---\n{}", p.page, p.text));
-                }
-                if !d.fields.is_empty() {
-                    text.push_str("\n\n--- form fields ---");
-                    for f in &d.fields {
-                        text.push_str(&format!("\n{}: {}", f.name, f.value));
-                    }
-                }
                 let structured = json!({
                     "type": "document",
                     "handle": d.handle.to_string(),
@@ -484,15 +536,6 @@ impl InkerServer {
                 ok(text, structured)
             }
             Resolved::Folder(f) => {
-                let mut text = format!(
-                    "{} is a folder with {} item(s). Resolve each one you need:",
-                    f.handle,
-                    f.children.len()
-                );
-                for c in &f.children {
-                    text.push('\n');
-                    text.push_str(&entry_line(c));
-                }
                 let children: Vec<EntryView> = f.children.iter().map(EntryView::from).collect();
                 ok(
                     text,
@@ -664,7 +707,13 @@ impl ServerHandler for InkerServer {
     }
 
     fn get_info(&self) -> ServerConfig {
-        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+        let capabilities = ServerCapabilities::builder()
+            .enable_completions()
+            .enable_prompts()
+            .enable_resources()
+            .enable_tools()
+            .build();
+        ServerConfig::new(capabilities)
             .with_server_info(
                 Implementation::new("inker", env!("CARGO_PKG_VERSION")).with_title("INKER"),
             )
@@ -685,6 +734,112 @@ impl ServerHandler for InkerServer {
         tool_definitions(self.options)
             .into_iter()
             .find(|t| t.name == name)
+    }
+
+    async fn list_resources(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourcesResult, McpError> {
+        let entries = self.listed("resources/list").await?;
+        Ok(ListResourcesResult::with_all_items(catalog::resources(
+            &entries,
+        )))
+    }
+
+    async fn list_resource_templates(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListResourceTemplatesResult, McpError> {
+        Ok(ListResourceTemplatesResult::with_all_items(vec![
+            catalog::template(),
+        ]))
+    }
+
+    async fn read_resource(
+        &self,
+        request: ReadResourceRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<ReadResourceResponse, McpError> {
+        let Some(h) = catalog::handle_from_uri(&request.uri) else {
+            tracing::info!(tool = "resources/read", "not an INKER resource");
+            return Err(McpError::resource_not_found(
+                "not an INKER resource. INKER resources look like inker:///w2-acme-2025.",
+                None,
+            ));
+        };
+        let resolved = match self.resolve_handle(&h, agent_name(&context)).await? {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::info!(tool = "resources/read", error = variant(&e), "read refused");
+                let text = error_text("resolve", Some(&h), &e);
+                return Err(match e {
+                    inker_core::Error::UnknownHandle(_) => McpError::resource_not_found(text, None),
+                    _ => McpError::invalid_request(text, None),
+                });
+            }
+        };
+        let contents = ResourceContents::text(resolved_text(&resolved), request.uri)
+            .with_mime_type(catalog::MIME_TYPE);
+        Ok(ReadResourceResult::new(vec![contents]).into())
+    }
+
+    async fn list_prompts(
+        &self,
+        _request: Option<PaginatedRequestParams>,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<ListPromptsResult, McpError> {
+        Ok(ListPromptsResult::with_all_items(vec![
+            catalog::read_prompt(),
+        ]))
+    }
+
+    async fn get_prompt(
+        &self,
+        request: GetPromptRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<GetPromptResponse, McpError> {
+        if request.name != catalog::READ_PROMPT {
+            return Err(McpError::invalid_params(
+                format!("unknown prompt: {}", request.name),
+                None,
+            ));
+        }
+        let given = request
+            .arguments
+            .as_ref()
+            .and_then(|a| a.get(catalog::READ_PROMPT_ARGUMENT))
+            .and_then(Value::as_str)
+            .ok_or_else(|| McpError::invalid_params("the read prompt needs a handle", None))?;
+        let h = parse_handle_arg(given)
+            .map_err(|e| McpError::invalid_params(error_text("read", None, &e), None))?;
+        let message = PromptMessage::new_text(Role::User, catalog::read_prompt_text(&h));
+        Ok(GetPromptResult::new(vec![message]).into())
+    }
+
+    async fn complete(
+        &self,
+        request: CompleteRequestParams,
+        _context: RequestContext<RoleServer>,
+    ) -> Result<CompleteResult, McpError> {
+        let arg = &request.argument;
+        let prompt = request.r#ref.as_prompt_name() == Some(catalog::READ_PROMPT)
+            && arg.name == catalog::READ_PROMPT_ARGUMENT;
+        let template = request.r#ref.as_resource_uri() == Some(catalog::RESOURCE_TEMPLATE)
+            && arg.name == catalog::TEMPLATE_ARGUMENT;
+        if !prompt && !template {
+            return Ok(CompleteResult::default());
+        }
+        let entries = self.listed("completion/complete").await?;
+        let values = if prompt {
+            catalog::complete_handle(&entries, &arg.value)
+        } else {
+            catalog::complete_codename(&entries, &arg.value)
+        };
+        let info = CompletionInfo::with_all_values(values)
+            .map_err(|_| McpError::internal_error("too many completions", None))?;
+        Ok(CompleteResult::new(info))
     }
 
     async fn call_tool(

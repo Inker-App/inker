@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var asciiHandles = false
     @State private var showsPayer = true
     @State private var clipboardChip = true
+    @State private var handleNote = true
     @State private var results: [String: String] = [:]
     @State private var copiedConfig = false
     private let log = Logger(subsystem: "sh.inker.app", category: "settings")
@@ -56,10 +57,13 @@ struct SettingsView: View {
             asciiHandles = store.settings.handleStyle == .ascii
             showsPayer = store.settings.showsPayer
             clipboardChip = store.settings.offersClipboardHandle
+            handleNote = store.settings.copiesHandleNote
         }
         .onChange(of: asciiHandles) { _, on in store.setHandleStyle(on ? .ascii : .octopus) }
         .onChange(of: showsPayer) { _, on in store.setShowsPayer(on) }
         .onChange(of: clipboardChip) { _, on in store.setOffersClipboardHandle(on) }
+        // Writes through to the defaults CoreStore reads on every Copy.
+        .onChange(of: handleNote) { _, on in store.settings.copiesHandleNote = on }
     }
 
     private var handles: some View {
@@ -122,6 +126,24 @@ struct SettingsView: View {
                     Hairline()
                 }
             }
+            handleNoteToggle
+                .padding(.top, 4)
+        }
+    }
+
+    /// Copy adds a short note after the handle so a chat that has not loaded
+    /// INKER's tools still knows what it is. Placement and wording are a
+    /// placeholder for Ben.
+    private var handleNoteToggle: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            InkCheckbox(isOn: $handleNote, label: Text(AppSettings.copyHandleNoteLabel),
+                        accessibilityLabel: AppSettings.copyHandleNoteLabel)
+                .font(Typography.small)
+                .foregroundColor(Palette.checkLabel)
+            Text(HandlePaste.example(style: asciiHandles ? .ascii : .octopus, withNote: handleNote))
+                .font(Typography.mono(11))
+                .foregroundColor(Palette.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 

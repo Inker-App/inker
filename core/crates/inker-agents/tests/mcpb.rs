@@ -71,6 +71,27 @@ fn description_never_says_redact() {
     assert!(manifest()["description"].as_str().unwrap().len() > 20);
 }
 
+/// Claude Desktop shows the long description on the extension's page; it
+/// carries the one rule a chat needs: a 🐙/ handle is read with INKER.
+#[test]
+fn long_description_carries_the_handle_rule() {
+    let m = manifest();
+    let long = m["long_description"].as_str().unwrap();
+    assert!(long.starts_with(mcpb::DESCRIPTION), "{long}");
+    assert!(long.ends_with(mcpb::HANDLE_RULE), "{long}");
+    for cue in [
+        "🐙/",
+        "ink/",
+        "INKER",
+        "private document",
+        "`resolve`",
+        "never from disk",
+    ] {
+        assert!(mcpb::HANDLE_RULE.contains(cue), "{cue:?}");
+    }
+    assert!(!long.to_lowercase().contains("octopus"), "{long}");
+}
+
 struct Built {
     _dir: tempfile::TempDir,
     out: Utf8PathBuf,

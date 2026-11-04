@@ -558,3 +558,180 @@ fn public_agency_contacts_are_never_inked() {
         TokenKind::Email
     );
 }
+
+// Letters and agreements (2026-11-04): every invented person in the two
+// non-tax samples must be inked, on every page, in the text layer and in
+// the OCR sidecar.
+
+const LETTER_PEOPLE: &[&str] = &[
+    "Odalys Fenwick",
+    "Perpetua Quayle",
+    "Lucan Ashgrove",
+    "Thaddeus Wrenfield",
+    "Imelda Corvane",
+];
+const AGREEMENT_PEOPLE: &[&str] = &[
+    "Ingrid Solvei Marchetti",
+    "Wendeline Okoro",
+    "Fitzgerald Amberley",
+    "Marisol Teague-Lindqvist",
+    "Desmond Achterberg",
+    "Thorvald Penhallow",
+    "Seraphina Oyelaran-Bix",
+];
+
+fn sample(name: &str) -> String {
+    std::fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../samples/synthetic")
+            .join(name),
+    )
+    .unwrap()
+}
+
+/// The sample's pages: its `.txt` split at form feeds, or its OCR sidecar.
+fn sample_pages(stem: &str, origin: TextOrigin) -> Extracted {
+    let texts: Vec<String> = match origin {
+        TextOrigin::Ocr => {
+            let v: serde_json::Value =
+                serde_json::from_str(&sample(&format!("{stem}.ocr.json"))).unwrap();
+            v["pages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|p| p["text"].as_str().unwrap().to_string())
+                .collect()
+        }
+        _ => sample(&format!("{stem}.txt"))
+            .split('\u{c}')
+            .map(String::from)
+            .collect(),
+    };
+    Extracted {
+        pages: texts
+            .into_iter()
+            .enumerate()
+            .map(|(i, text)| PageText {
+                page: i as u32 + 1,
+                text,
+                origin,
+            })
+            .collect(),
+        fields: vec![],
+    }
+}
+
+/// Each page with its detections replaced by `[KIND]`.
+fn inked(e: &Extracted, dets: &[Detection]) -> String {
+    let mut pages = Vec::new();
+    for p in &e.pages {
+        let mut text = p.text.clone();
+        let mut here: Vec<&Detection> = dets
+            .iter()
+            .filter(|d| d.page == p.page && d.field.is_none())
+            .collect();
+        here.sort_by_key(|d| std::cmp::Reverse(d.span.start));
+        for d in here {
+            text.replace_range(d.span.start..d.span.end, &format!("[{:?}]", d.kind));
+        }
+        pages.push(text);
+    }
+    pages.join("\n\u{c}\n")
+}
+
+fn count(dets: &[Detection], kind: TokenKind) -> usize {
+    dets.iter().filter(|d| d.kind == kind).count()
+}
+
+fn no_person_visible(stem: &str, people: &[&str]) -> (Extracted, Vec<Detection>, Classification) {
+    let mut last = None;
+    for origin in [TextOrigin::TextLayer, TextOrigin::Ocr] {
+        let e = sample_pages(stem, origin);
+        let (dets, c) = detect(&e, &packs()).unwrap();
+        no_overlaps(&dets);
+        let view = inked(&e, &dets);
+        for person in people {
+            for part in person.split([' ', '-']) {
+                assert!(
+                    !view.contains(part),
+                    "{stem} ({origin:?}): {part:?} of {person:?} visible:\n{view}"
+                );
+            }
+        }
+        assert!(
+            !dets.iter().any(|d| d.needs_review),
+            "{stem} ({origin:?}) asks questions:\n{view}"
+        );
+        if origin == TextOrigin::TextLayer {
+            last = Some((e, dets, c));
+        }
+    }
+    last.unwrap()
+}
+
+#[test]
+fn letter_end_to_end_inks_every_person() {
+    let (e, dets, _) = no_person_visible("letter-brackenridge-2026-10-14", LETTER_PEOPLE);
+    let view = inked(&e, &dets);
+    // Inside address and salutation, the body's two people, the page-2
+    // header, the signatory and the two cc names.
+    assert_eq!(count(&dets, TokenKind::Person), 8, "{view}");
+    // The sender twice on page 1 and once under the signature, the
+    // addressee's company, the target twice and the escrow agent.
+    assert_eq!(count(&dets, TokenKind::Org), 7, "{view}");
+    let role = |v: &str| {
+        let p = dets
+            .iter()
+            .find(|d| e.pages[d.page as usize - 1].text[d.span.start..d.span.end] == *v)
+            .unwrap_or_else(|| panic!("{v:?} not inked:\n{view}"));
+        p.role.clone()
+    };
+    assert_eq!(role("Odalys Fenwick").as_deref(), Some("addressee"));
+    assert_eq!(role("Ms. Odalys Fenwick").as_deref(), Some("addressee"));
+    assert_eq!(role("Thaddeus Wrenfield").as_deref(), Some("signatory"));
+    assert_eq!(role("Imelda Corvane").as_deref(), Some("contact"));
+    // Titles, the closing, dates and headings stay.
+    for kept in [
+        "Chief Executive Officer",
+        "Director of Procurement",
+        "Vice President of Finance",
+        "General Counsel",
+        "Sincerely,",
+        "October 14, 2026",
+        "Page 2",
+        "Enclosure",
+    ] {
+        assert!(view.contains(kept), "{kept:?} was inked:\n{view}");
+    }
+}
+
+#[test]
+fn agreement_end_to_end_inks_every_person() {
+    let (e, dets, _) = no_person_visible("agreement-kestrel-2026-09-30", AGREEMENT_PEOPLE);
+    let view = inked(&e, &dets);
+    // The holder three times (parties, /s/, the line under it), the
+    // general counsel, the three outside lawyers, and the two officers
+    // twice each (By /s/ and Name for the CEO; Name only for the president).
+    assert_eq!(count(&dets, TokenKind::Person), 10, "{view}");
+    for kept in [
+        "Chief Executive Officer",
+        "Title: President",
+        "General Counsel",
+        "acknowledges receipt",
+        "IN WITNESS WHEREOF",
+        "HOLDER",
+        "(the \"Holder\")",
+    ] {
+        assert!(view.contains(kept), "{kept:?} was inked:\n{view}");
+    }
+    for org in [
+        "Kestrel Ridge Analytics",
+        "KESTREL RIDGE ANALYTICS",
+        "Halvorsen Peak Systems",
+        "HALVORSEN PEAK SYSTEMS",
+        "Pembury Stroud",
+        "Ravensholm Abernethy",
+    ] {
+        assert!(!view.contains(org), "{org:?} visible:\n{view}");
+    }
+}

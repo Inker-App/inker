@@ -34,9 +34,11 @@ use tokio_util::sync::CancellationToken;
 
 use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
+use crate::inked;
 use crate::types::{
-    Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary, Loader,
-    QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TextSpan,
+    Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary,
+    InkedField, InkedView, Loader, QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status,
+    TextSpan,
 };
 
 /// How many agent reads the snapshot keeps for the footer.
@@ -467,6 +469,56 @@ impl Backend for HostBackend {
             dropped_at: SystemTime::from(d.dropped_at),
             dropped_with: d.dropped_with,
             last_read: d.last_read.map(read_event),
+        })
+    }
+
+    fn inked_view(&self, id: &str) -> Result<InkedView, FfiError> {
+        if id.starts_with("dir:") {
+            return Err(inked::folder());
+        }
+        let (doc, _) = parse_ids(id).map_err(|_| inked::not_found())?;
+        let core = self.host.core();
+        let Ok(rec) = core.document(doc) else {
+            drop(core);
+            return Err(if self.board().root.has_folder(id) {
+                inked::folder()
+            } else {
+                inked::not_found()
+            });
+        };
+        let handle = Handle::new(rec.codename.clone());
+        // The same calls the MCP server makes for `resolve` and `describe`.
+        let resolved = match core.resolve(&handle) {
+            Ok(CoreResolved::Document(d)) => d,
+            Ok(CoreResolved::Folder(_)) => return Err(inked::folder()),
+            Err(Error::PendingReview(_)) => return Err(inked::pending_review()),
+            Err(Error::NotReady(_)) => return Err(inked::not_ready()),
+            Err(e) => return Err(core_error(&e)),
+        };
+        let described = core.describe(&handle).map_err(|e| core_error(&e))?;
+        let roles: Vec<(String, String)> = described
+            .roles
+            .iter()
+            .map(|r| (r.token.to_string(), r.role.clone()))
+            .collect();
+        Ok(InkedView {
+            handle: resolved.handle.to_string(),
+            kind_label: find::kind_label(&resolved.kind),
+            year: resolved.year,
+            inked: rec.inked,
+            pages: resolved
+                .pages
+                .into_iter()
+                .map(|p| inked::page(p.page, p.text, &roles))
+                .collect(),
+            fields: resolved
+                .fields
+                .into_iter()
+                .map(|f| InkedField {
+                    name: f.name,
+                    value: f.value,
+                })
+                .collect(),
         })
     }
 

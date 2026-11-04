@@ -352,6 +352,9 @@ final class CoreStore: ObservableObject {
         case .showInFinder:
             reveal(path: target.path)
             closeMenu()
+        case .previewInked:
+            closeMenu()
+            previewInked(id: id, handle: target.menu.octopusHandle)
         case .inkAgain:
             closeMenu()
             inkAgain(id: id)
@@ -359,6 +362,47 @@ final class CoreStore: ObservableObject {
             forget(id: id)
         }
     }
+
+    // MARK: The inked preview
+
+    /// "Preview inked": ask the core for the document as an agent reads it,
+    /// off the main thread (it takes the core's lock), then show it. A held
+    /// or unready document shows its empty state instead.
+    func previewInked(id: String, handle text: String) {
+        let handle = handle
+        let apply: (InkedPreviewContent) -> Void = { [weak self] content in
+            // Not if the user moved on (the gear) while the core was busy.
+            guard let self, self.flow.screen == .board else { return }
+            self.flow.showInkedPreview(id: id, content: content)
+        }
+        if worksSynchronously {
+            apply(Self.loadInked(handle, id: id, rowHandle: text))
+            return
+        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let content = Self.loadInked(handle, id: id, rowHandle: text)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { apply(content) }
+            }
+        }
+    }
+
+    /// The core's view, or the fixed reason it has none. Runs on any thread.
+    nonisolated private static func loadInked(_ handle: CoreHandle, id: String, rowHandle: String) -> InkedPreviewContent {
+        do {
+            return .view(try handle.inkedView(id: id))
+        } catch {
+            return .unavailable(handle: rowHandle, reason: InkedPreviewModel.reason(of: error))
+        }
+    }
+
+    /// Previews and snapshots: the inked preview of the row a handle names.
+    func previewInked(handle text: String) {
+        guard let entry = handle.locate(handle: text) else { return }
+        previewInked(id: entry.entryID, handle: text)
+    }
+
+    func closeInkedPreview() { flow.closeInkedPreview() }
 
     /// "Ink again": the row goes back to queued with the same handle.
     func inkAgain(id: String) {
@@ -416,7 +460,7 @@ final class CoreStore: ObservableObject {
     func copy(handle text: String, id: String) {
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.setString(text, forType: .string)
+        pb.setString(HandlePaste.text(handle: text, withNote: settings.copiesHandleNote), forType: .string)
         copyFeedback.markCopied(id, at: Date())
         DispatchQueue.main.asyncAfter(deadline: .now() + CopyFeedback.duration + 0.05) { [weak self] in
             // Re-render so the button flips back to "Copy".
