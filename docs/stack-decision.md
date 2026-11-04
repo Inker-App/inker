@@ -132,6 +132,8 @@ Server `instructions` open with the one sentence that matters: strings starting 
 
 *CLI-only tools (added 2026-10-28).* The socket also serves `inker/review`, `inker/answer` and `inker/status`, so a held document can be released without the Swift app (`inker review`, `inker answer <id> ink|leave`) and `inker doctor` reports the folder the running server serves. They are never in `tools/list`, and `tools/call` serves them only on a connection whose `initialize` client name is `inker-cli` (per-request `_meta` client info does not count); to anyone else they are an unknown tool. That is a hiding rule, not authentication: the socket is the user's own (0600), and an agent's harness, not the agent, picks its client name. Because an agent with a shell could still run `inker answer … leave` and then resolve the value, `inker guard` denies any shell command that runs `inker answer`.
 
+*Resources, a prompt and completions (added 2026-11-04, section 10).* Every ready document and folder is also a resource at `inker:///<codename>` (template `inker:///{codename}`); reading one returns exactly what `resolve` returns, refusals included. One prompt, `read`, takes a `handle` and asks the model to use `resolve` rather than the disk, and `completion/complete` offers handles on either prefix. There is no `notifications/resources/list_changed`: the `Backend` trait has no change feed yet.
+
 `write` takes tokenized content from the agent, rehydrates it, and saves it only into the private folder. It returns a confirmation and a new handle for the output file; the agent can `resolve` that handle for the tokenized view (section 5.6).
 
 ### 3.7 The shell
@@ -431,7 +433,7 @@ INKER is for the chat window. Research on 2026-10-28 (search summaries only; ven
 
 | Client | Local MCP | How INKER plugs in | Notes |
 |---|---|---|---|
-| **Claude desktop app (macOS)** | stdio via `~/Library/Application Support/Claude/claude_desktop_config.json`, or a side-loaded `.mcpb` Desktop Extension bundle | **Primary.** Onboarding writes the config line (restart required) or the user installs the bundle. | Reportedly ignores the server `instructions` field, so the `🐙/` guidance lives in the tool descriptions. Unsigned bundles show an "unverified" warning; Anthropic's directory no longer accepts MCPB, only plugins. Each tool call prompts Allow once / Always allow; the default is now Always allow. |
+| **Claude desktop app (macOS)** | stdio via `~/Library/Application Support/Claude/claude_desktop_config.json`, or a side-loaded `.mcpb` Desktop Extension bundle | **Primary.** Onboarding writes the config line (restart required) or the user installs the bundle. | Reportedly ignores the server `instructions` field, so the `🐙/` guidance lives in the tool descriptions. A cold pasted handle failed there on 2026-11-04; the four layers that answer it are in section 10. Unsigned bundles show an "unverified" warning; Anthropic's directory no longer accepts MCPB, only plugins. Each tool call prompts Allow once / Always allow; the default is now Always allow. |
 | Raycast AI, Perplexity Mac | stdio | Same command; "copy this JSON". | Cheap second clients. |
 | **ChatGPT desktop app** | Chat mode: remote HTTPS connectors only (Developer mode). Codex mode: stdio via `~/.codex/config.toml`. | Stretch. The Codex writer already covers the config; whether plain chat can see it is unverified. | Write tools prompt unless `readOnlyHint`. |
 | claude.ai, chatgpt.com | Remote HTTPS with OAuth only; never localhost | **Parked.** Needs a public relay. OpenAI has a first-party outbound tunnel client (enterprise/API). | A relay only ever carries tokenized text, which is the one thing that makes it thinkable; still, deferred. |
@@ -443,3 +445,31 @@ INKER is for the chat window. Research on 2026-10-28 (search summaries only; ven
 - The cold-handle spike must be rerun in Claude Desktop on a Mac; the Claude Code result (12/12) does not transfer, because the mechanism it relied on (instructions) is reportedly not applied there.
 - Distribution: a `.mcpb` containing a signed, notarized copy of the shim, plus the config-line fallback. Every binary a chat app launches must be Developer ID signed; unsigned helpers get killed on managed Macs.
 - The website and app copy say "your AI chat", not "your coding agent".
+
+## 10. Cold handles in Claude Desktop (2026-11-04)
+
+**What happened.** Ben copied `🐙/folder-4392` from INKER and pasted it, with nothing else, into a Claude desktop chat with INKER connected. Claude replied:
+
+> "I can't find a folder called 🐙 anywhere I'm allowed to look (it's not at the top level of your home folder or inside Dev). It may be inside Desktop, Documents or Downloads, which I can't list without a grant. Easiest fix: add the 🐙/folder-4392 folder via "Add folder" in the "+" menu beside the message box, or tell me its full path and I'll request access to just that folder."
+
+INKER was connected: later in the same chat Claude called `describe` on its own once it was working with a document. The failure is the cold handle.
+
+**Diagnosis** (Ben's, shared by the build). The Claude desktop app does not apply the server `instructions`, and with many connectors attached it defers connector tools behind tool search. The `resolve` description that says "whenever the user's message contains a handle like 🐙/w2-2025 … call this tool" is then not in the model's context when the paste arrives, and a string with a slash in it reads as a path. The Claude Code spike (12/12, `docs/spike-cold-handle.md`) relied on the instructions being loaded, so it does not transfer. The one thing sure to be in the model's context is the pasted text itself.
+
+**Four layers, strongest first.**
+
+1. **The clipboard carries a note.** Copy (both row-menu copies and the Copy buttons, all through `CoreStore.copy`) puts `🐙/folder-4392 (INKER handle: read it with the INKER tool, not from disk)` on the clipboard: one line, handle first. `HandlePaste` in InkerKit renders it; `AppSettings.copiesHandleNote` (default on) turns it off, from a "Chat apps" toggle in Settings labelled "Add a note for the chat when copying a handle", with a muted mono line under it showing what gets pasted. The clipboard chip still finds a handle that carries the note. **The wording, the default and the toggle's place are Ben's call**; they ship so he can test in Claude Desktop.
+2. **Discoverable tools.** Tool search matches on names and descriptions, so the first sentence of every tool description now carries `🐙/`, `ink/`, `handle`, `INKER` and `private document`, and so does the instructions' first sentence, which now also says to read a handle with `resolve`, never from disk. Tool names stay `list`, `resolve`, `describe`, `write`; `resolve` keeps `_meta["anthropic/alwaysLoad"]`.
+3. **Resources and a prompt** (section 3.6), so the "+" menu Claude itself pointed at can hand a document over without the model choosing a tool: the resource `🐙/folder-4392` reads as the folder listing, and the "Read an INKER handle" prompt takes the handle. The stdio shim is a byte relay and passes these through; a test pins that.
+4. **A Claude skill.** Skill descriptions stay in context in Claude Desktop and claude.ai. `inker skill` prints a `SKILL.md` named `inker` whose description says to use it whenever a message contains `🐙/` or `ink/` followed by a name, and whose body is the instructions text. The `.mcpb` manifest's `long_description` ends with the same rule for the person reading the extension page. Installing the skill is a manual step for now; onboarding does not offer it.
+
+**Verified.** Only on Linux against the fake backend: the Rust tests for the descriptions, resources, prompt, completions, shim pass-through, skill and manifest. The Swift side (layer 1) is uncompiled; it needs `swift test` on a Mac.
+
+**Not verified: all of it in Claude Desktop.** Ben retests on his Mac, in a chat with his usual connectors attached:
+
+- paste a bare handle with the note on, then with it off;
+- with the note off, check whether the description changes alone (layer 2) make Claude find `resolve`;
+- open the "+" menu: is INKER listed with its resources, and does attaching `🐙/<a folder>` give Claude the listing? Then try the "Read an INKER handle" prompt;
+- install the skill (`inker skill > SKILL.md`, zipped in a folder named `inker`) and paste a bare handle with the note off again.
+
+Whatever wins decides what onboarding says about pasting, and whether the note stays on by default.
