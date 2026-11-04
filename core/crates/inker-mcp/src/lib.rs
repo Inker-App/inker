@@ -1,6 +1,8 @@
 //! inker-mcp: the MCP server INKER exposes to coding agents (stack-decision.md 3.6).
 //!
-//! Four tools: `list`, `resolve`, `describe`, `write`. The server talks to the
+//! Four tools: `list`, `resolve`, `describe`, `write`; one resource per
+//! ready document and folder, a `read` prompt and handle completions
+//! ([`catalog`]). The server talks to the
 //! core through the [`Backend`] trait so it can be tested with [`FakeBackend`]
 //! and wired to the real `inker_core` facade later. It runs over stdio or any
 //! `AsyncRead + AsyncWrite` pair, which is how `inker-ipc` serves it on a unix
@@ -9,6 +11,7 @@
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))]
 
 pub mod backend;
+pub mod catalog;
 pub mod client;
 pub mod fake;
 pub mod handle;

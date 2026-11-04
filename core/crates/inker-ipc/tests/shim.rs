@@ -91,6 +91,69 @@ async fn forwards_initialize_list_and_resolve() {
     ct.cancel();
 }
 
+/// Chat apps reach documents through resources, the `read` prompt and
+/// completions as well as tools; the shim must carry all of them.
+#[tokio::test]
+async fn forwards_resources_prompts_and_completions() {
+    let tmp = tempfile::tempdir().unwrap();
+    let sock = tmp.path().join("inker.sock");
+    let ct = start_host(sock.clone(), Arc::new(FakeBackend::sample()));
+    wait_for(&sock).await;
+    let (mut agent, task) = start_shim(sock, quick());
+    let init = agent.initialize("claude-ai").await;
+    assert!(init["result"]["capabilities"]["resources"].is_object());
+
+    let r = agent.request("resources/list", json!({})).await;
+    assert_eq!(
+        r["result"]["resources"][0]["uri"],
+        json!("inker:///w2-acme-2025")
+    );
+    let r = agent
+        .request("resources/read", json!({"uri": "inker:///w2-acme-2025"}))
+        .await;
+    let body = r["result"]["contents"][0]["text"].as_str().unwrap();
+    assert!(body.contains("[SSN_1]"), "{r}");
+    let r = agent.request("resources/templates/list", json!({})).await;
+    assert_eq!(
+        r["result"]["resourceTemplates"][0]["uriTemplate"],
+        json!("inker:///{codename}")
+    );
+    let r = agent.request("prompts/list", json!({})).await;
+    assert_eq!(r["result"]["prompts"][0]["name"], json!("read"));
+    let r = agent
+        .request(
+            "prompts/get",
+            json!({"name": "read", "arguments": {"handle": "ink/w2-acme-2025"}}),
+        )
+        .await;
+    let msg = r["result"]["messages"][0]["content"]["text"]
+        .as_str()
+        .unwrap();
+    assert!(
+        msg.starts_with("Read 🐙/w2-acme-2025 with INKER's `resolve` tool"),
+        "{r}"
+    );
+    let r = agent
+        .request(
+            "completion/complete",
+            json!({"ref": {"type": "ref/prompt", "name": "read"},
+                   "argument": {"name": "handle", "value": "ink/w"}}),
+        )
+        .await;
+    assert_eq!(
+        r["result"]["completion"]["values"],
+        json!(["ink/w2-acme-2025"])
+    );
+
+    drop(agent);
+    tokio::time::timeout(Duration::from_secs(5), task)
+        .await
+        .expect("shim hung")
+        .unwrap()
+        .unwrap();
+    ct.cancel();
+}
+
 #[tokio::test]
 async fn exits_when_the_host_goes_away() {
     let tmp = tempfile::tempdir().unwrap();
