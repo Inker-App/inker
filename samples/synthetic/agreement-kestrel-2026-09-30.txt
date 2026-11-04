@@ -1,0 +1,69 @@
+OPTION CANCELLATION AGREEMENT
+
+This Option Cancellation Agreement (this "Agreement") is entered into as of
+September 30, 2026, by and between Kestrel Ridge Analytics, Inc., a Delaware corporation
+(the "Company"), Halvorsen Peak Systems Corp., a Washington corporation ("Parent"), and
+Ingrid Solvei Marchetti (the "Holder").
+
+WHEREAS, the Company, Parent and a wholly owned subsidiary of Parent are
+parties to an Agreement and Plan of Merger dated September 2, 2026 (the
+"Merger Agreement"); and
+
+WHEREAS, the Holder holds options to purchase shares of the Company's common
+stock, and the parties wish to cancel those options at the effective time of
+the merger in exchange for the payment described below.
+
+NOW, THEREFORE, the parties hereby agree as follows:
+
+1. Cancellation. Each option held by the Holder is cancelled at the
+effective time in exchange for a cash payment of $412,500.00 (the
+"Cancellation Payment"), less applicable withholding.
+
+2. Acknowledgement. The Holder acknowledges receipt of a copy of the Merger
+Agreement and the Company's information statement, and confirms that the
+Cancellation Payment is in full satisfaction of the options.
+
+3. Governing Law. This Agreement is governed by the laws of the State of
+Delaware, without regard to its conflict of laws principles.
+4. Notices. All notices under this Agreement must be in writing and are
+deemed given on the date of receipt of notice by the party to whom they are
+addressed, as follows:
+
+If to the Company or Parent:
+Halvorsen Peak Systems Corp.
+2600 Glacier Point Drive
+Boise, ID 83702
+Attention: Wendeline Okoro, General Counsel
+Email: legal@halvorsenpeak.example
+
+with a copy (which shall not constitute notice) to:
+Pembury Stroud LLP
+45 Cobalt Street
+Chicago, IL 60606
+Attention: Fitzgerald Amberley, Esq.
+           Marisol Teague-Lindqvist, Esq.
+
+If to the Holder, at the address on file with the Company, with a copy to:
+Desmond Achterberg, Ravensholm Abernethy LLP
+
+5. Entire Agreement. This Agreement and the Merger Agreement are the entire
+agreement of the parties on this subject.
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date
+first written above.
+
+KESTREL RIDGE ANALYTICS, INC.
+
+By: /s/ Thorvald Penhallow
+Name: Thorvald Penhallow
+Title: Chief Executive Officer
+
+HALVORSEN PEAK SYSTEMS CORP.
+
+By: ______________________________
+Name: Seraphina Oyelaran-Bix
+Title: President
+
+HOLDER
+
+/s/ Ingrid Solvei Marchetti
+Ingrid Solvei Marchetti
