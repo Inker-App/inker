@@ -416,7 +416,7 @@ final class CoreStore: ObservableObject {
     func copy(handle text: String, id: String) {
         let pb = NSPasteboard.general
         pb.clearContents()
-        pb.setString(text, forType: .string)
+        pb.setString(HandlePaste.text(handle: text, withNote: settings.copiesHandleNote), forType: .string)
         copyFeedback.markCopied(id, at: Date())
         DispatchQueue.main.asyncAfter(deadline: .now() + CopyFeedback.duration + 0.05) { [weak self] in
             // Re-render so the button flips back to "Copy".
