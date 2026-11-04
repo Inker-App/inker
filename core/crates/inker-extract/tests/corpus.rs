@@ -285,7 +285,8 @@ fn fixture_ocr_every_corpus_sidecar_parses() {
             n += 1;
         }
     }
-    assert_eq!(n, 14);
+    // 14 tax and statement sidecars, plus the letter and the agreement.
+    assert_eq!(n, 16);
 }
 
 #[test]
