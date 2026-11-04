@@ -17,8 +17,8 @@ use crate::providers::{
     HostProviders, ProviderKeyStore, ProviderOcrSource, ProviderTextSource, SharedProviders,
 };
 use crate::types::{
-    Board, BoardEntry, DocDetails, FindMatch, HandleStyle, IngestMode, QueueItem, ReadEvent,
-    ReviewAnswer, Status,
+    Board, BoardEntry, DocDetails, FindMatch, HandleStyle, IngestMode, InkedView, QueueItem,
+    ReadEvent, ReviewAnswer, Status,
 };
 
 /// Implemented in Swift. Fired on any queue change, from a background thread;
@@ -240,6 +240,13 @@ impl CoreHandle {
     /// The expanded row.
     pub fn details(&self, id: String) -> Result<DocDetails, FfiError> {
         self.backend.details(&id)
+    }
+
+    /// "Preview inked": the document exactly as an agent reads it, tokens
+    /// located for drawing. Takes the core's lock on the real backend, so
+    /// call it off the main thread.
+    pub fn inked_view(&self, id: String) -> Result<InkedView, FfiError> {
+        self.backend.inked_view(&id)
     }
 
     /// "Forget this file" or "Forget this folder": out of the index and out

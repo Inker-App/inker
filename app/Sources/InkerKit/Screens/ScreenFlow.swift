@@ -8,6 +8,9 @@ public enum PopoverScreen: Equatable, Sendable {
     /// Onboarding, steps 1 to `ScreenFlow.stepCount`.
     case onboarding(step: Int)
     case settings
+    /// "Preview inked" on a document row: what the agent reads. Back returns
+    /// to the board.
+    case inkedPreview(id: String, content: InkedPreviewContent)
 }
 
 /// What the popover draws right now.
@@ -79,6 +82,18 @@ public struct ScreenFlow {
 
     public mutating func closeSettings() {
         guard screen == .settings else { return }
+        screen = .board
+    }
+
+    // MARK: The inked preview
+
+    public mutating func showInkedPreview(id: String, content: InkedPreviewContent) {
+        screen = .inkedPreview(id: id, content: content)
+    }
+
+    /// Back on the preview: the board that was showing (Find keeps its query).
+    public mutating func closeInkedPreview() {
+        guard case .inkedPreview = screen else { return }
         screen = .board
     }
 

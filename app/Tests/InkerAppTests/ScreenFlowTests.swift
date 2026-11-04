@@ -1,4 +1,5 @@
 import Testing
+import InkerCore
 @testable import InkerKit
 
 /// Everything lives in the popover: the boards, the three onboarding steps
@@ -127,6 +128,41 @@ struct ScreenFlowTests {
         #expect(flow.visible(dropPending: true) == .dropCard)
         #expect(flow.screen == .onboarding(step: 2), "the step underneath is kept")
         #expect(flow.visible(dropPending: false) == .screen(.onboarding(step: 2)))
+    }
+
+    // MARK: The inked preview
+
+    private let held = InkedPreviewContent.unavailable(handle: "🐙/w2-2025", reason: "pending review")
+
+    @Test func previewInkedOpensItsScreenAndBackReturnsToTheBoard() {
+        var flow = ScreenFlow(onboarding: OnboardingState(store: completed()))
+        flow.showInkedPreview(id: "d-1", content: held)
+        #expect(flow.screen == .inkedPreview(id: "d-1", content: held))
+        flow.closeInkedPreview()
+        #expect(flow.screen == .board)
+    }
+
+    @Test func closingThePreviewWhenItIsNotOpenChangesNothing() {
+        var flow = ScreenFlow(onboarding: OnboardingState(store: completed()))
+        flow.openSettings()
+        flow.closeInkedPreview()
+        #expect(flow.screen == .settings)
+    }
+
+    @Test func theGearFromThePreviewOpensSettingsThenTheBoard() {
+        var flow = ScreenFlow(onboarding: OnboardingState(store: completed()))
+        flow.showInkedPreview(id: "d-1", content: held)
+        flow.toggleSettings()
+        #expect(flow.screen == .settings)
+        flow.toggleSettings()
+        #expect(flow.screen == .board)
+    }
+
+    @Test func aDropCardGoesInFrontOfThePreviewAndLeavesIt() {
+        var flow = ScreenFlow(onboarding: OnboardingState(store: completed()))
+        flow.showInkedPreview(id: "d-1", content: held)
+        #expect(flow.visible(dropPending: true) == .dropCard)
+        #expect(flow.visible(dropPending: false) == .screen(.inkedPreview(id: "d-1", content: held)))
     }
 
     @Test func showClampsTheStep() {

@@ -68,6 +68,24 @@ private func popover(_ scenario: PreviewScenario, _ screen: PopoverScreen = .boa
         .environmentObject(RenderClock(alwaysRunning: true))
 }
 
+#Preview("Popover · Preview inked") {
+    FontRegistry.registerBundledFonts()
+    let store = CoreStore.preview(.ready)
+    store.previewInked(handle: "🐙/w2-acme-2025")
+    return PopoverRootView()
+        .environmentObject(store)
+        .environmentObject(RenderClock(alwaysRunning: true))
+}
+
+#Preview("Popover · Preview inked, held") {
+    FontRegistry.registerBundledFonts()
+    let store = CoreStore.preview(.attention)
+    store.previewInked(handle: "🐙/closing-statement-2025")
+    return PopoverRootView()
+        .environmentObject(store)
+        .environmentObject(RenderClock(alwaysRunning: true))
+}
+
 #Preview("Popover · Drop card") {
     FontRegistry.registerBundledFonts()
     let store = CoreStore.preview(.ready)

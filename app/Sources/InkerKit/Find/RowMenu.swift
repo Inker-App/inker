@@ -3,7 +3,7 @@ import Foundation
 /// One line of the row menu as the panel draws it.
 public struct RowMenuItem: Equatable, Sendable, Identifiable {
     public enum Action: Equatable, Hashable, Sendable {
-        case copyOctopus, copyAscii, showInFinder, inkAgain, forget
+        case copyOctopus, copyAscii, showInFinder, previewInked, inkAgain, forget
     }
 
     public var action: Action
@@ -22,19 +22,36 @@ public enum RowMenu {
     public static let areYouSure = "Are you sure?"
     public static let width: CGFloat = 200
     public static let gap: CGFloat = 4
-    /// Five 29-point items, the separator block and the padding; close
-    /// enough to decide whether the panel fits below its row.
-    public static let estimatedHeight: CGFloat = 168
+    /// One item: 7 points of padding either side of a 15-point line.
+    public static let itemHeight: CGFloat = 29
+    /// The separator block (4 + 1 + 4), the panel's padding and its border.
+    static let chromeHeight: CGFloat = 23
 
+    /// The items, the separator block and the padding: 168 for a folder's
+    /// five items, 197 for a document's six. Close enough to decide whether
+    /// the panel fits below its row.
+    public static func estimatedHeight(_ menu: RowMenuModel) -> CGFloat {
+        CGFloat(items(menu, confirmingForget: false).count) * itemHeight + chromeHeight
+    }
+
+    /// "Preview inked" is for a document only: a folder has no inked view,
+    /// so its menu leaves the item out rather than disabling it.
     public static func items(_ menu: RowMenuModel, confirmingForget: Bool) -> [RowMenuItem] {
-        [
+        var items = [
             RowMenuItem(action: .copyOctopus, title: menu.copyOctopus, isDestructive: false, separatorAbove: false),
             RowMenuItem(action: .copyAscii, title: menu.copyAscii, isDestructive: false, separatorAbove: false),
             RowMenuItem(action: .showInFinder, title: menu.showInFinder, isDestructive: false, separatorAbove: false),
+        ]
+        if !menu.isFolder {
+            items.append(RowMenuItem(action: .previewInked, title: menu.previewInked, isDestructive: false,
+                                     separatorAbove: false))
+        }
+        items += [
             RowMenuItem(action: .inkAgain, title: menu.inkAgain, isDestructive: false, separatorAbove: false),
             RowMenuItem(action: .forget, title: confirmingForget ? areYouSure : menu.forget,
                         isDestructive: confirmingForget, separatorAbove: true),
         ]
+        return items
     }
 
     public enum Placement: Equatable, Sendable {

@@ -21,7 +21,7 @@ struct RowMenuLayer: View {
         GeometryReader { geo in
             if let id = store.openMenuID, let anchor = anchors[id], let target = store.menuTarget(for: id) {
                 let rect = geo[anchor]
-                let placement = RowMenu.placement(rowMaxY: rect.maxY, panelHeight: RowMenu.estimatedHeight,
+                let placement = RowMenu.placement(rowMaxY: rect.maxY, panelHeight: RowMenu.estimatedHeight(target.menu),
                                                   boardHeight: geo.size.height)
                 ZStack {
                     Color.clear
