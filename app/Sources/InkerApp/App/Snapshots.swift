@@ -31,6 +31,8 @@ enum Snapshots {
         var menu: String?
         /// Forget clicked once, so the menu asks "Are you sure?".
         var confirmForget = false
+        /// "Preview inked" on the row this handle names.
+        var inked: String?
     }
 
     static let shots: [Shot] = [
@@ -43,6 +45,7 @@ enum Snapshots {
         Shot(name: "popover-scale-handle", scenario: .scale, screen: .board, locate: "🐙/w2-2025-2"),
         Shot(name: "popover-scale-menu", scenario: .scale, screen: .board, menu: "🐙/w2-2025-2"),
         Shot(name: "popover-scale-menu-forget", scenario: .scale, screen: .board, menu: "🐙/w2-2025-2", confirmForget: true),
+        Shot(name: "popover-inked", scenario: .ready, screen: .board, inked: "🐙/w2-acme-2025"),
         Shot(name: "onboarding-1", scenario: .empty, screen: .onboarding(step: 1)),
         Shot(name: "onboarding-2", scenario: .empty, screen: .onboarding(step: 2)),
         Shot(name: "onboarding-3", scenario: .empty, screen: .onboarding(step: 3)),
@@ -80,6 +83,7 @@ enum Snapshots {
                 store.openMenu(handle: handle)
                 if shot.confirmForget, let id = store.openMenuID { store.forget(id: id) }
             }
+            if let handle = shot.inked { store.previewInked(handle: handle) }
             let view = PopoverRootView()
                 .environmentObject(store)
                 .environmentObject(clock)
