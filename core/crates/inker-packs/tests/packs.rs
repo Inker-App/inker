@@ -298,6 +298,8 @@ fn builtin_tax_pack_loads_every_form() {
         ("bank-statement", "bank-statement"),
         ("closing-statement", "closing-statement"),
         ("receipt", "receipt"),
+        ("letter", "letter"),
+        ("agreement", "agreement"),
     ] {
         assert_eq!(set.codename_short(&DocKind(kind.into())), Some(short));
     }

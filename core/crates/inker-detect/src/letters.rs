@@ -183,10 +183,10 @@ const LEADS: &[&str] = &[
     "cc",
 ];
 
-static SALUTATION: LazyLock<Regex> =
+pub(crate) static SALUTATION: LazyLock<Regex> =
     LazyLock::new(|| re(r"(?m)^[ \t]*(?:Dear|DEAR)[ \t]+([^\n]*?)[ \t]*[,:][ \t]*$"));
 
-static CLOSING: LazyLock<Regex> = LazyLock::new(|| {
+pub(crate) static CLOSING: LazyLock<Regex> = LazyLock::new(|| {
     re(
         r"(?im)^[ \t]*(?:sincerely(?:[ ]yours)?|yours[ ](?:sincerely|truly|faithfully)|very[ ]truly[ ]yours|(?:best|kind|warm|warmest|with[ ]best)[ ]regards|regards|best[ ]wishes|respectfully(?:[ ]yours|[ ]submitted)?|cordially(?:[ ]yours)?|with[ ](?:thanks|appreciation)|best)[ \t]*,[ \t]*$",
     )

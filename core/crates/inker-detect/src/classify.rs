@@ -45,6 +45,10 @@ impl std::fmt::Debug for Redacted {
 pub const BANK_STATEMENT: &str = "bank-statement";
 pub const CLOSING_STATEMENT: &str = "closing-statement";
 pub const RECEIPT: &str = "receipt";
+/// A letter: a salutation and a closing.
+pub const LETTER: &str = "letter";
+/// A contract: "agreement" plus contract wording (whereas, hereby, ...).
+pub const AGREEMENT: &str = "agreement";
 /// An IRS form with no template: a form number plus an OMB control number.
 pub const TAX_FORM: &str = "tax-form";
 
@@ -55,6 +59,30 @@ static FORM_NO: LazyLock<Regex> =
     LazyLock::new(|| re(r"\bForm\s+(?:1099-[A-Z]{1,3}|W-2[A-Z]?|1098(?:-[A-Z])?)\b"));
 static OMB: LazyLock<Regex> = LazyLock::new(|| re(r"\bOMB\s+No\.?\s*\d{4}-\d{4}"));
 static YEAR: LazyLock<Regex> = LazyLock::new(|| re(r"(?:19[89]\d|20\d{2})"));
+/// A total line ending in an amount ("TOTAL   81.48", "Total $10.79").
+static TOTAL_LINE: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(?im)^[ \t]*(?:grand[ ]+)?total\b[^\n]*?\d\.\d{2}[ \t]*$"));
+static SUBTOTAL_LINE: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(?im)^[ \t]*sub[ -]?total\b[^\n]*?\d\.\d{2}[ \t]*$"));
+/// How it was paid, with an amount ("VISA CREDIT ****4242 USD 81.48").
+static TENDER_LINE: LazyLock<Regex> = LazyLock::new(|| {
+    re(
+        r"(?im)^[ \t]*(?:visa|mastercard|amex|american[ ]express|discover|cash|change|tendered|debit|credit[ ]card)\b[^\n]*?\d\.\d{2}[ \t]*$",
+    )
+});
+static TO_WHOM: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(?im)^[ \t]*to[ ]whom[ ]it[ ]may[ ]concern[ \t]*[,:]"));
+/// Contract wording; an agreement says "agreement" and two of these.
+const AGREEMENT_WORDS: &[&str] = &[
+    "whereas",
+    "witnesseth",
+    "in witness whereof",
+    "governing law",
+    "hereby",
+    "hereinafter",
+    "the parties",
+    "notices",
+];
 
 /// Classify from the matched template if any, else from the text.
 pub fn classify(
@@ -80,12 +108,12 @@ pub fn classify(
     }
 }
 
-/// The chip a kind without a template counts under. Receipts, scans and
-/// unknowns have no chip: they show under `All` only.
+/// The chip a kind without a template counts under. Receipts, letters,
+/// scans and unknowns have no chip: they show under `All` only.
 fn heuristic_tag(kind: &str) -> Option<&'static str> {
     match kind {
         BANK_STATEMENT => Some("Banking"),
-        CLOSING_STATEMENT => Some("Legal"),
+        CLOSING_STATEMENT | AGREEMENT => Some("Legal"),
         TAX_FORM => Some("Taxes"),
         _ => None,
     }
@@ -117,7 +145,19 @@ fn heuristic_kind(extracted: &Extracted) -> &'static str {
         "withdrawals",
     ]) {
         BANK_STATEMENT
-    } else if any(&["receipt"]) || (any(&["subtotal"]) && any(&["total"])) {
+    } else if any(&["agreement"])
+        && AGREEMENT_WORDS
+            .iter()
+            .filter(|w| lower.contains(*w))
+            .count()
+            >= 2
+    {
+        AGREEMENT
+    } else if (crate::letters::SALUTATION.is_match(&full) || TO_WHOM.is_match(&full))
+        && crate::letters::CLOSING.is_match(&full)
+    {
+        LETTER
+    } else if is_receipt(&full, any(&["receipt"])) {
         RECEIPT
     } else if !extracted.pages.is_empty()
         && extracted.pages.iter().all(|p| p.origin == TextOrigin::Ocr)
@@ -126,6 +166,14 @@ fn heuristic_kind(extracted: &Extracted) -> &'static str {
     } else {
         DocKind::UNKNOWN
     }
+}
+
+/// Receipt structure, not the word: a subtotal and a total line, or a total
+/// line with a tender line or the word "receipt". Agreements "acknowledge
+/// receipt" and letters confirm "receipt of" with no total line at all.
+fn is_receipt(full: &str, says_receipt: bool) -> bool {
+    TOTAL_LINE.is_match(full)
+        && (SUBTOTAL_LINE.is_match(full) || TENDER_LINE.is_match(full) || says_receipt)
 }
 
 /// The most common four-digit year that stands alone (not inside a longer
