@@ -6,8 +6,8 @@ pub fn instructions() -> &'static str {
 }
 
 const INSTRUCTIONS: &str =
-    "Strings that start with 🐙/ or ink/ are private document handles managed by INKER. \
-Never guess their contents; call `resolve` with the handle to get a version with sensitive values \
+    "Strings that start with 🐙/ or ink/ are private document handles managed by INKER: read one \
+with INKER's `resolve` tool, never from disk. Never guess their contents; call `resolve` with the handle to get a version with sensitive values \
 replaced by stable tokens like [SSN_1]. Use `describe` to learn what each token stands for. \
 Tokens are stable: the same [SSN_1] is the same person everywhere. To save output, call `write`; \
 never write real values anywhere.
@@ -30,7 +30,8 @@ mod tests {
     #[test]
     fn opens_with_the_handle_sentence() {
         assert!(instructions().starts_with(
-            "Strings that start with 🐙/ or ink/ are private document handles managed by INKER."
+            "Strings that start with 🐙/ or ink/ are private document handles managed by INKER: \
+             read one with INKER's `resolve` tool, never from disk."
         ));
         assert!(instructions().contains("call `resolve` with the handle"));
         assert!(
