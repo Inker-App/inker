@@ -371,6 +371,11 @@ void uniffi_inker_ffi_fn_method_corehandle_ingest(uint64_t ptr, RustBuffer paths
 void uniffi_inker_ffi_fn_method_corehandle_ink_again(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_INKED_VIEW
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_INKED_VIEW
+RustBuffer uniffi_inker_ffi_fn_method_corehandle_inked_view(uint64_t ptr, RustBuffer id, RustCallStatus *_Nonnull out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_LOCATE
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_FN_METHOD_COREHANDLE_LOCATE
 RustBuffer uniffi_inker_ffi_fn_method_corehandle_locate(uint64_t ptr, RustBuffer handle, RustCallStatus *_Nonnull out_status
@@ -740,6 +745,12 @@ uint16_t uniffi_inker_ffi_checksum_method_corehandle_ingest(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_INK_AGAIN
 #define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_INK_AGAIN
 uint16_t uniffi_inker_ffi_checksum_method_corehandle_ink_again(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_INKED_VIEW
+#define UNIFFI_FFIDEF_UNIFFI_INKER_FFI_CHECKSUM_METHOD_COREHANDLE_INKED_VIEW
+uint16_t uniffi_inker_ffi_checksum_method_corehandle_inked_view(void
     
 );
 #endif

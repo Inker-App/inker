@@ -697,6 +697,13 @@ public protocol CoreHandleProtocol: AnyObject, Sendable {
     func inkAgain(id: String) throws 
     
     /**
+     * "Preview inked": the document exactly as an agent reads it, tokens
+     * located for drawing. Takes the core's lock on the real backend, so
+     * call it off the main thread.
+     */
+    func inkedView(id: String) throws  -> InkedView
+    
+    /**
      * The document or folder a pasted handle (`🐙/x` or `ink/x`, nothing
      * else) points at, if the app holds it. For the clipboard chip and the
      * footer's last-read button.
@@ -953,6 +960,21 @@ open func inkAgain(id: String)throws   {try rustCallWithError(FfiConverterTypeFf
         FfiConverterString.lower(id),uniffiCallStatus
     )
 }
+}
+    
+    /**
+     * "Preview inked": the document exactly as an agent reads it, tokens
+     * located for drawing. Takes the core's lock on the real backend, so
+     * call it off the main thread.
+     */
+open func inkedView(id: String)throws  -> InkedView  {
+    return try  FfiConverterTypeInkedView_lift(try rustCallWithError(FfiConverterTypeFfiError_lift) {
+        uniffiCallStatus in
+    uniffi_inker_ffi_fn_method_corehandle_inked_view(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),uniffiCallStatus
+    )
+})
 }
     
     /**
@@ -2005,6 +2027,324 @@ public func FfiConverterTypeFolderSummary_lift(_ buf: RustBuffer) throws -> Fold
 #endif
 public func FfiConverterTypeFolderSummary_lower(_ value: FolderSummary) -> RustBuffer {
     return FfiConverterTypeFolderSummary.lower(value)
+}
+
+
+/**
+ * A form field, its value tokenized.
+ */
+public struct InkedField: Equatable, Hashable {
+    public let name: String
+    public let value: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(name: String, value: String) {
+        self.name = name
+        self.value = value
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension InkedField: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInkedField: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InkedField {
+        return
+            try InkedField(
+                name: FfiConverterString.read(from: &buf), 
+                value: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InkedField, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.name, into: &buf)
+        FfiConverterString.write(value.value, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInkedField_lift(_ buf: RustBuffer) throws -> InkedField {
+    return try FfiConverterTypeInkedField.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInkedField_lower(_ value: InkedField) -> RustBuffer {
+    return FfiConverterTypeInkedField.lower(value)
+}
+
+
+/**
+ * One page of tokenized text.
+ */
+public struct InkedPage: Equatable, Hashable {
+    /**
+     * Counted from 1, as `resolve` numbers it.
+     */
+    public let page: UInt32
+    public let text: String
+    /**
+     * Every token in `text`, in order.
+     */
+    public let tokens: [InkedToken]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Counted from 1, as `resolve` numbers it.
+         */page: UInt32, text: String, 
+        /**
+         * Every token in `text`, in order.
+         */tokens: [InkedToken]) {
+        self.page = page
+        self.text = text
+        self.tokens = tokens
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension InkedPage: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInkedPage: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InkedPage {
+        return
+            try InkedPage(
+                page: FfiConverterUInt32.read(from: &buf), 
+                text: FfiConverterString.read(from: &buf), 
+                tokens: FfiConverterSequenceTypeInkedToken.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InkedPage, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.page, into: &buf)
+        FfiConverterString.write(value.text, into: &buf)
+        FfiConverterSequenceTypeInkedToken.write(value.tokens, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInkedPage_lift(_ buf: RustBuffer) throws -> InkedPage {
+    return try FfiConverterTypeInkedPage.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInkedPage_lower(_ value: InkedPage) -> RustBuffer {
+    return FfiConverterTypeInkedPage.lower(value)
+}
+
+
+/**
+ * Where a token sits in its page's text and what it stands for.
+ */
+public struct InkedToken: Equatable, Hashable {
+    /**
+     * Byte offsets into the page's text.
+     */
+    public let span: TextSpan
+    /**
+     * `[SSN_1]`
+     */
+    public let token: String
+    /**
+     * The bracket label, as `describe` names the kind: "SSN", "PERSON".
+     */
+    public let kindLabel: String
+    /**
+     * `describe`'s role for it ("employee"), if the template gave one.
+     */
+    public let role: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Byte offsets into the page's text.
+         */span: TextSpan, 
+        /**
+         * `[SSN_1]`
+         */token: String, 
+        /**
+         * The bracket label, as `describe` names the kind: "SSN", "PERSON".
+         */kindLabel: String, 
+        /**
+         * `describe`'s role for it ("employee"), if the template gave one.
+         */role: String?) {
+        self.span = span
+        self.token = token
+        self.kindLabel = kindLabel
+        self.role = role
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension InkedToken: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInkedToken: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InkedToken {
+        return
+            try InkedToken(
+                span: FfiConverterTypeTextSpan.read(from: &buf), 
+                token: FfiConverterString.read(from: &buf), 
+                kindLabel: FfiConverterString.read(from: &buf), 
+                role: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InkedToken, into buf: inout [UInt8]) {
+        FfiConverterTypeTextSpan.write(value.span, into: &buf)
+        FfiConverterString.write(value.token, into: &buf)
+        FfiConverterString.write(value.kindLabel, into: &buf)
+        FfiConverterOptionString.write(value.role, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInkedToken_lift(_ buf: RustBuffer) throws -> InkedToken {
+    return try FfiConverterTypeInkedToken.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInkedToken_lower(_ value: InkedToken) -> RustBuffer {
+    return FfiConverterTypeInkedToken.lower(value)
+}
+
+
+/**
+ * A document as the agent reads it, for the user to check: the same pages
+ * and fields `resolve` returns, with every token located. Tokenized text
+ * only; never a real value.
+ */
+public struct InkedView: Equatable, Hashable {
+    /**
+     * `🐙/w2-2025`
+     */
+    public let handle: String
+    /**
+     * "W-2", as the rows say it.
+     */
+    public let kindLabel: String
+    public let year: UInt16?
+    /**
+     * Values inked, for "6 inked".
+     */
+    public let inked: UInt32
+    public let pages: [InkedPage]
+    /**
+     * Form fields with their values tokenized, after the pages.
+     */
+    public let fields: [InkedField]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * `🐙/w2-2025`
+         */handle: String, 
+        /**
+         * "W-2", as the rows say it.
+         */kindLabel: String, year: UInt16?, 
+        /**
+         * Values inked, for "6 inked".
+         */inked: UInt32, pages: [InkedPage], 
+        /**
+         * Form fields with their values tokenized, after the pages.
+         */fields: [InkedField]) {
+        self.handle = handle
+        self.kindLabel = kindLabel
+        self.year = year
+        self.inked = inked
+        self.pages = pages
+        self.fields = fields
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension InkedView: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInkedView: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InkedView {
+        return
+            try InkedView(
+                handle: FfiConverterString.read(from: &buf), 
+                kindLabel: FfiConverterString.read(from: &buf), 
+                year: FfiConverterOptionUInt16.read(from: &buf), 
+                inked: FfiConverterUInt32.read(from: &buf), 
+                pages: FfiConverterSequenceTypeInkedPage.read(from: &buf), 
+                fields: FfiConverterSequenceTypeInkedField.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InkedView, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.handle, into: &buf)
+        FfiConverterString.write(value.kindLabel, into: &buf)
+        FfiConverterOptionUInt16.write(value.year, into: &buf)
+        FfiConverterUInt32.write(value.inked, into: &buf)
+        FfiConverterSequenceTypeInkedPage.write(value.pages, into: &buf)
+        FfiConverterSequenceTypeInkedField.write(value.fields, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInkedView_lift(_ buf: RustBuffer) throws -> InkedView {
+    return try FfiConverterTypeInkedView.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInkedView_lower(_ value: InkedView) -> RustBuffer {
+    return FfiConverterTypeInkedView.lower(value)
 }
 
 
@@ -4226,6 +4566,81 @@ fileprivate struct FfiConverterSequenceTypeFolderItem: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeInkedField: FfiConverterRustBuffer {
+    typealias SwiftType = [InkedField]
+
+    public static func write(_ value: [InkedField], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeInkedField.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [InkedField] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [InkedField]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeInkedField.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeInkedPage: FfiConverterRustBuffer {
+    typealias SwiftType = [InkedPage]
+
+    public static func write(_ value: [InkedPage], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeInkedPage.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [InkedPage] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [InkedPage]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeInkedPage.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeInkedToken: FfiConverterRustBuffer {
+    typealias SwiftType = [InkedToken]
+
+    public static func write(_ value: [InkedToken], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeInkedToken.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [InkedToken] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [InkedToken]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeInkedToken.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypePlanStep: FfiConverterRustBuffer {
     typealias SwiftType = [PlanStep]
 
@@ -4347,6 +4762,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_ink_again() != 60824) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_inker_ffi_checksum_method_corehandle_inked_view() != 51876) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_inker_ffi_checksum_method_corehandle_locate() != 21599) {
