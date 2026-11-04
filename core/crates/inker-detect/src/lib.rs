@@ -10,9 +10,11 @@ pub mod classify;
 pub mod dob;
 pub mod failclosed;
 pub mod fields;
+pub mod letters;
 pub mod model;
 pub mod names;
 pub mod rules;
+pub mod same_name;
 pub mod same_value;
 pub mod shape;
 pub mod spaced;
@@ -30,8 +32,8 @@ use inker_packs::PackSet;
 
 /// The detection pipeline: templates, rules, names, addresses, dates of
 /// birth, the model (if any), then fail-closed and, on form pages, unplaced
-/// values; overlaps merged, repeats of a placed number given its kind, roles
-/// attached from template fields.
+/// values; overlaps merged, repeats of a placed person's name and of a
+/// placed number given its kind, roles attached from template fields.
 #[derive(Debug)]
 pub struct Detector<'a> {
     packs: &'a PackSet,
@@ -165,6 +167,13 @@ impl<'a> Detector<'a> {
                 );
             !printed && !self.is_public_contact(extracted, &field_pages, d)
         });
+
+        // A person named once is inked wherever the name repeats.
+        let people = same_name::find(&extracted.pages, &out, instructions);
+        if !people.is_empty() {
+            out.extend(people);
+            out = merge(out);
+        }
 
         // A number placed once is the same kind wherever it repeats.
         let repeats = same_value::find(&extracted.pages, &field_pages, &out);
