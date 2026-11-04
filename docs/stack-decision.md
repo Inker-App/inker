@@ -121,6 +121,7 @@ From the model research. Ordered by precision; each stage sees what the previous
 7. **Same value everywhere** *(added 2026-10-30)*. Once a number is placed with confidence as an SSN, ITIN, EIN, routing or account number by a template or rule, every other occurrence of the same digits in any page or form field, with or without separators, gets the same kind and is never held. One value, one token, across the whole document.
 8. **Letter-spaced pages** *(added 2026-10-30)*. Some tax software places every glyph by itself, so the text layer reads back as `9 0 0 - 1 2 - 3 4 5 6`. Such pages are closed up before detection and the spans mapped back. Digit boxes (`0 0 0 1 2 3`, `0001 2345 6789`) are read as one value by the template, account and fail-closed rules.
 9. **Instruction pages and public contacts** *(added 2026-10-30)*. A template may mark its printed instruction pages (W-9); only identifier rules run there, never names, orgs or addresses. The pack's `[public]` table lists agency phone numbers and emails (IRS, SSA, TAS, FTC) that are never inked. Dates after a birth-date label are inked as `[DOB_n]`; PINs after a PIN label as `[PIN_n]` or `[IP_PIN_n]`.
+10. **Letters and agreements** *(added 2026-11-04)*. Correspondence and contracts carry no box labels, so people are placed by where they stand: after "Dear" (addressee), under a closing, over a title line or on `Name:`, `By:` and `/s/` lines (signatory), after `Attention:`, `Attn:`, `c/o` and "with a copy to:", before ", Esq." or ", Firm LLP" and on a cc line (contact), before a defined term such as `(the "Holder")` (party), and after an honorific. Job titles, generic salutations ("Dear Customer") and contract wording are never a name, and a placed name of two or more words is inked wherever it repeats. A document with a salutation and a closing is a `letter`; one that says "agreement" plus contract wording (whereas, hereby, governing law) is an `agreement`; a `receipt` now needs a total line, so "acknowledges receipt" no longer makes one.
 
 Three treatments per detection, from the brief: tokenize, generalize, keep. Treatment is decided by type and template, overridable per document by the user's answer on the attention card.
 
@@ -426,6 +427,16 @@ Still open from the same report: one 2023 return "failed to process" with no rea
 yet (the app log under subsystem `sh.inker.app` should say); a street line with no city line
 after it is still not an address on its own; a `pdf-extract` that keeps glyph positions would
 make the letter-spaced view unnecessary.
+
+### 2026-11-04: names in letters and agreements
+
+Ben dropped two non-tax documents (a letter about an acquisition and its cancellation agreement)
+into INKER and Claude reported that only organisations and emails were inked: the addressee after
+"Dear", the signatory on the signature page and the four lawyers in the notices block came through
+in plain text, and the agreement was classified as a receipt because it "acknowledges receipt".
+Closed by step 10 in section 3.5, test-first against two new synthetic samples
+(`letter-brackenridge-2026-10-14`, `agreement-kestrel-2026-09-30`). Still not inked: a given name or
+surname on its own in prose ("as Odalys said"), unless an honorific is in front of it.
 
 ## 9. Target clients (reframed 2026-10-28)
 

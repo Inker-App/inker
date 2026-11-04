@@ -310,7 +310,7 @@ const STATE_NAMES: &[&str] = &[
 /// Organisations ending in a suffix, anywhere on a line.
 static ORG_RUN: LazyLock<Regex> = LazyLock::new(|| {
     re(
-        r"(?:[A-Z][A-Za-z'’&.-]*[ ]){1,4}(?:Credit[ ]Union|Bank|Trust|Inc\.?|Incorporated|LLC|L\.L\.C\.|LLP|LP|L\.P\.|Ltd\.?|Corp\.?|Corporation|Company|Co\.|N\.A\.)(?:,[ ]N\.A\.)?(?:[^A-Za-z]|$)",
+        r"(?:[A-Z][A-Za-z'’&.-]*[ ]){0,3}[A-Z][A-Za-z'’&.-]*,?[ ](?:Credit[ ]Union|CREDIT[ ]UNION|Bank|BANK|Trust|TRUST|Inc\.?|INC\.?|Incorporated|INCORPORATED|LLC|L\.L\.C\.|LLP|LP|L\.P\.|Ltd\.?|LTD\.?|Corp\.?|CORP\.?|Corporation|CORPORATION|Company|COMPANY|Co\.|CO\.|N\.A\.)(?:,[ ]N\.A\.)?(?:[^A-Za-z]|$)",
     )
 });
 
@@ -337,13 +337,13 @@ pub fn is_stop_word(word: &str) -> bool {
     STOP_WORDS.contains(&w.as_str())
 }
 
-fn is_suffix(word: &str) -> bool {
+pub(crate) fn is_suffix(word: &str) -> bool {
     let w = word.trim_end_matches(',').to_ascii_lowercase();
     ORG_SUFFIXES.contains(&w.as_str())
 }
 
 fn is_capitalised(word: &str) -> bool {
-    let w = word.trim_end_matches(',');
+    let w = word.trim_end_matches([',', ':', ';']);
     w.chars().next().is_some_and(|c| c.is_ascii_uppercase())
         && w.chars()
             .all(|c| c.is_ascii_alphabetic() || "'’.-&".contains(c))
@@ -379,6 +379,10 @@ pub fn run_at(text: &str, start: usize) -> Option<NameRun> {
             break;
         }
         toks.push((pos, w));
+        // A colon or semicolon ends the run ("Dear Ms. Fenwick:").
+        if w.ends_with([':', ';']) {
+            break;
+        }
         // A comma ends the run unless an org suffix follows, or it follows
         // a lone surname and a given name comes next.
         let next = words.get(i + 1).map(|&(_, n)| n);
@@ -512,8 +516,9 @@ fn mailing_names(text: &str) -> Vec<(usize, usize)> {
     out
 }
 
-/// Names after labels, names heading a mailing block, and organisations
-/// ending in a suffix anywhere.
+/// Names after labels, names heading a mailing block, people in letters and
+/// agreements ([`crate::letters`]), and organisations ending in a suffix
+/// anywhere.
 pub fn find(page: &PageText) -> Vec<Detection> {
     let text = page.text.as_str();
     let lower = text.to_ascii_lowercase();
@@ -567,6 +572,10 @@ pub fn find(page: &PageText) -> Vec<Detection> {
             0.6,
             Treatment::Tokenize,
         ));
+    }
+    for d in crate::letters::find(page, &taken) {
+        taken.push((d.span.start, d.span.end));
+        out.push(d);
     }
     for m in ORG_RUN.find_iter(text) {
         // Drop leading stop words and the trailing non-letter the regex used as a boundary.

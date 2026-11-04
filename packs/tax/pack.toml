@@ -35,6 +35,8 @@ default = "doc"
 "bank-statement" = "bank-statement"
 "closing-statement" = "closing-statement"
 "receipt" = "receipt"
+"letter" = "letter"
+"agreement" = "agreement"
 "scan" = "scan"
 
 [public]

@@ -588,3 +588,62 @@ fn a_letter_spaced_8879_is_never_served_with_nothing_inked() {
         );
     }
 }
+
+#[test]
+fn letters_and_agreements_come_out_with_every_person_inked() {
+    // Claude Desktop, 2026-11-04: a letter's addressee and signatory and an
+    // agreement's notice-block lawyers were served in plain text, and the
+    // agreement was filed as a receipt. Every name below is invented.
+    for (name, kind, people) in [
+        (
+            "letter-brackenridge-2026-10-14.txt",
+            "letter",
+            &[
+                "Odalys Fenwick",
+                "Perpetua Quayle",
+                "Lucan Ashgrove",
+                "Thaddeus Wrenfield",
+                "Imelda Corvane",
+            ][..],
+        ),
+        (
+            "agreement-kestrel-2026-09-30.txt",
+            "agreement",
+            &[
+                "Ingrid Solvei Marchetti",
+                "Wendeline Okoro",
+                "Fitzgerald Amberley",
+                "Marisol Teague-Lindqvist",
+                "Desmond Achterberg",
+                "Thorvald Penhallow",
+                "Seraphina Oyelaran-Bix",
+            ][..],
+        ),
+    ] {
+        let w = World::new();
+        let src = w.download(name);
+        let outcomes = w
+            .pipeline
+            .ingest(std::slice::from_ref(&src), IngestMode::Copy)
+            .expect("ingest");
+        let id = outcomes[0].id;
+        let rec = w.pipeline.core().document(id).expect("record");
+        assert_eq!(rec.state, DocState::Ready, "{name}: {:?}", rec.status_note);
+        assert_eq!(rec.kind.as_str(), kind, "{name}");
+        assert!(
+            rec.codename.as_str().starts_with(&format!("{kind}-2026")),
+            "{name}: codename {}",
+            rec.codename
+        );
+        let view = resolved_view(&w, &Handle::new(rec.codename));
+        for person in people {
+            for part in person.split([' ', '-']) {
+                assert!(
+                    !view.contains(part),
+                    "{name}: {part:?} of {person:?} visible:\n{view}"
+                );
+            }
+        }
+        assert!(view.contains("[PERSON_"), "{name}:\n{view}");
+    }
+}

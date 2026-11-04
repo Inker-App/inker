@@ -502,6 +502,207 @@ Thank you for shopping local!
 """
 
 
+# ---------------------------------------------------------------------------
+# Non-tax documents: a business letter and a legal agreement. Invented people
+# and companies only; every person named here must come out as [PERSON_n].
+# ---------------------------------------------------------------------------
+
+LETTER = {
+    "sender_org": "Brackenridge Copperworks, Inc.",
+    "sender_street": "1180 Foundry Row, Suite 400",
+    "sender_city": "Tacoma, WA 98402",
+    "sender_phone": "(253) 555-0127",
+    "addressee": "Odalys Fenwick",
+    "addressee_title": "Director of Procurement",
+    "addressee_org": "Sablewood Marine Holdings LLC",
+    "addressee_street": "77 Pier Crescent",
+    "addressee_city": "Bellingham, WA 98225",
+    "target": "Tamberlane Fittings Corp.",
+    "escrow_contact": "Perpetua Quayle",
+    "escrow_org": "Harrowgate Escrow Services LLC",
+    "finance_vp": "Lucan Ashgrove",
+    "signatory": "Thaddeus Wrenfield",
+    "counsel": "Imelda Corvane",
+}
+# Everyone the letter names: none of these may survive tokenization.
+LETTER_PEOPLE = [
+    LETTER["addressee"],
+    LETTER["escrow_contact"],
+    LETTER["finance_vp"],
+    LETTER["signatory"],
+    LETTER["counsel"],
+]
+
+AGREEMENT = {
+    "company": "Kestrel Ridge Analytics, Inc.",
+    "parent": "Halvorsen Peak Systems Corp.",
+    "holder": "Ingrid Solvei Marchetti",
+    "parent_counsel": "Wendeline Okoro",
+    "firm": "Pembury Stroud LLP",
+    "firm_lawyer_1": "Fitzgerald Amberley",
+    "firm_lawyer_2": "Marisol Teague-Lindqvist",
+    "holder_firm": "Ravensholm Abernethy LLP",
+    "holder_lawyer": "Desmond Achterberg",
+    "company_ceo": "Thorvald Penhallow",
+    "parent_president": "Seraphina Oyelaran-Bix",
+}
+AGREEMENT_PEOPLE = [
+    AGREEMENT["holder"],
+    AGREEMENT["parent_counsel"],
+    AGREEMENT["firm_lawyer_1"],
+    AGREEMENT["firm_lawyer_2"],
+    AGREEMENT["holder_lawyer"],
+    AGREEMENT["company_ceo"],
+    AGREEMENT["parent_president"],
+]
+
+
+def letter_pages() -> list[str]:
+    """A two-page business letter: letterhead, date, inside address,
+    salutation, body, closing, signature block, cc line; page 2 opens with
+    the usual continuation header (addressee, date, page)."""
+    l = LETTER
+    page1 = f"""\
+{l["sender_org"]}
+{l["sender_street"]}
+{l["sender_city"]}   {l["sender_phone"]}
+
+October 14, 2026
+
+Ms. {l["addressee"]}
+{l["addressee_title"]}
+{l["addressee_org"]}
+{l["addressee_street"]}
+{l["addressee_city"]}
+
+Re: Proposed acquisition of {l["target"]}
+
+Dear {l["addressee"]},
+
+Thank you for meeting with us in Bellingham last week. As we discussed,
+{l["sender_org"]} intends to acquire all of the outstanding shares of
+{l["target"]} on the terms set out in the enclosed summary, subject to
+diligence and the approval of our board.
+
+Our Vice President of Finance, {l["finance_vp"]}, will contact you this week
+to arrange access to the data room. Questions about the escrow arrangements
+should go to Ms. {l["escrow_contact"]} at {l["escrow_org"]}, who has agreed to
+act as escrow agent for both sides.
+"""
+    page2 = f"""\
+{l["addressee"]}
+October 14, 2026
+Page 2
+
+This letter is an expression of interest only and is not a binding offer.
+Neither party is bound until a definitive purchase agreement is signed. We
+would be grateful for a reply by November 7, 2026.
+
+Sincerely,
+
+{l["signatory"]}
+Chief Executive Officer
+{l["sender_org"]}
+
+cc: {l["finance_vp"]}, Vice President of Finance
+    {l["counsel"]}, General Counsel
+
+Enclosure
+"""
+    return [page1, page2]
+
+
+def letter_text() -> str:
+    return "\f".join(letter_pages())
+
+
+def agreement_pages() -> list[str]:
+    """A three-page cancellation agreement for an acquisition: parties,
+    recitals, a clause that "acknowledges receipt", a notices section with
+    four lawyers, and a signature page for each party."""
+    a = AGREEMENT
+    page1 = f"""\
+OPTION CANCELLATION AGREEMENT
+
+This Option Cancellation Agreement (this "Agreement") is entered into as of
+September 30, 2026, by and between {a["company"]}, a Delaware corporation
+(the "Company"), {a["parent"]}, a Washington corporation ("Parent"), and
+{a["holder"]} (the "Holder").
+
+WHEREAS, the Company, Parent and a wholly owned subsidiary of Parent are
+parties to an Agreement and Plan of Merger dated September 2, 2026 (the
+"Merger Agreement"); and
+
+WHEREAS, the Holder holds options to purchase shares of the Company's common
+stock, and the parties wish to cancel those options at the effective time of
+the merger in exchange for the payment described below.
+
+NOW, THEREFORE, the parties hereby agree as follows:
+
+1. Cancellation. Each option held by the Holder is cancelled at the
+effective time in exchange for a cash payment of $412,500.00 (the
+"Cancellation Payment"), less applicable withholding.
+
+2. Acknowledgement. The Holder acknowledges receipt of a copy of the Merger
+Agreement and the Company's information statement, and confirms that the
+Cancellation Payment is in full satisfaction of the options.
+
+3. Governing Law. This Agreement is governed by the laws of the State of
+Delaware, without regard to its conflict of laws principles.
+"""
+    page2 = f"""\
+4. Notices. All notices under this Agreement must be in writing and are
+deemed given on the date of receipt of notice by the party to whom they are
+addressed, as follows:
+
+If to the Company or Parent:
+{a["parent"]}
+2600 Glacier Point Drive
+Boise, ID 83702
+Attention: {a["parent_counsel"]}, General Counsel
+Email: legal@halvorsenpeak.example
+
+with a copy (which shall not constitute notice) to:
+{a["firm"]}
+45 Cobalt Street
+Chicago, IL 60606
+Attention: {a["firm_lawyer_1"]}, Esq.
+           {a["firm_lawyer_2"]}, Esq.
+
+If to the Holder, at the address on file with the Company, with a copy to:
+{a["holder_lawyer"]}, {a["holder_firm"]}
+
+5. Entire Agreement. This Agreement and the Merger Agreement are the entire
+agreement of the parties on this subject.
+"""
+    page3 = f"""\
+IN WITNESS WHEREOF, the parties have executed this Agreement as of the date
+first written above.
+
+{a["company"].upper()}
+
+By: /s/ {a["company_ceo"]}
+Name: {a["company_ceo"]}
+Title: Chief Executive Officer
+
+{a["parent"].upper()}
+
+By: ______________________________
+Name: {a["parent_president"]}
+Title: President
+
+HOLDER
+
+/s/ {a["holder"]}
+{a["holder"]}
+"""
+    return [page1, page2, page3]
+
+
+def agreement_text() -> str:
+    return "\f".join(agreement_pages())
+
+
 def row(*cols: tuple[int, str]) -> str:
     """One line of a form laid out in columns: each text starts at its
     column, at least three spaces after the previous one."""
@@ -1407,6 +1608,28 @@ def main(out: Path = OUT) -> None:
         ocr_json(docs["receipt-cornerstone-2025-03-09"][1]), encoding="utf-8"
     )
     written.append(out / "receipt-cornerstone-2025-03-09-photo.ocr.json")
+
+    # The letter and the agreement have several pages: a form feed between
+    # them in the .txt, one entry per page in the sidecar.
+    paged = {
+        "letter-brackenridge-2026-10-14": [
+            letter_pages()[0],
+            noisy(letter_pages()[1], [("Sincerely,", "Sincere1y,"), ("definitive", "deﬁnitive")]),
+        ],
+        "agreement-kestrel-2026-09-30": [
+            noisy(agreement_pages()[0], [("$412,500.00", "$4l2,500.00"), ("satisfaction", "satisfactlon")]),
+            ocr_generic(agreement_pages()[1]),
+            noisy(agreement_pages()[2], [("first written", "ﬁrst written")]),
+        ],
+    }
+    texts = {"letter-brackenridge-2026-10-14": letter_text(), "agreement-kestrel-2026-09-30": agreement_text()}
+    for stem, ocr_pages in paged.items():
+        p = out / f"{stem}.txt"
+        p.write_text(texts[stem], encoding="utf-8")
+        written.append(p)
+        p = out / f"{stem}.ocr.json"
+        p.write_text(ocr_json_pages([ocr_generic(t) for t in ocr_pages]), encoding="utf-8")
+        written.append(p)
 
     total = sum(p.stat().st_size for p in written)
     print(f"wrote {len(written)} files, {total} bytes, to {out}")

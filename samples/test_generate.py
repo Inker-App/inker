@@ -52,6 +52,8 @@ SIDECARS_FOR_BINARIES = ["w2-acme-2025-scan.ocr.json", "receipt-cornerstone-2025
 # Several pages: a form feed between them in the .txt, one entry per page in
 # the sidecar, one PDF page each.
 MULTI_PAGE = {"w9-bluefin-2025": 3}
+# Several pages, text and sidecar only (no PDF): the non-tax documents.
+PAGED_TEXT = {"letter-brackenridge-2026-10-14": 2, "agreement-kestrel-2026-09-30": 3}
 
 UNISSUED_EIN_PREFIXES = {"00", "07", "08", "09", "17", "18", "19", "28", "29", "49", "69", "70", "78", "79", "89"}
 
@@ -92,6 +94,7 @@ class Corpus(unittest.TestCase):
         expected = {f"{s}.txt" for s in STEMS} | {f"{s}.ocr.json" for s in STEMS}
         expected |= set(BINARIES) | set(SIDECARS_FOR_BINARIES)
         expected |= {f"{s}{ext}" for s in MULTI_PAGE for ext in (".txt", ".ocr.json", ".pdf")}
+        expected |= {f"{s}{ext}" for s in PAGED_TEXT for ext in (".txt", ".ocr.json")}
         self.assertEqual(expected, {p.name for p in self.out.iterdir()})
 
     def test_corpus_under_two_megabytes(self):
@@ -228,6 +231,60 @@ class Corpus(unittest.TestCase):
         pdf = (self.out / "w9-bluefin-2025.pdf").read_bytes()
         self.assertIn(f"/Count {n}".encode(), pdf)
         self.assertIn(b"(Request for Taxpayer) Tj", pdf)
+    def test_paged_text_documents_have_every_page_in_text_and_sidecar(self):
+        for stem, n in PAGED_TEXT.items():
+            self.assertEqual(len(self.read(f"{stem}.txt").split("\f")), n, stem)
+            data = json.loads(self.read(f"{stem}.ocr.json"))
+            self.assertEqual(list(range(1, n + 1)), [p["page"] for p in data["pages"]], stem)
+
+    def test_letter_has_the_parts_of_a_business_letter(self):
+        first, second = self.read("letter-brackenridge-2026-10-14.txt").split("\f")
+        l = gen.LETTER
+        # Letterhead, date, inside address with the addressee over a title.
+        self.assertTrue(first.startswith(l["sender_org"]))
+        self.assertIn("October 14, 2026", first)
+        self.assertIn(f"Ms. {l['addressee']}\n{l['addressee_title']}\n{l['addressee_org']}\n"
+                      f"{l['addressee_street']}\n{l['addressee_city']}", first)
+        self.assertIn(f"Dear {l['addressee']},", first)
+        # The body names another person and an organisation with a suffix.
+        self.assertIn(l["finance_vp"], first)
+        self.assertIn(f"Ms. {l['escrow_contact']} at {l['escrow_org']}", first)
+        # Continuation header, closing, signature block, cc line.
+        self.assertTrue(second.startswith(f"{l['addressee']}\nOctober 14, 2026\nPage 2"))
+        self.assertIn(f"Sincerely,\n\n{l['signatory']}\nChief Executive Officer\n{l['sender_org']}", second)
+        self.assertIn(f"cc: {l['finance_vp']}, Vice President of Finance\n    {l['counsel']}, General Counsel",
+                      second)
+        for person in gen.LETTER_PEOPLE:
+            self.assertIn(person, first + second)
+
+    def test_agreement_has_parties_receipt_notices_and_signatures(self):
+        first, notices, signatures = self.read("agreement-kestrel-2026-09-30.txt").split("\f")
+        a = gen.AGREEMENT
+        self.assertIn("OPTION CANCELLATION AGREEMENT", first)
+        self.assertIn(f"by and between {a['company']}", first)
+        self.assertIn(f"{a['holder']} (the \"Holder\")", first)
+        self.assertIn("acknowledges receipt", first)
+        self.assertIn("Governing Law", first)
+        self.assertIn("receipt of notice", notices)
+        self.assertIn(f"Attention: {a['parent_counsel']}, General Counsel", notices)
+        self.assertIn(f"Attention: {a['firm_lawyer_1']}, Esq.\n           {a['firm_lawyer_2']}, Esq.", notices)
+        self.assertIn(f"with a copy to:\n{a['holder_lawyer']}, {a['holder_firm']}", notices)
+        self.assertIn("IN WITNESS WHEREOF", signatures)
+        self.assertIn(f"By: /s/ {a['company_ceo']}\nName: {a['company_ceo']}\nTitle: Chief Executive Officer",
+                      signatures)
+        self.assertIn(f"Name: {a['parent_president']}\nTitle: President", signatures)
+        self.assertIn(f"/s/ {a['holder']}\n{a['holder']}", signatures)
+        for person in gen.AGREEMENT_PEOPLE:
+            self.assertIn(person, first + notices + signatures)
+
+    def test_letter_and_agreement_cast_is_new(self):
+        # Invented for these two documents: no one shares a name part with
+        # the tax corpus's cast, so a leak test can grep for each.
+        tax = {w for p in (gen.JORDAN, gen.RILEY) for w in p["full"].split()}
+        tax |= {gen.DEPENDENT["first"], *gen.DESIGNEE["name"].split(), *gen.PREPARER["name"].split()}
+        for person in gen.LETTER_PEOPLE + gen.AGREEMENT_PEOPLE:
+            self.assertFalse(set(person.split()) & tax, person)
+
     def test_8879_carries_both_signers_the_firm_and_every_pin(self):
         f = self.read("8879-example-2023.txt")
         for label in [
