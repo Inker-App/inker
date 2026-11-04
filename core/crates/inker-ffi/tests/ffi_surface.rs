@@ -779,3 +779,96 @@ fn ink_again_requeues_and_finishes_with_the_same_handle() {
         Err(FfiError::NotFound { .. })
     ));
 }
+
+// ---------------------------------------------------------------------------
+// inked_view on the preview backend
+// ---------------------------------------------------------------------------
+
+fn assert_view_lines_up(view: &inker_ffi::InkedView) {
+    for p in &view.pages {
+        for t in &p.tokens {
+            assert_eq!(&p.text[t.span.start as usize..t.span.end as usize], t.token);
+            assert!(t.token.starts_with(&format!("[{}_", t.kind_label)));
+        }
+    }
+}
+
+#[test]
+fn every_ready_preview_document_has_an_inked_view_with_tokens() {
+    for scenario in [PreviewScenario::Ready, PreviewScenario::Scale] {
+        let h = CoreHandle::preview(scenario);
+        let ready: Vec<_> = h
+            .queue()
+            .into_iter()
+            .flat_map(|g| g.children)
+            .filter(|d| d.state == DocState::Ready)
+            .collect();
+        assert!(!ready.is_empty());
+        for d in ready {
+            let view = h.inked_view(d.id.clone()).unwrap();
+            assert_eq!(view.handle, format!("🐙/{}", d.codename));
+            assert_eq!(view.kind_label, d.kind_label);
+            assert_eq!(view.year, d.year);
+            assert_eq!(view.inked, d.inked);
+            assert!(!view.pages.is_empty(), "{}", d.codename);
+            assert!(
+                view.pages.iter().any(|p| !p.tokens.is_empty()),
+                "{} shows at least one token",
+                d.codename
+            );
+            assert_view_lines_up(&view);
+        }
+    }
+}
+
+#[test]
+fn the_ready_preview_w2_has_two_pages_and_roles() {
+    let h = CoreHandle::preview(PreviewScenario::Ready);
+    let view = h.inked_view("d-1".into()).unwrap();
+    assert_eq!(view.pages.len(), 2);
+    assert_eq!(
+        view.pages.iter().map(|p| p.page).collect::<Vec<_>>(),
+        vec![1, 2]
+    );
+    let person = view.pages[0]
+        .tokens
+        .iter()
+        .find(|t| t.token == "[PERSON_1]")
+        .unwrap();
+    assert_eq!(person.role.as_deref(), Some("employee"));
+}
+
+#[test]
+fn a_preview_inked_view_refuses_held_in_flight_and_folder_rows() {
+    let h = CoreHandle::preview(PreviewScenario::Attention);
+    let q = h.queue();
+    let held = q[0]
+        .children
+        .iter()
+        .find(|d| d.state == DocState::NeedsAttention)
+        .unwrap();
+    assert!(matches!(
+        h.inked_view(held.id.clone()),
+        Err(FfiError::Backend { reason }) if reason == "pending review"
+    ));
+    assert!(matches!(
+        h.inked_view(q[0].id.clone()),
+        Err(FfiError::InvalidArgument { reason }) if reason == "a folder has no inked view"
+    ));
+    assert!(matches!(
+        h.inked_view("nope".into()),
+        Err(FfiError::NotFound { .. })
+    ));
+
+    let h = CoreHandle::preview(PreviewScenario::Processing);
+    let reading = h
+        .queue()
+        .into_iter()
+        .flat_map(|g| g.children)
+        .find(|d| d.state == DocState::Reading)
+        .unwrap();
+    assert!(matches!(
+        h.inked_view(reading.id),
+        Err(FfiError::Backend { reason }) if reason == "not ready"
+    ));
+}

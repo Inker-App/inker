@@ -280,6 +280,11 @@ impl FolderItem {
         out.extend(self.files.iter());
         out
     }
+
+    /// Whether this folder, or one at any depth under it, has this id.
+    pub fn has_folder(&self, id: &str) -> bool {
+        self.id == id || self.folders.iter().any(|f| f.has_folder(id))
+    }
 }
 
 /// What `locate` found: a document or a dropped folder. A UniFFI enum
@@ -462,4 +467,73 @@ pub struct Status {
     /// right now ("Claude", "Claude Code"), each once, sorted. The footer
     /// says "Claude connected" when "Claude" is here.
     pub clients: Vec<String>,
+}
+
+/// A document as the agent reads it, for the user to check: the same pages
+/// and fields `resolve` returns, with every token located. Tokenized text
+/// only; never a real value.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct InkedView {
+    /// `🐙/w2-2025`
+    pub handle: String,
+    /// "W-2", as the rows say it.
+    pub kind_label: String,
+    pub year: Option<u16>,
+    /// Values inked, for "6 inked".
+    pub inked: u32,
+    pub pages: Vec<InkedPage>,
+    /// Form fields with their values tokenized, after the pages.
+    pub fields: Vec<InkedField>,
+}
+
+/// One page of tokenized text.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct InkedPage {
+    /// Counted from 1, as `resolve` numbers it.
+    pub page: u32,
+    pub text: String,
+    /// Every token in `text`, in order.
+    pub tokens: Vec<InkedToken>,
+}
+
+/// Where a token sits in its page's text and what it stands for.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct InkedToken {
+    /// Byte offsets into the page's text.
+    pub span: TextSpan,
+    /// `[SSN_1]`
+    pub token: String,
+    /// The bracket label, as `describe` names the kind: "SSN", "PERSON".
+    pub kind_label: String,
+    /// `describe`'s role for it ("employee"), if the template gave one.
+    pub role: Option<String>,
+}
+
+/// A form field, its value tokenized.
+#[derive(Debug, Clone, PartialEq, Eq, uniffi::Record)]
+pub struct InkedField {
+    pub name: String,
+    pub value: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dir(id: &str, folders: Vec<FolderItem>) -> FolderItem {
+        FolderItem {
+            id: id.into(),
+            folders,
+            ..FolderItem::default()
+        }
+    }
+
+    #[test]
+    fn has_folder_looks_at_every_depth_and_not_at_files() {
+        let root = dir("dir:", vec![dir("f-1", vec![dir("dir:a/b", vec![])])]);
+        assert!(root.has_folder("dir:"));
+        assert!(root.has_folder("f-1"));
+        assert!(root.has_folder("dir:a/b"));
+        assert!(!root.has_folder("d-1"));
+    }
 }

@@ -7,7 +7,7 @@ use camino::Utf8PathBuf;
 
 use crate::error::FfiError;
 use crate::types::{
-    Board, BoardEntry, DocDetails, FindMatch, QueueItem, ReadEvent, ReviewAnswer, Status,
+    Board, BoardEntry, DocDetails, FindMatch, InkedView, QueueItem, ReadEvent, ReviewAnswer, Status,
 };
 
 /// Called by a backend whenever the queue changes. Cheap and thread-safe; the
@@ -66,6 +66,11 @@ pub trait Backend: Send + Sync + fmt::Debug {
     fn locate(&self, codename: &str) -> Option<BoardEntry>;
     /// The expanded row for a document id.
     fn details(&self, id: &str) -> Result<DocDetails, FfiError>;
+    /// The document as an agent reads it: `resolve`'s pages and fields with
+    /// every token located, and `describe`'s roles. Errors with a fixed,
+    /// value-free reason for a held document ("pending review"), one not
+    /// ready ("not ready") and a folder ("a folder has no inked view").
+    fn inked_view(&self, id: &str) -> Result<InkedView, FfiError>;
     /// Forget a document or a folder by id. The files stay.
     fn forget(&self, id: &str) -> Result<(), FfiError>;
     /// Read and ink a document or a folder's documents again, keeping handles.

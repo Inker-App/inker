@@ -11,12 +11,15 @@ use std::time::{Duration, SystemTime};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use inker_core::find::{build_tree, normalize_query, text_snippet};
+use inker_core::types::HANDLE_PREFIX_OCTOPUS;
 
 use crate::backend::{Backend, ChangeSink};
 use crate::error::FfiError;
+use crate::inked;
 use crate::types::{
-    Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary, Loader,
-    MatchField, QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TextSpan,
+    Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary,
+    InkedField, InkedView, Loader, MatchField, QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion,
+    Status, TextSpan,
 };
 
 /// The four popover boards, plus the ready board at scale.
@@ -62,8 +65,8 @@ struct Inner {
     /// Newest first.
     groups: Vec<Group>,
     reads: Vec<ReadEvent>,
-    /// One invented line of inked text per document id, for Find.
-    texts: HashMap<String, String>,
+    /// Invented inked pages per document id, for Find and the inked view.
+    texts: HashMap<String, Vec<String>>,
     sink: ChangeSink,
     next_id: u64,
 }
@@ -430,8 +433,10 @@ impl Backend for PreviewBackend {
                     snippet: None,
                 }),
                 None => {
-                    if let Some((snippet, matched)) =
-                        inner.texts.get(&d.id).and_then(|t| text_snippet(t, &q))
+                    if let Some((snippet, matched)) = inner
+                        .texts
+                        .get(&d.id)
+                        .and_then(|pages| pages.iter().find_map(|t| text_snippet(t, &q)))
                     {
                         out.push(FindMatch {
                             doc: d,
@@ -483,6 +488,49 @@ impl Backend for PreviewBackend {
                 .iter()
                 .find(|r| r.codename == doc.codename)
                 .cloned(),
+        })
+    }
+
+    fn inked_view(&self, id: &str) -> Result<InkedView, FfiError> {
+        let inner = self.lock();
+        let Some(d) = inner
+            .groups
+            .iter()
+            .flat_map(|g| g.docs.iter())
+            .find(|d| d.id == id)
+        else {
+            drop(inner);
+            return Err(if self.board().root.has_folder(id) {
+                inked::folder()
+            } else {
+                inked::not_found()
+            });
+        };
+        match d.state {
+            DocState::Ready => {}
+            DocState::NeedsAttention => return Err(inked::pending_review()),
+            DocState::Queued | DocState::Reading | DocState::Inking | DocState::Failed => {
+                return Err(inked::not_ready());
+            }
+        }
+        let roles = fixture_roles(&d.kind_label);
+        // A live drop has no fixture text; it gets its kind's pages.
+        let pages = inner
+            .texts
+            .get(id)
+            .cloned()
+            .unwrap_or_else(|| fixture_pages(&d.kind_label));
+        Ok(InkedView {
+            handle: format!("{HANDLE_PREFIX_OCTOPUS}{}", d.codename),
+            kind_label: d.kind_label.clone(),
+            year: d.year,
+            inked: d.inked,
+            pages: pages
+                .into_iter()
+                .zip(1u32..)
+                .map(|(text, n)| inked::page(n, text, &roles))
+                .collect(),
+            fields: fixture_fields(&d.kind_label),
         })
     }
 
@@ -1101,22 +1149,103 @@ fn scale() -> (Vec<Group>, Vec<ReadEvent>) {
     (groups, reads)
 }
 
-/// One invented line of inked text per fixture document, so Find has
-/// something to match. Tokens only, never a value.
-fn fixture_texts(groups: &[Group]) -> HashMap<String, String> {
-    let mut out = HashMap::new();
-    for d in groups.iter().flat_map(|g| g.docs.iter()) {
-        let line = match d.kind_label.as_str() {
-            "1098" => "Mortgage Interest Statement for [PERSON_1] from [ORG_1]",
-            "W-2" => "Wage and Tax Statement · Employee [PERSON_1] · Employer [ORG_1]",
-            "1099-INT" => "Interest Income · Payer [ORG_1] · Recipient [PERSON_1]",
-            "bank statement" => "Statement period · Account [ACCOUNT_1] · Ending balance",
-            "closing statement" => "Closing Disclosure · Borrower [PERSON_1] · Lender [ORG_1]",
-            _ => "Form for [PERSON_1]",
-        };
-        out.insert(d.id.clone(), line.to_string());
+/// The invented inked pages of each fixture document, so Find has
+/// something to match and the inked view something to show.
+fn fixture_texts(groups: &[Group]) -> HashMap<String, Vec<String>> {
+    groups
+        .iter()
+        .flat_map(|g| g.docs.iter())
+        .map(|d| (d.id.clone(), fixture_pages(&d.kind_label)))
+        .collect()
+}
+
+/// One or two pages of invented, already tokenized text for a kind of
+/// document. Tokens only, never a value; the first line is what Find reads.
+fn fixture_pages(kind_label: &str) -> Vec<String> {
+    let pages: &[&str] = match kind_label {
+        "1098" => &["Mortgage Interest Statement for [PERSON_1] from [ORG_1]\n\
+             Payer's TIN [EIN_1]    Payer's RIN [SSN_1]\n\
+             Account number [ACCOUNT_1]\n\
+             1 Mortgage interest received from payer(s)/borrower(s)"],
+        "W-2" => &[
+            "Wage and Tax Statement · Employee [PERSON_1] · Employer [ORG_1]\n\
+             a Employee's social security number\n  [SSN_1]\n\
+             b Employer identification number (EIN)\n  [EIN_1]\n\
+             c Employer's name, address, and ZIP code\n  [ORG_1]\n  [ADDRESS_1]\n\
+             e Employee's first name and initial    Last name\n  [PERSON_1]",
+            "1 Wages, tips, other compensation    2 Federal income tax withheld\n\
+             15 State    Employer's state ID number\n  OR [GOVID_1]\n\
+             Copy C for employee's records: [PERSON_1][SSN_1]",
+        ],
+        "1099-INT" => &["Interest Income · Payer [ORG_1] · Recipient [PERSON_1]\n\
+             PAYER'S TIN [EIN_1]    RECIPIENT'S TIN [SSN_1]\n\
+             Account number (see instructions) [ACCOUNT_1]\n\
+             1 Interest income"],
+        "bank statement" => &[
+            "Statement period · Account [ACCOUNT_1] · Ending balance\n\
+             [PERSON_1]\n[ADDRESS_1]\n\
+             Routing [ROUTING_1]",
+            "Deposits and other credits\n\
+             Transfer from [ACCOUNT_2]\n\
+             Questions? Call [PHONE_1]",
+        ],
+        "closing statement" => &[
+            "Closing Disclosure · Borrower [PERSON_1] · Lender [ORG_1]\n\
+             Property [ADDRESS_1]\n\
+             Loan ID # [ACCOUNT_1]",
+            "Seller [PERSON_2]\n\
+             Settlement agent [ORG_2]    Contact [EMAIL_1]",
+        ],
+        _ => &["Form for [PERSON_1]\nTaxpayer ID [SSN_1]"],
+    };
+    pages.iter().map(|p| p.to_string()).collect()
+}
+
+/// What `describe` would say the fixture tokens stand for.
+fn fixture_roles(kind_label: &str) -> Vec<(String, String)> {
+    let pairs: &[(&str, &str)] = match kind_label {
+        "W-2" => &[
+            ("[PERSON_1]", "employee"),
+            ("[SSN_1]", "employee"),
+            ("[ORG_1]", "employer"),
+            ("[EIN_1]", "employer"),
+        ],
+        "1098" => &[
+            ("[PERSON_1]", "borrower"),
+            ("[SSN_1]", "borrower"),
+            ("[ORG_1]", "lender"),
+            ("[EIN_1]", "lender"),
+        ],
+        "1099-INT" => &[
+            ("[PERSON_1]", "recipient"),
+            ("[SSN_1]", "recipient"),
+            ("[ORG_1]", "payer"),
+            ("[EIN_1]", "payer"),
+        ],
+        "closing statement" => &[("[PERSON_1]", "borrower"), ("[ORG_1]", "lender")],
+        _ => &[],
+    };
+    pairs
+        .iter()
+        .map(|(t, r)| (t.to_string(), r.to_string()))
+        .collect()
+}
+
+/// The fixture W-2's form fields, so the view's field section shows.
+fn fixture_fields(kind_label: &str) -> Vec<InkedField> {
+    match kind_label {
+        "W-2" => vec![
+            InkedField {
+                name: "Employee SSN".into(),
+                value: "[SSN_1]".into(),
+            },
+            InkedField {
+                name: "Employer EIN".into(),
+                value: "[EIN_1]".into(),
+            },
+        ],
+        _ => Vec::new(),
     }
-    out
 }
 
 fn fixture(s: PreviewScenario) -> (Vec<Group>, Vec<ReadEvent>) {

@@ -21,6 +21,7 @@ mod backend;
 mod error;
 mod handle;
 mod host_backend;
+mod inked;
 mod preview;
 mod providers;
 mod types;
@@ -34,8 +35,8 @@ pub use preview::{PreviewBackend, PreviewScenario, codename_from_name};
 pub use providers::{ExtractedFfi, ExtractedField, ExtractedPage, HostProviders, ProviderError};
 pub use types::{
     Board, BoardEntry, DocDetails, DocItem, DocState, FindMatch, FolderItem, FolderSummary,
-    HandleStyle, IngestMode, Loader, MatchField, QueueItem, ReadEvent, ReviewAnswer,
-    ReviewQuestion, Status, TextSpan,
+    HandleStyle, IngestMode, InkedField, InkedPage, InkedToken, InkedView, Loader, MatchField,
+    QueueItem, ReadEvent, ReviewAnswer, ReviewQuestion, Status, TextSpan,
 };
 
 uniffi::setup_scaffolding!();

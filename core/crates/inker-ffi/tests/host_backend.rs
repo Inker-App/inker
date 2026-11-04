@@ -601,3 +601,158 @@ fn forget_leaves_the_file_and_ink_again_keeps_the_handle() {
     assert!(h.board().root.files.is_empty());
     assert!(matches!(h.forget(doc.id), Err(FfiError::NotFound { .. })));
 }
+
+// ---------------------------------------------------------------------------
+// The inked view: what the agent reads, shown to the user
+// ---------------------------------------------------------------------------
+
+use inker_ffi::InkedView;
+
+/// Every token's span slices out exactly its token, and the token is the
+/// core's `[LABEL_N]` with its label as the kind.
+fn assert_tokens_line_up(view: &InkedView) {
+    for p in &view.pages {
+        for t in &p.tokens {
+            let slice = &p.text[t.span.start as usize..t.span.end as usize];
+            assert_eq!(slice, t.token, "page {}", p.page);
+            let inner = t.token.trim_start_matches('[').trim_end_matches(']');
+            let (label, n) = inner.rsplit_once('_').unwrap();
+            assert_eq!(label, t.kind_label);
+            assert!(n.parse::<u32>().is_ok(), "{}", t.token);
+        }
+    }
+}
+
+#[test]
+fn the_inked_view_is_exactly_what_resolve_hands_an_agent() {
+    let w = World::new();
+    let h = w.open();
+    h.ingest(vec![w.download("w2-acme-2025.txt")], IngestMode::Move)
+        .unwrap();
+    let q = wait_queue(&h, all_settled);
+    let doc = docs(&q)[0].clone();
+    assert_eq!(doc.state, DocState::Ready);
+
+    let view = h.inked_view(doc.id.clone()).unwrap();
+    assert_eq!(view.handle, format!("🐙/{}", doc.codename));
+    assert_eq!(view.kind_label, "W-2");
+    assert_eq!(view.year, Some(2025));
+    assert_eq!(view.inked, doc.inked);
+    assert!(view.inked > 0);
+    assert!(!view.pages.is_empty());
+    assert!(
+        !format!("{view:?}").contains(JORDAN_SSN),
+        "a real value reached the preview"
+    );
+    assert_tokens_line_up(&view);
+    let ssn = view
+        .pages
+        .iter()
+        .flat_map(|p| p.tokens.iter())
+        .find(|t| t.kind_label == "SSN")
+        .expect("the employee's SSN is a token");
+    assert_eq!(ssn.role.as_deref(), Some("employee"), "describe's role map");
+
+    // The same document through inker_core directly, as the MCP server
+    // resolves it: page for page, the same text.
+    drop(h);
+    let host = inker_host::Host::open(inker_host::HostConfig {
+        private_folder: Utf8PathBuf::from_path_buf(w.private()).unwrap(),
+        data_dir: Utf8PathBuf::from_path_buf(w.data()).unwrap(),
+        packs_dir: None,
+    })
+    .unwrap();
+    let handle = inker_core::Handle::parse(&view.handle).unwrap();
+    let inker_core::Resolved::Document(resolved) = host.core().resolve(&handle).unwrap() else {
+        panic!("a document resolves to pages")
+    };
+    let core_pages: Vec<(u32, String)> = resolved
+        .pages
+        .into_iter()
+        .map(|p| (p.page, p.text))
+        .collect();
+    let view_pages: Vec<(u32, String)> = view
+        .pages
+        .iter()
+        .map(|p| (p.page, p.text.clone()))
+        .collect();
+    assert_eq!(view_pages, core_pages);
+    let core_fields: Vec<(String, String)> = resolved
+        .fields
+        .into_iter()
+        .map(|f| (f.name, f.value))
+        .collect();
+    let view_fields: Vec<(String, String)> = view
+        .fields
+        .iter()
+        .map(|f| (f.name.clone(), f.value.clone()))
+        .collect();
+    assert_eq!(view_fields, core_fields);
+}
+
+#[test]
+fn a_held_document_has_no_inked_view_until_the_card_is_answered() {
+    let w = World::new();
+    let h = w.open();
+    h.ingest(
+        vec![w.download_text("note.txt", HELD_NOTE)],
+        IngestMode::Move,
+    )
+    .unwrap();
+    let q = wait_queue(&h, |q| {
+        docs(q).iter().any(|d| d.state == DocState::NeedsAttention)
+    });
+    let doc = docs(&q)[0].clone();
+    let err = h.inked_view(doc.id.clone()).unwrap_err();
+    assert!(
+        matches!(&err, FfiError::Backend { reason } if reason == "pending review"),
+        "{err:?}"
+    );
+    assert!(!err.to_string().contains("00000000000"));
+}
+
+#[test]
+fn a_failed_document_is_not_ready() {
+    let w = World::new();
+    let h = w.open();
+    h.ingest(
+        vec![w.download_text("broken.pdf", "this is not a pdf")],
+        IngestMode::Move,
+    )
+    .unwrap();
+    let q = wait_queue(&h, all_settled);
+    let doc = docs(&q)[0].clone();
+    assert_eq!(doc.state, DocState::Failed, "{doc:#?}");
+    let err = h.inked_view(doc.id).unwrap_err();
+    assert!(
+        matches!(&err, FfiError::Backend { reason } if reason == "not ready"),
+        "{err:?}"
+    );
+}
+
+#[test]
+fn a_folder_has_no_inked_view_and_an_unknown_id_is_not_found() {
+    let w = World::new();
+    let h = w.open();
+    let dir = w.tmp.path().join("Downloads").join("Taxes 2025");
+    fs::create_dir_all(dir.join("Receipts")).unwrap();
+    fs::write(dir.join("Receipts").join("note.txt"), "No values here.").unwrap();
+    h.ingest(vec![s(&dir)], IngestMode::Move).unwrap();
+    wait_queue(&h, all_settled);
+    let b = h.board();
+    let taxes = &b.root.folders[0];
+    let is_folder_err = |e: FfiError| matches!(&e, FfiError::InvalidArgument { reason } if reason == "a folder has no inked view");
+    assert!(is_folder_err(h.inked_view(taxes.id.clone()).unwrap_err()));
+    assert!(
+        is_folder_err(h.inked_view(taxes.folders[0].id.clone()).unwrap_err()),
+        "a folder that is only a path segment"
+    );
+    assert!(matches!(
+        h.inked_view("12345".into()),
+        Err(FfiError::NotFound { .. })
+    ));
+    assert!(matches!(
+        h.inked_view("nonsense".into()),
+        Err(FfiError::NotFound { .. })
+    ));
+}
