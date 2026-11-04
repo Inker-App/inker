@@ -34,6 +34,15 @@ without Claude seeing the identifying details. INKER keeps the originals in a pr
 on your Mac and gives Claude a copy where names, numbers and addresses are inked out as stable \
 tokens like [SSN_1], with amounts, boxes and dates kept. Needs the INKER app running.";
 
+/// The rule a chat needs, in one sentence, for the extension's page.
+pub const HANDLE_RULE: &str = "When a message contains 🐙/ or ink/ followed by a name, that is \
+an INKER private document handle: Claude reads it with INKER's `resolve` tool, never from disk.";
+
+/// What Claude Desktop shows on the extension's page.
+pub fn long_description() -> String {
+    format!("{DESCRIPTION}\n\n{HANDLE_RULE}")
+}
+
 const README: &str = "# INKER for Claude\n\n\
 This extension connects the Claude app to INKER, the menu bar app that lets Claude work on \
 sensitive documents without seeing the identifying details.\n\n\
@@ -55,6 +64,7 @@ pub fn manifest(version: &str, binary_name: &str, private_folder_default: &str) 
         "display_name": "INKER",
         "version": version,
         "description": DESCRIPTION,
+        "long_description": long_description(),
         "author": { "name": "INKER", "url": "https://inker.sh" },
         "homepage": "https://inker.sh",
         "server": {

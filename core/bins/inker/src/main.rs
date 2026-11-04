@@ -58,6 +58,9 @@ enum Cmd {
     },
     /// Print the MCP server instructions.
     Instructions,
+    /// Print a SKILL.md that teaches Claude Desktop and claude.ai to read
+    /// 🐙/ handles with INKER (install it as a skill named `inker`).
+    Skill,
     /// Register INKER with the Claude app, or configure a coding agent (MCP
     /// registration, exclusion of the private folder, the teaching line).
     Setup {
@@ -237,6 +240,10 @@ fn run(cmd: Cmd) -> Result<ExitCode> {
         }
         Cmd::Instructions => {
             println!("{}", inker_mcp::instructions());
+            Ok(ExitCode::SUCCESS)
+        }
+        Cmd::Skill => {
+            println!("{}", inker_mcp::skill());
             Ok(ExitCode::SUCCESS)
         }
         Cmd::Setup {
